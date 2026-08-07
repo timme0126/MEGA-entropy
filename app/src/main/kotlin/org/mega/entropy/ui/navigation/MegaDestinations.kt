@@ -9,6 +9,11 @@ package org.mega.entropy.ui.navigation
 object MegaDestinations {
     const val WELCOME = "welcome"
     const val BEFORE_YOU_BEGIN = "before_you_begin"
+
+    /** Route of the nested graph wrapping DICE_ENTRY..FINAL_MNEMONIC, so
+     * those screens can share one DiceSessionViewModel scoped to this
+     * graph's own back stack entry (see MegaNavGraph). */
+    const val DICE_FLOW = "dice_flow"
     const val DICE_ENTRY = "dice_entry"
     const val BIAS_CHECK = "bias_check"
     const val ENTROPY_256 = "entropy_256"
