@@ -98,11 +98,13 @@ tasks.register("securityAudit") {
     inputs.file(manifestFile)
 
     doLast {
-        val text = manifestFile.asFile.readText()
+        // Strip XML comments first so explanatory prose (e.g. "MEGA requests
+        // NO android.permission.INTERNET") can't trip a naive substring match.
+        val text = manifestFile.asFile.readText().replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "")
         val violations = mutableListOf<String>()
 
         forbiddenManifestPermissions.forEach { perm ->
-            if (text.contains(perm)) {
+            if (Regex("<uses-permission[^>]*\"$perm\"").containsMatchIn(text)) {
                 violations += "AndroidManifest.xml declares forbidden permission '$perm'"
             }
         }
