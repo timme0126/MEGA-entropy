@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Icon concept: a six-sided die face (5 pips), echoing the brand
+    direction in docs — "a simple six-sided die transitioning into
+    entropy." Kept to flat geometric shapes only, no imagery.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- die face -->
+    <path
+        android:fillColor="#211C15"
+        android:strokeColor="#E8792E"
+        android:strokeWidth="3"
+        android:pathData="M31,21 L77,21 A10,10 0 0 1 87,31 L87,77 A10,10 0 0 1 77,87 L31,87 A10,10 0 0 1 21,77 L21,31 A10,10 0 0 1 31,21 Z" />
+
+    <!-- five pips -->
+    <path android:fillColor="#E8792E"
+        android:pathData="M33,33 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+    <path android:fillColor="#E8792E"
+        android:pathData="M75,33 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+    <path android:fillColor="#E8792E"
+        android:pathData="M54,54 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+    <path android:fillColor="#E8792E"
+        android:pathData="M33,75 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+    <path android:fillColor="#E8792E"
+        android:pathData="M75,75 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+</vector>

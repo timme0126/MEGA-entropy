@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Legacy (pre-Android 12) full-backup exclusion rules. Combined with
+    android:allowBackup="false" and data_extraction_rules.xml — see
+    docs/STORAGE-DESIGN.md. This file excludes everything; it exists
+    only because some OEM backup agents still consult it even when
+    allowBackup is false.
+-->
+<full-backup-content>
+    <exclude domain="root" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="external" path="." />
+</full-backup-content>

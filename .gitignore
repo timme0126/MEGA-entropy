@@ -1,0 +1,14 @@
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuildOverride/
+build/
+!/gradle/wrapper/gradle-wrapper.jar
+.cxx/
+*.apk
+*.aab
+/tools/*.raw.json
