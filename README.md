@@ -1,5 +1,7 @@
 # MEGA — Make Entropy Great Again
 
+*mega.it*
+
 A transparent, offline Android tool for converting **100 physical
 six-sided-die rolls, supplied entirely by the user,** into a valid 24-word
 English BIP39 mnemonic.
