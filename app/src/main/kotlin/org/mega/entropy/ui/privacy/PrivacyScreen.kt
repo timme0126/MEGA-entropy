@@ -32,7 +32,7 @@ fun PrivacyScreen(onBack: () -> Unit) {
                 "No collection of user data by the developer, ever",
             )
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items.forEach { Text("•  $it", style = MaterialTheme.typography.bodyMedium) }
+                items.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium) }
             }
         }
         Text(

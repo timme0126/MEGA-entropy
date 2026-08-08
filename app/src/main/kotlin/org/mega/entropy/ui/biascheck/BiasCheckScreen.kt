@@ -1,5 +1,6 @@
 package org.mega.entropy.ui.biascheck
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -42,6 +43,14 @@ fun BiasCheckScreen(
     onStartNewSequence: () -> Unit,
 ) {
     SecureScreen()
+    // A rejected sequence's only forward action is "Start New Sequence"
+    // (a full resetSession()) — the system back button must do the same,
+    // not leave rejected rolls sitting in DiceSessionViewModel where
+    // DiceEntryScreen's undoLastRoll()/reopenBatch() could edit and reuse
+    // most of a rejected sequence instead of a clean re-roll.
+    if (rejectionResult is RejectionResult.Rejected) {
+        BackHandler(onBack = onStartNewSequence)
+    }
     val rollCount = mnemonicLength.rollCount
     val bits = mnemonicLength.entropyBits
 
@@ -96,7 +105,7 @@ fun BiasCheckScreen(
                 Text(
                     "Nothing is wrong with your dice. This rejection is " +
                         "necessary to keep the result uniformly random — a " +
-                        "meaningful fraction of valid sequences land here by " +
+                        "significant fraction of valid sequences land here by " +
                         "design.",
                     style = MaterialTheme.typography.bodyMedium,
                 )

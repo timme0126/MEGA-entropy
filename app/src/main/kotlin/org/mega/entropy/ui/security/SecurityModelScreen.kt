@@ -29,7 +29,8 @@ fun SecurityModelScreen(onBack: () -> Unit) {
                     "Request no INTERNET permission — it isn't in the manifest",
                     "Keep saved data inside this app's private sandbox",
                     "Encrypt any data you explicitly choose to save",
-                    "Optionally add a MEGA PIN as an extra access barrier",
+                    "Require a MEGA PIN before any session can be saved or viewed",
+                    "Optionally save a way to verify a re-entered passphrase, without ever storing or displaying it",
                     "Suppress screenshots and recent-app thumbnails on sensitive screens",
                     "Show every intermediate calculation, not just the final words",
                     "Allow independent verification of every step, by design",
@@ -49,7 +50,31 @@ fun SecurityModelScreen(onBack: () -> Unit) {
                     "A compromised keyboard, if one is ever used elsewhere with your seed",
                     "Flaws in your own physical entropy procedure",
                     "Undiscovered vulnerabilities in Android or the hardware itself",
+                    "A rooted or otherwise administratively-compromised device",
+                    "Offline passphrase brute-forcing if a saved passphrase check's encryption is ever defeated",
                 ),
+            )
+        }
+
+        MegaCard(title = "Best Practice: GrapheneOS") {
+            Text(
+                "MEGA works on stock Android, but GrapheneOS is the stronger " +
+                    "choice for actually protecting funds with it — it hardens " +
+                    "exactly the parts of the device MEGA has no control over. " +
+                    "A hardened memory allocator limits the damage of " +
+                    "memory-corruption bugs, in MEGA or the OS itself. No " +
+                    "Google Play Services by default removes a layer of " +
+                    "background telemetry MEGA can't see or block from inside " +
+                    "the app. A per-app network toggle lets you disable MEGA's " +
+                    "network access at the OS level and independently confirm " +
+                    "it still works identically — proof, not just trust, that " +
+                    "\"no INTERNET permission\" really means no network " +
+                    "activity. And verified boot comes from a security-focused " +
+                    "non-profit instead of an OEM's bundled software. None of " +
+                    "this replaces MEGA's own guarantees — it closes the gap " +
+                    "between \"this app is offline\" and \"this device is " +
+                    "trustworthy enough for that to matter.\"",
+                style = MaterialTheme.typography.bodyMedium,
             )
         }
 
@@ -65,7 +90,7 @@ fun SecurityModelScreen(onBack: () -> Unit) {
 private fun BulletList(items: List<String>) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         items.forEach { item ->
-            Text("•  $item", style = MaterialTheme.typography.bodyMedium)
+            Text("• $item", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

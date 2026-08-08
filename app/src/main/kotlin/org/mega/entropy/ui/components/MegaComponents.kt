@@ -1,16 +1,13 @@
 package org.mega.entropy.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -26,42 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropy.ui.theme.MegaNeutralGray
-
-/**
- * The small uppercase pills used on the Welcome screen: OFFLINE,
- * 100 DICE ROLLS, ZERO DEVICE ENTROPY IN SEED. Also reused wherever a
- * short reinforcing security fact needs to stay visually distinct from
- * body text (see spec section 8, "Progress visualization").
- */
-@Composable
-fun MegaBadge(text: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(50),
-            )
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            letterSpacing = 0.6.sp,
-        )
-    }
-}
-
-@Composable
-fun MegaBadgeRow(badges: List<String>, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        badges.forEach { MegaBadge(it) }
-    }
-}
 
 /** Primary CTA button — large touch target, full width, per spec section 44. */
 @Composable

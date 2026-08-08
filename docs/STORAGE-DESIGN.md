@@ -21,6 +21,11 @@ recomputed from the saved dice rolls when a session is reopened — nothing
 about *how* the mnemonic was derived is stored, only the raw rolls (and,
 optionally, the resulting words themselves).
 
+Independently of those three options, if a BIP39 passphrase was entered on
+the optional PassphraseScreen (or is added later — see below), a
+**passphrase check** can also be saved. This is opt-in and separate from
+saving the mnemonic itself — see "The optional passphrase check" below.
+
 ## Where it lives
 
 App-private internal storage only: `context.filesDir/mega_sessions/`. MEGA
@@ -30,8 +35,8 @@ Per session, two files:
 
 | File | Contents | Encrypted? |
 |---|---|---|
-| `<sessionId>.meta` | id, created-at timestamp, roll count, whether a mnemonic was saved, Keystore alias | No — none of this is sensitive on its own |
-| `<sessionId>.enc` | AES-256-GCM ciphertext of the dice rolls (and mnemonic, if saved), with a 12-byte GCM IV prefixed | Yes |
+| `<sessionId>.meta` | id, created-at timestamp, roll count, whether a mnemonic was saved, whether a passphrase check was saved, Keystore alias | No — none of this is sensitive on its own |
+| `<sessionId>.enc` | AES-256-GCM ciphertext of the dice rolls (and mnemonic and/or passphrase check, if saved), with a 12-byte GCM IV prefixed | Yes |
 
 `sessionId` is a random UUID (`java.util.UUID.randomUUID()`) — a storage
 identifier only, generated *after* the mnemonic has already been derived,
@@ -47,9 +52,12 @@ dependency. Example encrypted-payload plaintext (before AES-GCM encryption):
 MEGA-SESSION-V1
 ROLLS:1,4,3,6,2,...
 MNEMONIC:word1 word2 word3 ... word24
+PASSCHECK:<32-byte salt, hex>:<32-byte hash, hex>
 ```
 
-(the `MNEMONIC:` line is present only when the mnemonic was also saved.)
+(the `MNEMONIC:` and `PASSCHECK:` lines are each independently present
+only when the mnemonic, or a passphrase check, was also saved — see "The
+optional passphrase check" below.)
 
 ## Encryption
 
@@ -86,8 +94,8 @@ storage key is ever derived from dice rolls or a mnemonic, and
 for every saved session.
 
 Deleting the Keystore key matters as much as deleting the files: even if a
-copy of the ciphertext somehow survived (a forensic recovery of "deleted"
-flash storage, for example), it would be cryptographically inaccessible
+copy of the ciphertext somehow survived (forensic recovery of data from
+"deleted" flash storage, for example), it would be cryptographically inaccessible
 without the destroyed key. MEGA does **not** claim to securely overwrite
 flash storage — flash-memory wear-leveling means an app-level "secure
 delete" of the ciphertext bytes themselves cannot promise the underlying
@@ -104,10 +112,13 @@ device-to-device transfer) **and** legacy `android:fullBackupContent` rules
 consult different mechanisms. See `app/src/main/AndroidManifest.xml` and
 `app/src/main/res/xml/`.
 
-## The optional MEGA PIN
+## The MEGA PIN
 
-Stored separately, under `context.filesDir/mega_security/` — see
-`org.mega.entropy.security.pin`:
+Nothing about saving is mandatory — you can leave a session unsaved
+entirely — but the moment you choose to save one, MEGA requires a PIN to
+already exist (setting one up first if needed), and viewing any saved
+session always requires it. Stored separately, under
+`context.filesDir/mega_security/` — see `org.mega.entropy.security.pin`:
 
 - `pin.record`: `salt` (16 random bytes), `hash` (32-byte
   `PBKDF2WithHmacSHA256` output, 120,000 iterations), iteration count, and
@@ -127,3 +138,51 @@ on top of (not a replacement for) Android sandboxing and the AES-256-GCM
 session encryption above. See
 [`docs/SECURITY-MODEL.md`](SECURITY-MODEL.md) for why a 5–8 digit PIN isn't
 treated as having meaningful cryptographic entropy on its own.
+
+## The optional passphrase check
+
+A session can optionally store a way to verify a re-entered BIP39
+passphrase matches the one originally used — without MEGA ever storing or
+displaying the passphrase itself, similar to how some other wallets let
+you confirm a passphrase without revealing it. This can be set at the same
+time a session is first saved (right after entering a passphrase on
+PassphraseScreen), or added later to an already-saved session from its
+detail screen — either way it works the same, since the mnemonic is always
+recomputable from the session's dice rolls
+(`org.mega.entropy.security.passphrase`, `SessionRepository.setPassphraseCheck`).
+
+- **What's stored:** a random 16-byte salt and a 32-byte SHA-256 hash of
+  `salt || seed`, where `seed` is the full 512-bit BIP39 seed derived from
+  the mnemonic and the passphrase (`deriveSeed`, per BIP-0039). The
+  passphrase itself and the derived seed are never written to disk. This
+  is a single salted hash rather than an iterated KDF like the PIN's,
+  because the input already passed through BIP39's own 2048-round
+  PBKDF2-HMAC-SHA512 — the hash here only needs to be a fixed-size
+  verifier, not add further brute-force cost.
+- **Where it lives:** inside the same `.enc` payload as the dice rolls and
+  (optionally) the mnemonic, as an optional `PASSCHECK:<salt hex>:<hash
+  hex>` line — so it gets the same AES-256-GCM protection as everything
+  else in the session. `SavedSessionMetadata.hasPassphraseCheck` (in the
+  unencrypted `.meta` file, format `MEGA-META-V3`) just tracks whether one
+  exists, so the UI can offer "Set" or "Verify" without decrypting.
+- **Verifying:** re-entering a candidate passphrase recomputes its seed,
+  hashes it with the stored salt, and compares in constant time
+  (`checkPassphrase`, returning a `PassphraseVerification`) against the
+  stored hash — the result is only ever "matches" / "doesn't match", never
+  the stored passphrase. On a confirmed match, the saved-session detail
+  screen additionally offers to reveal the seed that candidate passphrase
+  just derived (the same "reveal the seed" gate PassphraseScreen shows
+  right after deriving one) — never for an unconfirmed guess.
+- **Threat model note:** because the check lives under the same encryption
+  as the mnemonic, someone who defeats a session's Keystore-backed
+  encryption gains an offline oracle to brute-force test candidate
+  passphrases against the stored hash — but if the mnemonic was also
+  saved, they'd already have it in the clear at that point, so this isn't
+  a materially new trust boundary. It's still not a secret vault: don't
+  treat "no PASSCHECK line" or a cleared check as passphrase-loss
+  protection — see [`docs/SECURITY-MODEL.md`](SECURITY-MODEL.md).
+
+Metadata format `MEGA-META-V2` (7 lines, no `hasPassphraseCheck`) is
+unreadable to `decodeMetadata()` once this ships, following the same
+no-migration precedent as the earlier V1→V2 break — nothing real is saved
+by this app yet.

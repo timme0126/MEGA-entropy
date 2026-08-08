@@ -19,8 +19,12 @@ just as important — what it does not.
   [`docs/STORAGE-DESIGN.md`](STORAGE-DESIGN.md))
 - Encrypt any data you explicitly choose to save, with AES-256-GCM via a
   dedicated Android Keystore key per session
-- Optionally add a MEGA PIN as an extra access barrier, with rate-limited
-  attempts and a scrambled keypad
+- Require a MEGA PIN before any session can be saved or viewed, with
+  rate-limited attempts and a scrambled keypad
+- Optionally save a way to verify a re-entered BIP39 passphrase matches
+  the one you used, without ever storing or displaying the passphrase
+  itself — see "The optional passphrase check" in
+  [`docs/STORAGE-DESIGN.md`](STORAGE-DESIGN.md)
 - Suppress screenshots and recent-app thumbnails (`FLAG_SECURE`) on every
   screen that shows dice history or derived secrets
 - Show every intermediate calculation, not just the final words — the goal
@@ -46,10 +50,44 @@ just as important — what it does not.
 - Undiscovered vulnerabilities in Android or the hardware itself
 - A rooted or otherwise administratively-compromised device — app
   sandboxing assumes a stock, unmodified OS
+- Being immune to offline passphrase brute-forcing if you choose to save a
+  passphrase check *and* your session's encryption is ever defeated: the
+  saved check becomes a local oracle an attacker could use to test
+  candidate passphrases (though at that point, if the mnemonic was also
+  saved, they'd already have it in the clear)
 
 MEGA is not marketed as unhackable, because nothing is. See
 [`SECURITY.md`](../SECURITY.md) for reporting a vulnerability and the
 current audit status.
+
+## Best practice: GrapheneOS
+
+MEGA is designed to work correctly on stock Android — nothing about its
+entropy derivation, storage, or PIN depends on GrapheneOS. But for anyone
+using MEGA with a mnemonic that will actually protect funds, running it on
+GrapheneOS instead of stock Android (OEM or otherwise) is the stronger
+choice, for reasons entirely outside MEGA's own control:
+
+- **Hardened memory allocator** (`hardened_malloc`) reduces the
+  exploitability of memory-corruption vulnerabilities — in MEGA or in the
+  OS itself — which matters precisely because MEGA holds wallet-seed-grade
+  secrets in memory while a session is open.
+- **No Google Play Services by default.** Sandboxed Google Play is
+  available but opt-in and isolated; stock Android's tighter integration
+  means background telemetry and network activity MEGA has no visibility
+  into can run at the OS level, undermining an offline app's own
+  guarantees from outside the app entirely.
+- **A granular per-app Network permission toggle** lets you disable MEGA's
+  network access at the OS level and independently confirm it still works
+  identically — proof, not just trust, that "no INTERNET permission" (see
+  "MEGA does" above) actually means no network activity.
+- **Verified boot**, with support for locking the bootloader to your own
+  keys, maintained by a security-focused non-profit rather than bundled
+  OEM software carrying its own — often much larger — attack surface.
+
+None of this replaces MEGA's own guarantees. It closes the gap between
+"this app is offline and auditable" and "this device is trustworthy enough
+for that claim to matter."
 
 ## Rationale for a few specific decisions
 

@@ -20,6 +20,7 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
+import org.mega.entropy.security.passphrase.buildPassphraseCheck
 import org.mega.entropy.security.pin.PinManager
 import org.mega.entropy.storage.SessionRepository
 import org.mega.entropy.ui.about.AboutScreen
@@ -30,6 +31,7 @@ import org.mega.entropy.ui.diceentry.DiceEntryScreen
 import org.mega.entropy.ui.diceentry.DiceSessionViewModel
 import org.mega.entropy.ui.entropy.EntropyScreen
 import org.mega.entropy.ui.howitworks.HowItWorksScreen
+import org.mega.entropy.ui.loading.LoadingScreen
 import org.mega.entropy.ui.mnemonic.FinalMnemonicScreen
 import org.mega.entropy.ui.onboarding.BeforeYouBeginScreen
 import org.mega.entropy.ui.passphrase.PassphraseScreen
@@ -68,7 +70,16 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    NavHost(navController = navController, startDestination = MegaDestinations.WELCOME) {
+    NavHost(navController = navController, startDestination = MegaDestinations.LOADING) {
+        composable(MegaDestinations.LOADING) {
+            LoadingScreen(
+                onEnter = {
+                    navController.navigate(MegaDestinations.WELCOME) {
+                        popUpTo(MegaDestinations.LOADING) { inclusive = true }
+                    }
+                },
+            )
+        }
         composable(MegaDestinations.WELCOME) {
             val coroutineScope = rememberCoroutineScope()
             WelcomeScreen(
@@ -129,7 +140,17 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                         coroutineScope.launch {
                             val success = state.mnemonicResult as? MnemonicResult.Success
                             val mnemonicWords = if (pendingSaveWithMnemonic) success?.words else null
-                            repository.saveSession(diceRolls = state.allRolls, mnemonicWords = mnemonicWords)
+                            val passphrase = state.passphrase
+                            val passphraseCheck = if (state.pendingSavePassphraseCheck && success != null && passphrase != null) {
+                                buildPassphraseCheck(success.words, passphrase)
+                            } else {
+                                null
+                            }
+                            repository.saveSession(
+                                diceRolls = state.allRolls,
+                                mnemonicWords = mnemonicWords,
+                                passphraseCheck = passphraseCheck,
+                            )
                             diceSessionViewModel.clearPendingSave()
                             diceSessionViewModel.resetSession()
                             navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
@@ -313,7 +334,10 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
             if (success != null) {
                 PassphraseScreen(
                     words = success.words,
-                    onContinue = { navController.navigate(MegaDestinations.SAVE_SESSION) },
+                    onContinue = { passphrase ->
+                        sharedViewModel.setPassphrase(passphrase)
+                        navController.navigate(MegaDestinations.SAVE_SESSION)
+                    },
                 )
             }
         }
@@ -333,14 +357,24 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
             // doesn't, defer the save (via sharedViewModel.requestPendingSave)
             // and force the user through PIN_SETUP first; PIN_SETUP performs
             // the deferred save itself once a PIN is set (see above).
-            fun saveOrRequirePin(withMnemonic: Boolean) {
+            fun saveOrRequirePin(withMnemonic: Boolean, withPassphraseCheck: Boolean) {
                 coroutineScope.launch {
                     if (pinManager.isPinEnabled()) {
                         val mnemonicWords = if (withMnemonic) success?.words else null
-                        repository.saveSession(diceRolls = state.allRolls, mnemonicWords = mnemonicWords)
+                        val passphrase = state.passphrase
+                        val passphraseCheck = if (withPassphraseCheck && success != null && passphrase != null) {
+                            buildPassphraseCheck(success.words, passphrase)
+                        } else {
+                            null
+                        }
+                        repository.saveSession(
+                            diceRolls = state.allRolls,
+                            mnemonicWords = mnemonicWords,
+                            passphraseCheck = passphraseCheck,
+                        )
                         finishAndReturnToWelcome()
                     } else {
-                        sharedViewModel.requestPendingSave(withMnemonic)
+                        sharedViewModel.requestPendingSave(withMnemonic, withPassphraseCheck)
                         navController.navigate(MegaDestinations.PIN_SETUP)
                     }
                 }
@@ -349,9 +383,14 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
             SaveSessionScreen(
                 rollCount = state.mnemonicLength.rollCount,
                 wordCount = state.mnemonicLength.wordCount,
+                hasPendingPassphrase = state.passphrase != null,
                 onDontSave = { finishAndReturnToWelcome() },
-                onSaveDiceOnly = { saveOrRequirePin(withMnemonic = false) },
-                onSaveDiceAndMnemonic = { saveOrRequirePin(withMnemonic = true) },
+                onSaveDiceOnly = { savePassphraseCheck ->
+                    saveOrRequirePin(withMnemonic = false, withPassphraseCheck = savePassphraseCheck)
+                },
+                onSaveDiceAndMnemonic = { savePassphraseCheck ->
+                    saveOrRequirePin(withMnemonic = true, withPassphraseCheck = savePassphraseCheck)
+                },
             )
         }
     }

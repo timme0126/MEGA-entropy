@@ -59,7 +59,7 @@ fun SavedSessionsScreen(
             state.sessions.isEmpty() -> {
                 Text(
                     "No saved sessions. Sessions are only saved when you " +
-                        "explicitly choose to on the Save screen at the end " +
+                        "explicitly choose to save on the Save screen at the end " +
                         "of a dice-rolling flow.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -112,7 +112,9 @@ private fun SavedSessionCard(
             Text(dateText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         }
         Text(
-            "${session.rollsCount} rolls" + if (session.hasMnemonic) " · mnemonic saved" else "",
+            "${session.rollsCount} rolls" +
+                (if (session.hasMnemonic) " · mnemonic saved" else "") +
+                (if (session.hasPassphraseCheck) " · passphrase check saved" else ""),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -2,6 +2,7 @@ package org.mega.entropy.ui.savesession
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -30,17 +33,25 @@ import org.mega.entropy.ui.theme.MegaError
  * Spec section 16, "Save?" step. Saving is always explicit, defaults to
  * dice-only, and saving the derived mnemonic requires a second, separate
  * confirmation on top of picking that option in the first place.
+ *
+ * hasPendingPassphrase reflects whether a passphrase was entered on the
+ * preceding (optional) PassphraseScreen; when true, an additional opt-in
+ * checkbox offers to also save a PassphraseCheck for it, independent of
+ * whether the mnemonic itself is saved (a check can always be verified
+ * later since the mnemonic is recomputable from saved dice rolls).
  */
 @Composable
 fun SaveSessionScreen(
     rollCount: Int,
     wordCount: Int,
+    hasPendingPassphrase: Boolean,
     onDontSave: () -> Unit,
-    onSaveDiceOnly: () -> Unit,
-    onSaveDiceAndMnemonic: () -> Unit,
+    onSaveDiceOnly: (savePassphraseCheck: Boolean) -> Unit,
+    onSaveDiceAndMnemonic: (savePassphraseCheck: Boolean) -> Unit,
 ) {
     SecureScreen()
     var confirmingMnemonicSave by remember { mutableStateOf(false) }
+    var savePassphraseCheck by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -56,6 +67,24 @@ fun SaveSessionScreen(
                 "Saving is entirely optional and always something you choose.",
             style = MaterialTheme.typography.bodyMedium,
         )
+
+        if (hasPendingPassphrase) {
+            MegaCard(title = "Also Save a Passphrase Check") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Save a way to verify the passphrase you just entered " +
+                            "later, without MEGA ever storing or displaying " +
+                            "the passphrase itself. Only applies if you save " +
+                            "this session below.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = savePassphraseCheck, onCheckedChange = { savePassphraseCheck = it })
+                        Text("Save a passphrase check", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
 
         if (!confirmingMnemonicSave) {
             MegaCard(title = "Don't Save") {
@@ -77,7 +106,7 @@ fun SaveSessionScreen(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            MegaSecondaryButton(text = "Save Dice Rolls", onClick = onSaveDiceOnly)
+            MegaSecondaryButton(text = "Save Dice Rolls", onClick = { onSaveDiceOnly(savePassphraseCheck) })
 
             MegaCard(title = "Save Dice Rolls + Derived Mnemonic") {
                 Text(
@@ -106,7 +135,10 @@ fun SaveSessionScreen(
                     fontWeight = FontWeight.SemiBold,
                 )
             }
-            MegaPrimaryButton(text = "Yes, Save the Mnemonic Too", onClick = onSaveDiceAndMnemonic)
+            MegaPrimaryButton(
+                text = "Yes, Save the Mnemonic Too",
+                onClick = { onSaveDiceAndMnemonic(savePassphraseCheck) },
+            )
             MegaSecondaryButton(text = "Cancel", onClick = { confirmingMnemonicSave = false })
         }
     }

@@ -1,5 +1,7 @@
 package org.mega.entropy.storage
 
+import org.mega.entropy.security.passphrase.PassphraseCheck
+
 data class SavedSessionMetadata(
     val id: String,
     val createdAtEpochMillis: Long,
@@ -10,6 +12,10 @@ data class SavedSessionMetadata(
     // the rest of this metadata), so no validation on its contents beyond
     // not containing the line-based format's own delimiter.
     val label: String = "",
+    // Whether a PassphraseCheck (see SessionRepository) is stored in this
+    // session's encrypted payload. Tracked here, unencrypted, purely so the
+    // UI can decide whether to offer "Set" or "Verify" without decrypting.
+    val hasPassphraseCheck: Boolean = false,
 ) {
     init {
         require(id.isNotBlank()) { "id must not be blank" }
@@ -23,6 +29,7 @@ data class SavedSessionRecord(
     val metadata: SavedSessionMetadata,
     val diceRolls: List<Int>,
     val mnemonicWords: List<String>?,
+    val passphraseCheck: PassphraseCheck?,
 ) {
     init {
         // rollsCount must be within the allowed range for a session
@@ -43,6 +50,11 @@ data class SavedSessionRecord(
             require(mnemonicWords.size == 12 || mnemonicWords.size == 24) {
                 "mnemonicWords must contain 12 or 24 entries when present, got ${mnemonicWords.size}"
             }
+        }
+        // passphraseCheck nullability must strictly match the hasPassphraseCheck flag
+        val passphraseCheckMatchesFlag = (passphraseCheck != null) == metadata.hasPassphraseCheck
+        require(passphraseCheckMatchesFlag) {
+            "passphraseCheck nullability must match hasPassphraseCheck flag"
         }
     }
 }

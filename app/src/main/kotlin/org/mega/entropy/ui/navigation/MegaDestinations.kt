@@ -7,6 +7,8 @@ package org.mega.entropy.ui.navigation
  * flat list is easier to audit than a framework.
  */
 object MegaDestinations {
+    /** Shown once per cold launch, before WELCOME — see LoadingScreen. */
+    const val LOADING = "loading"
     const val WELCOME = "welcome"
     const val CHOOSE_LENGTH = "choose_length"
     const val BEFORE_YOU_BEGIN = "before_you_begin"

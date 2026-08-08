@@ -38,16 +38,18 @@ import org.mega.entropycore.deriveSeed
  * Optional step after FinalMnemonicScreen: attaches a BIP39 "25th word"
  * passphrase to the mnemonic MEGA just derived from dice, per BIP-0039 —
  * see deriveSeed's KDoc for why this only ever operates on words this app
- * derived itself, never arbitrary typed-in ones. Nothing computed here
- * (passphrase or seed) is ever saved to disk, saved to SavedStateHandle,
- * or passed to any other screen — the seed exists only in this
- * composable's memory for as long as it's on screen, exactly like the
- * mnemonic itself on FinalMnemonicScreen.
+ * derived itself, never arbitrary typed-in ones. The computed seed itself
+ * is never saved to disk or passed to any other screen — it exists only in
+ * this composable's memory for as long as it's on screen (the same way the
+ * mnemonic on FinalMnemonicScreen is held in memory). The entered passphrase
+ * is handed back via onContinue purely so the next screen (Save) can offer
+ * to store a way to verify it later; MEGA still never saves the passphrase
+ * itself.
  */
 @Composable
 fun PassphraseScreen(
     words: List<String>,
-    onContinue: () -> Unit,
+    onContinue: (String?) -> Unit,
 ) {
     SecureScreen()
     var passphrase by remember { mutableStateOf("") }
@@ -83,9 +85,13 @@ fun PassphraseScreen(
             Text(
                 "If you forget this passphrase, the wallet it protects is " +
                     "permanently unrecoverable — even with the correct " +
-                    "$wordCountLabel. There is no reset. MEGA never saves it " +
-                    "anywhere; you must remember it yourself, ideally " +
-                    "separately from where you keep the words.",
+                    "$wordCountLabel. There is no reset. MEGA never saves " +
+                    "the passphrase itself; you must remember it yourself, " +
+                    "ideally separately from where you keep the words. On " +
+                    "the next screen you can optionally save a way to " +
+                    "verify you've remembered it correctly later — MEGA " +
+                    "will confirm a match without ever storing or " +
+                    "displaying the passphrase again.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MegaError,
                 fontWeight = FontWeight.SemiBold,
@@ -126,7 +132,7 @@ fun PassphraseScreen(
                 enabled = passphrase.isNotEmpty() && !mismatch,
                 onClick = { calculatedSeed = deriveSeed(words, passphrase) },
             )
-            MegaSecondaryButton(text = "Skip (No Passphrase)", onClick = onContinue)
+            MegaSecondaryButton(text = "Skip (No Passphrase)", onClick = { onContinue(null) })
         } else {
             val strengthBits = remember(passphrase) { estimatePassphraseStrengthBits(passphrase) }
             MegaCard(title = "Passphrase Strength (Estimate)") {
@@ -170,7 +176,7 @@ fun PassphraseScreen(
                     confirmPassphrase = ""
                 },
             )
-            MegaPrimaryButton(text = "Continue", onClick = onContinue)
+            MegaPrimaryButton(text = "Continue", onClick = { onContinue(passphrase) })
         }
     }
 }

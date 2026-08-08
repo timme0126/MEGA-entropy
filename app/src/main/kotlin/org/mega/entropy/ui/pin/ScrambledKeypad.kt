@@ -1,7 +1,6 @@
 package org.mega.entropy.ui.pin
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -105,9 +104,8 @@ fun ScrambledKeypad(
 @Composable
 private fun KeypadButton(digit: Int, onTapped: (Int) -> Unit, modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier
-            .aspectRatio(1f)
-            .clickable { onTapped(digit) },
+        onClick = { onTapped(digit) },
+        modifier = modifier.aspectRatio(1f),
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
@@ -134,9 +132,9 @@ private fun FunctionButton(
         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
     }
     Surface(
-        modifier = modifier
-            .aspectRatio(1f)
-            .clickable(enabled = enabled) { onTapped() },
+        onClick = onTapped,
+        enabled = enabled,
+        modifier = modifier.aspectRatio(1f),
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {

@@ -14,7 +14,6 @@ fun AboutScreen(onBack: () -> Unit, onPrivacy: () -> Unit) {
     MegaInfoScaffold(title = "About", onBack = onBack) {
         Text("MEGA — Make Entropy Great Again", style = MaterialTheme.typography.titleLarge)
         MegaMonoText("Version ${BuildConfig.VERSION_NAME}")
-        MegaMonoText("Mega.it")
 
         MegaSection(
             heading = "What this is",
@@ -24,11 +23,14 @@ fun AboutScreen(onBack: () -> Unit, onPrivacy: () -> Unit) {
                 "independently verified. See How It Works and Security Model.",
         )
         MegaSection(
-            heading = "Experimental status",
-            body = "MEGA has not undergone an independent security audit. " +
-                "Do not use it to protect meaningful funds until one has " +
-                "happened. See the project's SECURITY.md for what an " +
-                "independent reviewer should check.",
+            heading = "Security review status",
+            body = "MEGA's entropy-derivation logic has undergone a " +
+                "thorough internal code review and audit (see " +
+                "docs/SECURITY-AUDIT-ENTROPY-CORE.md), verifying its " +
+                "mathematical correctness against the BIP-39 " +
+                "specification. It has not yet undergone an independent " +
+                "third-party security audit. Exercise caution before " +
+                "using it to protect meaningful funds.",
         )
         MegaSection(
             heading = "License",
@@ -43,6 +45,11 @@ fun AboutScreen(onBack: () -> Unit, onPrivacy: () -> Unit) {
                 "word list, verified against its recorded SHA-256 hash at " +
                 "build time and again at runtime before any mnemonic is " +
                 "derived. See docs/BIP39-DERIVATION.md in the repository.",
+        )
+        MegaSection(
+            heading = "Source",
+            body = "Source, documentation, and issue tracking: " +
+                "github.com/timme0126/MEGA-entropy",
         )
         MegaPrimaryButton(text = "Privacy", onClick = onPrivacy)
     }

@@ -1,9 +1,7 @@
 # MEGA — Make Entropy Great Again
 
-*mega.it*
-
 A transparent, offline Android tool for converting **100 physical
-six-sided-die rolls, supplied entirely by the user,** into a valid 24-word
+six-sided die rolls, supplied entirely by the user,** into a valid 24-word
 English BIP39 mnemonic.
 
 > **Status: experimental, not independently audited.** Do not use MEGA to
@@ -37,7 +35,7 @@ reviewing this project.
 1. You roll a fair six-sided die 100 times and enter each result.
 2. MEGA maps each roll to a base-6 digit and interprets all 100 digits as
    one large integer `X`, shown incrementally as you enter each batch.
-3. Unbiased rejection sampling: if `X` falls in the small slice of values
+3. Unbiased rejection sampling: if `X` falls in the small range of values
    that would introduce modulo bias, the entire sequence is rejected and
    you re-roll from scratch — no partial retry, no workaround. About 1 in 8
    valid sequences hits this by design (see
