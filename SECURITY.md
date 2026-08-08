@@ -75,6 +75,6 @@ directly. Include:
    [`docs/REPRODUCIBLE-BUILD.md`](docs/REPRODUCIBLE-BUILD.md), which doesn't
    exist yet.
 4. **Not done, and can't be done by any AI tool run by the project itself**
-   (Claude, Kimi, or Codex) — this needs a human/firm with no relationship
+   run by the project itself — this needs a human/firm with no relationship
    to development. Steps 1-3 are defense-in-depth evidence for this step,
    not a substitute for it.

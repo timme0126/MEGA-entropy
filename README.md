@@ -30,6 +30,30 @@ reviewing this project.
 - **100 DICE ROLLS** — one d6, rolled by you, entered as 20 batches of 5
 - **ZERO DEVICE ENTROPY IN SEED** — see above
 
+## Beta testing and hand verification
+
+If you are testing MEGA, start with
+[`docs/BETA-TESTING.md`](docs/BETA-TESTING.md). It explains the problem MEGA
+is trying to solve: wallet seed generation often asks users to trust hidden
+randomness, while MEGA makes the entropy source physical, visible, and
+reviewable.
+
+MEGA is designed to be verified by hand. The repository includes printable
+reference PDFs under [`docs/references/`](docs/references/):
+
+- [`dplusplus-hex.pdf`](docs/references/dplusplus-hex.pdf), mirrored from
+  <https://dplusplus.me/hex.pdf>
+- [`bip39-24-word-dice-worksheet.pdf`](docs/references/bip39-24-word-dice-worksheet.pdf),
+  the MEGA 100 d6 / 24-word worksheet
+
+The official BIP39 English word list is also vendored as plain text at
+[`entropy-core/src/main/resources/bip39/english.txt`](entropy-core/src/main/resources/bip39/english.txt)
+and hash-checked at runtime. Use
+[`docs/HAND-VERIFICATION.md`](docs/HAND-VERIFICATION.md) to check MEGA's
+displayed BIP39 indexes, hex values, checksum-sensitive final word, and final
+mnemonic against those references. A small educational GitHub Pages-style site
+is available at [`docs/index.html`](docs/index.html).
+
 ## What it does
 
 1. You roll a fair six-sided die 100 times and enter each result.
@@ -82,6 +106,10 @@ table.
 | Document | What it covers |
 |---|---|
 | [`docs/NO-RNG-PROOF.md`](docs/NO-RNG-PROOF.md) | The core "no device randomness in the seed" argument — read this first |
+| [`docs/BETA-TESTING.md`](docs/BETA-TESTING.md) | Beta testing purpose, GrapheneOS guidance, and what to report |
+| [`docs/HAND-VERIFICATION.md`](docs/HAND-VERIFICATION.md) | How to verify MEGA's BIP39 words by hand using the committed PDFs |
+| [`docs/references/`](docs/references/) | Committed reference PDFs and their SHA-256 hashes |
+| [`docs/index.html`](docs/index.html) | Mini GitHub Pages-style project site |
 | [`docs/ENTROPY-MATH.md`](docs/ENTROPY-MATH.md) | Why 100 rolls, why rejection sampling, the math behind each step |
 | [`docs/BIP39-DERIVATION.md`](docs/BIP39-DERIVATION.md) | The exact BIP39 checksum/word-derivation steps, and the vendored word list's provenance |
 | [`docs/SECURITY-MODEL.md`](docs/SECURITY-MODEL.md) | Plain-English threat model: what MEGA does and doesn't protect against |

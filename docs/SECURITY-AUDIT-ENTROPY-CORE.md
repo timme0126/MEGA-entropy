@@ -1,10 +1,9 @@
 # MEGA Entropy-Core Security Audit Report
 
 > **Correction (2026-08-08, later the same day):** This report was written
-> by Claude (the AI assistant used for MEGA's development), not a human or
-> a party independent of the codebase — "Senior Application Security
-> Engineer" below describes the persona it was prompted with, not its
-> actual identity. A follow-up pass with a second AI model (Kimi K3),
+> by a non-independent AI assistant used during MEGA development, not a human or
+> a party independent of the codebase. "Senior Application Security
+> Engineer" below describes the review persona, not an independent auditor. A follow-up pass with a second AI model (Kimi K3),
 > intended as an independent corroboration, was found to have simply read
 > and reproduced this file verbatim rather than performing its own review —
 > so despite appearances, no second opinion actually happened at that time.
@@ -16,7 +15,7 @@
 > audit — see `SECURITY.md`.
 
 **Date:** 2026-08-08
-**Auditor:** Claude (AI assistant), prompted as a senior application security engineer — not independent of the codebase; see correction above
+**Auditor:** Non-independent AI assistant, prompted as a senior application security engineer; see correction above
 **Scope:** `entropy-core/src/main/kotlin/org/mega/entropycore/` (11 source files, 10 test files)
 **Method:** Manual code review, independent mathematical verification, independent BIP39 derivation, Gradle security audit execution, full test suite execution
 

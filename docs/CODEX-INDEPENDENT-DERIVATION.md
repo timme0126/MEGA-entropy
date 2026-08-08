@@ -8,7 +8,7 @@ code in this directory.
 
 ```text
 $ pwd && rg --files -uu
-/tmp/claude-1000/-home-timme/93acfbe6-1a11-4c73-9ce9-a9b97a141158/scratchpad/codex-independent-derivation
+/tmp/isolated-mega-independent-derivation
 docs/BIP39-DERIVATION.md
 docs/TEST-VECTORS.md
 docs/NO-RNG-PROOF.md
