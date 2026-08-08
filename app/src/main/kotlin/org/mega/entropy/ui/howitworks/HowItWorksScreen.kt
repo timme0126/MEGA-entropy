@@ -73,12 +73,18 @@ fun HowItWorksScreen(onBack: () -> Unit) {
                 "randomness of its own.",
         )
 
-        MegaCard(title = "Why 24 words?") {
+        MegaCard(title = "Why 24 words? (or 12?)") {
             MegaMonoText("ENT = 256")
             MegaMonoText("CS  = ENT / 32 = 8")
             MegaMonoText("ENT + CS = 256 + 8 = 264")
             MegaMonoText("264 / 11 = 24")
             Text("BIP39 splits the entropy+checksum bitstream into 11-bit groups, so the total bit count must divide evenly by 11. 264 does, giving 24 words.")
+            Text(
+                "MEGA also offers a 12-word option: ENT=128, CS=128/32=4, " +
+                    "132/11=12. It's the same construction with 128 bits of " +
+                    "entropy instead of 256 — still a standard, fully valid " +
+                    "BIP39 mnemonic, just from 50 dice rolls instead of 100.",
+            )
         }
 
         MegaCard(title = "Why 2048 words?") {
