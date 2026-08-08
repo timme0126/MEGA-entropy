@@ -36,13 +36,16 @@ fun accumulate(previousX: BigInteger, chunk: Long): BigInteger {
 }
 
 /**
- * Folds the accumulation process over a sequence of 20 batch chunks.
- * Starts from X0 = 0 and applies accumulate sequentially.
- * This path is mathematically equivalent to interpreting all 100 base-6 digits
- * as a single positional integer, but allows incremental UI updates without
- * recomputing the entire sequence from scratch.
+ * Folds the accumulation process over a sequence of batch chunks: 20 chunks
+ * for the 100-roll/24-word case, 10 chunks for the 50-roll/12-word case (see
+ * MnemonicLength). Starts from X0 = 0 and applies accumulate sequentially.
+ * This path is mathematically equivalent to interpreting all of the base-6
+ * digits as a single positional integer, but allows incremental UI updates
+ * without recomputing the entire sequence from scratch.
  */
 fun accumulateAllBatches(chunksInOrder: List<Long>): BigInteger {
-    require(chunksInOrder.size == 20) { "accumulateAllBatches requires exactly 20 chunks, got: ${chunksInOrder.size}" }
+    require(chunksInOrder.size == 10 || chunksInOrder.size == 20) {
+        "accumulateAllBatches requires exactly 10 or 20 chunks, got: ${chunksInOrder.size}"
+    }
     return chunksInOrder.fold(BigInteger.ZERO) { acc, chunk -> accumulate(acc, chunk) }
 }

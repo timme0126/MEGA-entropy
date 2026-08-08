@@ -28,6 +28,17 @@ val forbiddenApiPatterns = listOf(
     "java.time.",
     "java.util.Date",
     "android.",
+    // Reflection/dynamic-loading patterns that could indirectly reach a
+    // forbidden RNG/clock API without matching a literal substring above
+    // (see docs/CODEX-AUDIT-ENTROPY-CORE.md, Finding: securityAudit bypass).
+    "Class.forName",
+    "getDeclaredMethod",
+    "getMethod",
+    "java.lang.reflect",
+    "MethodHandles",
+    "ServiceLoader",
+    "shuffled",
+    ".random(",
 )
 
 tasks.register("securityAudit") {

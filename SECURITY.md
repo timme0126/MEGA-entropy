@@ -54,9 +54,27 @@ directly. Include:
 
 ## Next security steps before trusting MEGA with real funds
 
-1. Independent source review of `:entropy-core` against BIP-0039
-2. Independent re-derivation of this repository's test vectors
-   (`docs/TEST-VECTORS.md`) using a separate, trusted implementation
-3. Reproducible-build verification (`docs/REPRODUCIBLE-BUILD.md`) — confirm
-   the APK you install actually matches this source
-4. A formal, independent security/cryptography audit
+1. **Done (automated, not human-independent):** [`docs/CODEX-AUDIT-ENTROPY-CORE.md`](docs/CODEX-AUDIT-ENTROPY-CORE.md)
+   — a source review of `:entropy-core` against BIP-0039, run with no access
+   to any of this repo's other audit docs so it couldn't just echo them back
+   (see the correction note in
+   [`docs/SECURITY-AUDIT-ENTROPY-CORE.md`](docs/SECURITY-AUDIT-ENTROPY-CORE.md)
+   for why that isolation mattered). Found one real MEDIUM finding — public
+   low-level APIs in `:entropy-core` could be composed to bypass rejection
+   sampling — not caught by either prior pass; fixed the same day (see the
+   remediation-status note at the top of the report). Still AI-run, not a
+   substitute for #4.
+2. **Done:** [`docs/CODEX-INDEPENDENT-DERIVATION.md`](docs/CODEX-INDEPENDENT-DERIVATION.md)
+   — a from-scratch reimplementation ([`tools/independent_derivation.py`](tools/independent_derivation.py)),
+   written with no access to this repo's Kotlin source, matches all 5
+   vectors in `docs/TEST-VECTORS.md`.
+3. **Partial:** two clean rebuilds on the same machine produced
+   byte-identical debug APKs (rules out incidental build non-determinism),
+   but full reproducible-build verification needs the release-build/signing
+   pipeline described as future work in
+   [`docs/REPRODUCIBLE-BUILD.md`](docs/REPRODUCIBLE-BUILD.md), which doesn't
+   exist yet.
+4. **Not done, and can't be done by any AI tool run by the project itself**
+   (Claude, Kimi, or Codex) — this needs a human/firm with no relationship
+   to development. Steps 1-3 are defense-in-depth evidence for this step,
+   not a substitute for it.

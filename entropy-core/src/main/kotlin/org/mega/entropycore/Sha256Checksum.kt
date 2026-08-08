@@ -14,7 +14,7 @@ import java.security.MessageDigest
  * @param data The input bytes to hash.
  * @return The 32-byte SHA-256 digest.
  */
-fun sha256(data: ByteArray): ByteArray {
+internal fun sha256(data: ByteArray): ByteArray {
     val digest = MessageDigest.getInstance("SHA-256")
     return digest.digest(data)
 }
@@ -31,7 +31,7 @@ fun sha256(data: ByteArray): ByteArray {
  * @return ChecksumResult containing the full SHA-256 digest and the checksum bits.
  * @throws IllegalArgumentException if entropyBytes.size is not 16 or 32.
  */
-fun calculateChecksum(entropyBytes: ByteArray): ChecksumResult {
+internal fun calculateChecksum(entropyBytes: ByteArray): ChecksumResult {
     if (entropyBytes.size != 16 && entropyBytes.size != 32) {
         throw IllegalArgumentException("Entropy must be exactly 16 or 32 bytes, got: ${entropyBytes.size}")
     }

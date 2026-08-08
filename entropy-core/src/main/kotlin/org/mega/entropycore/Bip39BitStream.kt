@@ -9,7 +9,7 @@ package org.mega.entropycore
  * bits. This function enforces that exact bit ordering to guarantee
  * deterministic word index derivation.
  */
-fun buildBitStream(entropyBytes: ByteArray, checksumBits: BooleanArray): BooleanArray {
+internal fun buildBitStream(entropyBytes: ByteArray, checksumBits: BooleanArray): BooleanArray {
     require(entropyBytes.size == 16 || entropyBytes.size == 32) {
         "Entropy must be exactly 16 or 32 bytes, got ${entropyBytes.size}"
     }
@@ -45,7 +45,7 @@ fun buildBitStream(entropyBytes: ByteArray, checksumBits: BooleanArray): Boolean
  * group being the most significant bit (MSB). This matches BIP39's
  * specification for deriving the 0..2047 word indices.
  */
-fun splitInto11BitGroups(bitStream: BooleanArray): List<Int> {
+internal fun splitInto11BitGroups(bitStream: BooleanArray): List<Int> {
     require(bitStream.size % 11 == 0) {
         "Bit stream length must be a multiple of 11, got ${bitStream.size}"
     }

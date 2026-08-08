@@ -9,12 +9,11 @@ package org.mega.entropycore
  * rather than two hand-written copies that could quietly diverge.
  *
  * @param rolls Exactly 100 die rolls, each in the range 1..6.
- * @param wordList The validated BIP39 word list (defaults to the official English list).
  * @return MnemonicResult.Success with the derived mnemonic, or MnemonicResult.Rejected
  *         if the sequence fails the unbiased rejection sampling threshold.
  */
-fun deriveMnemonic(rolls: List<Int>, wordList: List<String> = loadOfficialEnglishWordList()): MnemonicResult =
-    deriveMnemonic(rolls, MnemonicLength.TWENTY_FOUR_WORDS, wordList)
+fun deriveMnemonic(rolls: List<Int>): MnemonicResult =
+    deriveMnemonic(rolls, MnemonicLength.TWENTY_FOUR_WORDS)
 
 /**
  * Generalized mnemonic derivation pipeline covering both lengths MEGA
@@ -24,17 +23,22 @@ fun deriveMnemonic(rolls: List<Int>, wordList: List<String> = loadOfficialEnglis
  * checksum, derives word indices, and maps them to the official English
  * word list.
  *
+ * The word list is always the verified official English list — this
+ * function intentionally does not accept a caller-supplied word list, so
+ * an external caller cannot swap in a malformed or non-standard list and
+ * silently get a non-BIP39-compliant mnemonic out of an otherwise-correct
+ * entropy/checksum derivation.
+ *
  * @param rolls Exactly `length.rollCount` die rolls, each in the range 1..6.
  * @param length Which mnemonic length to derive (12 or 24 words).
- * @param wordList The validated BIP39 word list (defaults to the official English list).
  * @return MnemonicResult.Success with the derived mnemonic, or MnemonicResult.Rejected
  *         if the sequence fails the unbiased rejection sampling threshold.
  */
 fun deriveMnemonic(
     rolls: List<Int>,
     length: MnemonicLength,
-    wordList: List<String> = loadOfficialEnglishWordList(),
 ): MnemonicResult {
+    val wordList = loadOfficialEnglishWordList()
     // 1. Validate input invariants strictly
     require(rolls.size == length.rollCount) {
         "Exactly ${length.rollCount} die rolls are required for ${length.wordCount} words, got ${rolls.size}"

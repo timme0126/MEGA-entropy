@@ -14,7 +14,7 @@ class SmokeTest {
     @Test
     fun `all rolls of one is the minimum X and must be accepted`() {
         val allOnes = List(100) { 1 }
-        val result = deriveMnemonic(allOnes, loadOfficialEnglishWordList())
+        val result = deriveMnemonic(allOnes)
         assertTrue(result is MnemonicResult.Success)
         result as MnemonicResult.Success
         // X = 0 -> E = 0 mod 2^256 = 0 -> 32 zero bytes -> 64 hex zero chars.
@@ -25,7 +25,7 @@ class SmokeTest {
     @Test
     fun `all rolls of six is the maximum X and must be rejected`() {
         val allSixes = List(100) { 6 }
-        val result = deriveMnemonic(allSixes, loadOfficialEnglishWordList())
+        val result = deriveMnemonic(allSixes)
         assertTrue(result is MnemonicResult.Rejected)
     }
 

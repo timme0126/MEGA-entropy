@@ -8,7 +8,7 @@ import java.math.BigInteger
  * @param x The accepted accumulated integer (guaranteed < 2^256 after rejection sampling).
  * @return Entropy256 wrapping the 32-byte array.
  */
-fun deriveEntropy256(x: BigInteger): Entropy256 {
+internal fun deriveEntropy256(x: BigInteger): Entropy256 {
     // E = x mod 2^256. Since x < T = 5 * 2^256, E is simply x % 2^256.
     val e = x.mod(TWO_POW_256)
     val bytes = bigIntegerToUnsignedBytes(e, 32)
@@ -21,7 +21,7 @@ fun deriveEntropy256(x: BigInteger): Entropy256 {
  * exactly entropyBits/8 unsigned big-endian bytes. Same math as
  * deriveEntropy256 above, parametrized instead of hard-coded to 256/32.
  */
-fun deriveEntropyBits(x: BigInteger, entropyBits: Int): MnemonicEntropy {
+internal fun deriveEntropyBits(x: BigInteger, entropyBits: Int): MnemonicEntropy {
     val e = x.mod(twoPow(entropyBits))
     val bytes = bigIntegerToUnsignedBytes(e, entropyBits / 8)
     return MnemonicEntropy(bytes)
@@ -43,7 +43,7 @@ fun deriveEntropyBits(x: BigInteger, entropyBits: Int): MnemonicEntropy {
  * @return A ByteArray of exactly lengthBytes.
  * @throws IllegalArgumentException if value is negative or cannot fit in lengthBytes.
  */
-fun bigIntegerToUnsignedBytes(value: BigInteger, lengthBytes: Int): ByteArray {
+internal fun bigIntegerToUnsignedBytes(value: BigInteger, lengthBytes: Int): ByteArray {
     if (value.signum() < 0) {
         throw IllegalArgumentException("Value must be non-negative, got: $value")
     }

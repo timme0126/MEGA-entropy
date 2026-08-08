@@ -27,7 +27,7 @@ class TwelveWordMnemonicTest {
     @Test
     fun `all rolls of one is the minimum X and must be accepted for 12 words`() {
         val rolls = List(50) { 1 }
-        val result = deriveMnemonic(rolls, MnemonicLength.TWELVE_WORDS, loadOfficialEnglishWordList())
+        val result = deriveMnemonic(rolls, MnemonicLength.TWELVE_WORDS)
         assertTrue(result is MnemonicResult.Success)
         result as MnemonicResult.Success
         assertEquals("0".repeat(32), result.entropy.hex)
@@ -43,7 +43,7 @@ class TwelveWordMnemonicTest {
     @Test
     fun `all rolls of six is the maximum X and must be rejected for 12 words`() {
         val rolls = List(50) { 6 }
-        val result = deriveMnemonic(rolls, MnemonicLength.TWELVE_WORDS, loadOfficialEnglishWordList())
+        val result = deriveMnemonic(rolls, MnemonicLength.TWELVE_WORDS)
         assertTrue(result is MnemonicResult.Rejected)
     }
 
@@ -58,13 +58,13 @@ class TwelveWordMnemonicTest {
     @Test
     fun `deriveMnemonic requires exactly 50 rolls for TWELVE_WORDS`() {
         assertThrows(IllegalArgumentException::class.java) {
-            deriveMnemonic(List(49) { 1 }, MnemonicLength.TWELVE_WORDS, loadOfficialEnglishWordList())
+            deriveMnemonic(List(49) { 1 }, MnemonicLength.TWELVE_WORDS)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            deriveMnemonic(List(51) { 1 }, MnemonicLength.TWELVE_WORDS, loadOfficialEnglishWordList())
+            deriveMnemonic(List(51) { 1 }, MnemonicLength.TWELVE_WORDS)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            deriveMnemonic(List(100) { 1 }, MnemonicLength.TWELVE_WORDS, loadOfficialEnglishWordList())
+            deriveMnemonic(List(100) { 1 }, MnemonicLength.TWELVE_WORDS)
         }
     }
 

@@ -56,7 +56,7 @@ fun loadOfficialEnglishWordList(): List<String> {
  * The word list is never sorted or modified; the index directly corresponds to the list position.
  * Validates that all indices fall within the valid range [0, 2047] to prevent out-of-bounds access.
  */
-fun deriveWords(indices: List<Int>, wordList: List<String>): List<String> {
+internal fun deriveWords(indices: List<Int>, wordList: List<String>): List<String> {
     require(wordList.size == 2048) { "Word list must contain exactly 2048 words, got ${wordList.size}" }
     require(indices.all { it in 0..2047 }) { "All word indices must be in range 0..2047, found invalid index" }
 
