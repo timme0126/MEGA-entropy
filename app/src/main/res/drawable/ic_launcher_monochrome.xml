@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Monochrome variant for Android 13+ themed icons. The system renders
-    this as a single flat tint using the shape's alpha as a mask, so it
-    must be one opaque color with true transparent negative space (mixing
-    two opaque colors, as in the full-color foreground, would render as a
-    single undifferentiated blob once tinted). Uses evenOdd fill so the
-    five pip circles are cut out as transparent holes in the die shape.
+    Monochrome variant for Android 13+ themed icons, matching the isometric
+    die foreground: the hexagonal cube silhouette with all 6 pips (1+2+3)
+    cut out as transparent holes via evenOdd fill, since a themed icon is
+    rendered as a single flat tint using alpha as a mask.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -17,12 +15,12 @@
         android:fillColor="#000000"
         android:fillType="evenOdd"
         android:pathData="
-            M31,21 L77,21 A10,10 0 0 1 87,31 L87,77 A10,10 0 0 1 77,87
-            L31,87 A10,10 0 0 1 21,77 L21,31 A10,10 0 0 1 31,21 Z
-            M33,33 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0
-            M75,33 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0
-            M54,54 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0
-            M33,75 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0
-            M75,75 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0
+            M54,22 L81.71,38 L81.71,70 L54,86 L26.29,70 L26.29,38 Z
+            M54,38 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0
+            M73.4,52.4 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0
+            M62.31,71.6 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0
+            M33.22,66 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0
+            M40.14,62 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0
+            M47.07,58 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0
         " />
 </vector>
