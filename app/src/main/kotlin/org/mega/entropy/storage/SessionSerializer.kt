@@ -77,16 +77,19 @@ fun decodePayload(bytes: ByteArray): Pair<List<Int>, List<String>?> {
 }
 
 /**
- * Encodes session metadata into the exact plaintext format for the unencrypted .meta file.
+ * Encodes session metadata into the exact plaintext format for the unencrypted
+ * .meta file. V2 adds the user-editable label line; there is no migration
+ * from V1 (see decodeMetadata) since this predates any real saved data.
  */
 fun encodeMetadata(metadata: SavedSessionMetadata): ByteArray {
     val lines = listOf(
-        "MEGA-META-V1",
+        "MEGA-META-V2",
         "id:${metadata.id}",
         "createdAt:${metadata.createdAtEpochMillis}",
         "rollsCount:${metadata.rollsCount}",
         "hasMnemonic:${metadata.hasMnemonic}",
-        "alias:${metadata.keystoreAlias}"
+        "alias:${metadata.keystoreAlias}",
+        "label:${metadata.label}"
     )
     return lines.joinToString("\n").toByteArray(StandardCharsets.UTF_8)
 }
@@ -94,14 +97,19 @@ fun encodeMetadata(metadata: SavedSessionMetadata): ByteArray {
 /**
  * Decodes the unencrypted .meta file back into SavedSessionMetadata.
  *
- * WHY: We validate the header and parse strictly. A mismatched header indicates
- * a corrupted or incompatible file, so we fail closed.
+ * WHY: We validate the header and parse strictly. A mismatched header
+ * indicates a corrupted or incompatible file, so we fail closed — this
+ * includes the older MEGA-META-V1 format (no label field), which is
+ * treated as unreadable rather than silently guessing a default label.
+ * SessionFileStore.listAllMetadata() already skips (not crashes on)
+ * individual files that fail to parse, so pre-V2 test sessions simply stop
+ * being listed rather than breaking the app.
  */
 fun decodeMetadata(bytes: ByteArray): SavedSessionMetadata {
     val text = bytes.decodeToString()
     val lines = text.split("\n")
-    require(lines.size == 6) { "Invalid metadata format: expected exactly 6 lines, got ${lines.size}" }
-    require(lines[0] == "MEGA-META-V1") { "Invalid metadata format: first line must be exactly 'MEGA-META-V1'" }
+    require(lines.size == 7) { "Invalid metadata format: expected exactly 7 lines, got ${lines.size}" }
+    require(lines[0] == "MEGA-META-V2") { "Invalid metadata format: first line must be exactly 'MEGA-META-V2'" }
 
     fun extractValue(index: Int, key: String): String {
         val line = lines[index]
@@ -114,6 +122,7 @@ fun decodeMetadata(bytes: ByteArray): SavedSessionMetadata {
         createdAtEpochMillis = extractValue(2, "createdAt").toLong(),
         rollsCount = extractValue(3, "rollsCount").toInt(),
         hasMnemonic = extractValue(4, "hasMnemonic").toBoolean(),
-        keystoreAlias = extractValue(5, "alias")
+        keystoreAlias = extractValue(5, "alias"),
+        label = extractValue(6, "label"),
     )
 }

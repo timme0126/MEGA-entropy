@@ -64,4 +64,11 @@ class SavedSessionsViewModel(application: Application) : AndroidViewModel(applic
             refresh()
         }
     }
+
+    fun renameSession(id: String, label: String) {
+        viewModelScope.launch {
+            repository.renameSession(id, label)
+            refresh()
+        }
+    }
 }

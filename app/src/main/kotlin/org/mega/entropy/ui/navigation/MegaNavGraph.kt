@@ -111,12 +111,37 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             )
         }
         composable(MegaDestinations.PIN_SETUP) {
+            val state by diceSessionViewModel.uiState.collectAsState()
+            val coroutineScope = rememberCoroutineScope()
+            val context = LocalContext.current
+            val repository = remember { SessionRepository(context) }
+            val pendingSaveWithMnemonic = state.pendingSaveWithMnemonic
+
             PinSetupScreen(
                 onPinSet = {
                     appLockViewModel.unlock()
+                    if (pendingSaveWithMnemonic != null) {
+                        // Reached via a forced "you must set a PIN before
+                        // saving" redirect (see SAVE_SESSION below) — finish
+                        // the save that was waiting on this, then leave the
+                        // whole dice flow, exactly like a normal save does.
+                        coroutineScope.launch {
+                            val success = state.mnemonicResult as? MnemonicResult.Success
+                            val mnemonicWords = if (pendingSaveWithMnemonic) success?.words else null
+                            repository.saveSession(diceRolls = state.allRolls, mnemonicWords = mnemonicWords)
+                            diceSessionViewModel.clearPendingSave()
+                            diceSessionViewModel.resetSession()
+                            navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
+                        }
+                    } else {
+                        // Reached via "Change PIN" from Saved Sessions.
+                        navController.popBackStack()
+                    }
+                },
+                onCancel = {
+                    diceSessionViewModel.clearPendingSave()
                     navController.popBackStack()
                 },
-                onCancel = { navController.popBackStack() },
             )
         }
         composable(MegaDestinations.BEFORE_YOU_BEGIN) {
@@ -146,7 +171,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             LockGuard(appLockViewModel, navController)
             SavedSessionsScreen(
                 onBack = { navController.popBackStack() },
-                onEnablePin = { navController.navigate(MegaDestinations.PIN_SETUP) },
+                onChangePin = { navController.navigate(MegaDestinations.PIN_SETUP) },
                 onViewSession = { sessionId ->
                     navController.navigate(MegaDestinations.savedSessionDetailRoute(sessionId))
                 },
@@ -164,7 +189,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             )
         }
 
-        diceFlow(navController, diceSessionViewModel)
+        diceFlow(navController, diceSessionViewModel, pinManager)
     }
 }
 
@@ -184,6 +209,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
 private fun androidx.navigation.NavGraphBuilder.diceFlow(
     navController: NavHostController,
     sharedViewModel: DiceSessionViewModel,
+    pinManager: PinManager,
 ) {
     navigation(startDestination = MegaDestinations.DICE_ENTRY, route = MegaDestinations.DICE_FLOW) {
         composable(MegaDestinations.DICE_ENTRY) {
@@ -267,22 +293,29 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
                 navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
             }
 
+            // Saving any data requires a MEGA PIN to already exist. If one
+            // doesn't, defer the save (via sharedViewModel.requestPendingSave)
+            // and force the user through PIN_SETUP first; PIN_SETUP performs
+            // the deferred save itself once a PIN is set (see above).
+            fun saveOrRequirePin(withMnemonic: Boolean) {
+                coroutineScope.launch {
+                    if (pinManager.isPinEnabled()) {
+                        val mnemonicWords = if (withMnemonic) success?.words else null
+                        repository.saveSession(diceRolls = state.allRolls, mnemonicWords = mnemonicWords)
+                        finishAndReturnToWelcome()
+                    } else {
+                        sharedViewModel.requestPendingSave(withMnemonic)
+                        navController.navigate(MegaDestinations.PIN_SETUP)
+                    }
+                }
+            }
+
             SaveSessionScreen(
                 rollCount = state.mnemonicLength.rollCount,
                 wordCount = state.mnemonicLength.wordCount,
                 onDontSave = { finishAndReturnToWelcome() },
-                onSaveDiceOnly = {
-                    coroutineScope.launch {
-                        repository.saveSession(diceRolls = state.allRolls, mnemonicWords = null)
-                        finishAndReturnToWelcome()
-                    }
-                },
-                onSaveDiceAndMnemonic = {
-                    coroutineScope.launch {
-                        repository.saveSession(diceRolls = state.allRolls, mnemonicWords = success?.words)
-                        finishAndReturnToWelcome()
-                    }
-                },
+                onSaveDiceOnly = { saveOrRequirePin(withMnemonic = false) },
+                onSaveDiceAndMnemonic = { saveOrRequirePin(withMnemonic = true) },
             )
         }
     }

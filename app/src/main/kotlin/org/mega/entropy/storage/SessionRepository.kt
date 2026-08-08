@@ -16,7 +16,7 @@ class SessionRepository(private val context: Context) {
      * a random UUID used purely as a storage identifier, completely independent
      * of wallet/mnemonic entropy handled by :entropy-core.
      */
-    suspend fun saveSession(diceRolls: List<Int>, mnemonicWords: List<String>? = null): SavedSessionMetadata {
+    suspend fun saveSession(diceRolls: List<Int>, mnemonicWords: List<String>? = null, label: String = ""): SavedSessionMetadata {
         return withContext(Dispatchers.IO) {
             val sessionId = UUID.randomUUID().toString()
             val alias = aliasForSession(sessionId)
@@ -28,12 +28,27 @@ class SessionRepository(private val context: Context) {
                 createdAtEpochMillis = System.currentTimeMillis(),
                 rollsCount = diceRolls.size,
                 hasMnemonic = mnemonicWords != null,
-                keystoreAlias = alias
+                keystoreAlias = alias,
+                label = label,
             )
 
             fileStore.writeMetaFile(metadata)
             fileStore.writeEncFile(sessionId, encrypted)
             metadata
+        }
+    }
+
+    /**
+     * Updates a saved session's label. Metadata is unencrypted (see
+     * SavedSessionMetadata's doc comment), so this only touches the .meta
+     * file — no decryption or re-encryption of the session's dice/mnemonic
+     * payload is needed.
+     */
+    suspend fun renameSession(sessionId: String, label: String) {
+        withContext(Dispatchers.IO) {
+            val metadata = fileStore.readMetaFile(sessionId)
+                ?: throw NoSuchElementException("Session metadata not found for ID: $sessionId")
+            fileStore.writeMetaFile(metadata.copy(label = label))
         }
     }
 

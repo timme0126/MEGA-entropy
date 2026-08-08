@@ -1,19 +1,28 @@
 package org.mega.entropy.ui.chooselength
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import org.mega.entropy.ui.components.MegaCard
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import org.mega.entropy.ui.components.MegaInfoScaffold
-import org.mega.entropy.ui.components.MegaPrimaryButton
-import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropycore.MnemonicLength
 
 /**
  * Lets the user pick a 12-word (128-bit, 50 rolls) or 24-word (256-bit,
- * 100 rolls) mnemonic before rolling begins. 24 words is the BIP39 default
- * most wallets expect and MEGA's original design, so it's the primary
- * button; 12 words is offered as a faster, still-standard alternative.
+ * 100 rolls) mnemonic before rolling begins. Both are standard, fully
+ * valid BIP39 mnemonics — presented as two equal, tappable choices rather
+ * than one "primary" and one "alternative", since MEGA has no opinion on
+ * which a given wallet expects.
  */
 @Composable
 fun ChooseLengthScreen(
@@ -21,34 +30,37 @@ fun ChooseLengthScreen(
     onLengthChosen: (MnemonicLength) -> Unit,
 ) {
     MegaInfoScaffold(title = "Mnemonic Length", onBack = onBack) {
-        Text(
-            "Both lengths are standard BIP39 mnemonics accepted by wallets. " +
-                "24 words is the more common default; 12 words is a valid, " +
-                "faster-to-enter alternative with less (but still very " +
-                "large) entropy.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        Text("Choose one:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
-        MegaCard(title = "24 Words") {
-            Text(
-                "256 bits of entropy, from 100 dice rolls in 20 batches of 5.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        MegaPrimaryButton(
-            text = "24 Words (100 Rolls)",
+        LengthOptionCard(
+            title = "24 Words",
+            detail = "256 bits of entropy, from 100 dice rolls in 20 batches of 5.",
             onClick = { onLengthChosen(MnemonicLength.TWENTY_FOUR_WORDS) },
         )
-
-        MegaCard(title = "12 Words") {
-            Text(
-                "128 bits of entropy, from 50 dice rolls in 10 batches of 5.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        MegaSecondaryButton(
-            text = "12 Words (50 Rolls)",
+        LengthOptionCard(
+            title = "12 Words",
+            detail = "128 bits of entropy, from 50 dice rolls in 10 batches of 5.",
             onClick = { onLengthChosen(MnemonicLength.TWELVE_WORDS) },
         )
+    }
+}
+
+@Composable
+private fun LengthOptionCard(title: String, detail: String, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text(detail, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }

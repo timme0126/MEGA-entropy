@@ -40,6 +40,11 @@ data class DiceSessionUiState(
     // computed via the same public checkAcceptance() call the pipeline
     // itself uses. This never changes which branch was taken.
     val rejectionResult: RejectionResult? = null,
+    // Non-null while a save is waiting on the user to set up a MEGA PIN
+    // first (spec: saving any data requires a PIN to already exist).
+    // MegaNavGraph sets this before routing to PIN_SETUP and reads/clears
+    // it once setup completes, to perform the deferred save.
+    val pendingSaveWithMnemonic: Boolean? = null,
 ) {
     val totalRolls: Int get() = mnemonicLength.rollCount
     val totalBatches: Int get() = totalRolls / ROLLS_PER_BATCH
@@ -166,5 +171,13 @@ class DiceSessionViewModel : ViewModel() {
 
     fun resetSession() {
         _uiState.value = DiceSessionUiState(mnemonicLength = _uiState.value.mnemonicLength)
+    }
+
+    fun requestPendingSave(withMnemonic: Boolean) {
+        _uiState.update { it.copy(pendingSaveWithMnemonic = withMnemonic) }
+    }
+
+    fun clearPendingSave() {
+        _uiState.update { it.copy(pendingSaveWithMnemonic = null) }
     }
 }

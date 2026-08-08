@@ -6,11 +6,16 @@ data class SavedSessionMetadata(
     val rollsCount: Int,
     val hasMnemonic: Boolean,
     val keystoreAlias: String,
+    // User-editable label, empty string if never set. Not sensitive (like
+    // the rest of this metadata), so no validation on its contents beyond
+    // not containing the line-based format's own delimiter.
+    val label: String = "",
 ) {
     init {
         require(id.isNotBlank()) { "id must not be blank" }
         require(rollsCount in 0..100) { "rollsCount must be between 0 and 100, got $rollsCount" }
         require(keystoreAlias.isNotBlank()) { "keystoreAlias must not be blank" }
+        require(!label.contains('\n')) { "label must not contain a newline" }
     }
 }
 

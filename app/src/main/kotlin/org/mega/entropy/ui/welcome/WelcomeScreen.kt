@@ -76,5 +76,12 @@ fun WelcomeScreen(
         MegaSecondaryButton(text = "How It Works", onClick = onHowItWorks)
         MegaSecondaryButton(text = "Security Model", onClick = onSecurityModel)
         MegaSecondaryButton(text = "About", onClick = onAbout)
+
+        Spacer(modifier = Modifier.height(32.dp))
+        Text(
+            text = "© 2026 Mega.it. Code licensed under MIT.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

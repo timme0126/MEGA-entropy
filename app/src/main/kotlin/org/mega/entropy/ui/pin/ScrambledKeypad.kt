@@ -70,13 +70,17 @@ fun ScrambledKeypad(
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         rows.forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                // A short final row (just the lone 10th digit) is centered
+                // under the middle column above, not left-aligned: split
+                // the missing slots evenly before and after the digit(s).
+                val missing = 3 - row.size
+                val before = missing / 2
+                val after = missing - before
+                repeat(before) { Spacer(modifier = Modifier.weight(1f)) }
                 row.forEach { digit ->
                     KeypadButton(digit = digit, onTapped = onDigitTapped, modifier = Modifier.weight(1f))
                 }
-                // Pad the final (shorter) row so buttons keep a consistent size.
-                repeat(3 - row.size) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
+                repeat(after) { Spacer(modifier = Modifier.weight(1f)) }
             }
         }
     }
