@@ -1,5 +1,6 @@
 package org.mega.entropy.ui.pin
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -21,7 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import org.mega.entropy.ui.components.MegaSecondaryButton
+import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
 
 const val PIN_MIN_LENGTH = 5
@@ -55,6 +56,11 @@ fun PinEntryScreen(
     onCancel: (() -> Unit)? = null,
 ) {
     SecureScreen()
+    // No visible Cancel button (most screens using this already have a back
+    // gesture/tray in the system UI) — but callers that pass onCancel still
+    // need its cleanup (e.g. clearing a pending save) to run on that back
+    // gesture, so it's wired here instead of dropped.
+    onCancel?.let { BackHandler(onBack = it) }
     var enteredDigits by remember { mutableStateOf(listOf<Int>()) }
     var shuffleGeneration by remember { mutableIntStateOf(0) }
 
@@ -91,8 +97,8 @@ fun PinEntryScreen(
             clearEnabled = enteredDigits.isNotEmpty(),
         )
 
-        MegaSecondaryButton(
-            text = "Enter",
+        MegaPrimaryButton(
+            text = "Submit",
             enabled = enteredDigits.size in PIN_MIN_LENGTH..PIN_MAX_LENGTH,
             onClick = {
                 onSubmit(enteredDigits.joinToString(""))
@@ -104,9 +110,5 @@ fun PinEntryScreen(
                 shuffleGeneration++
             },
         )
-
-        onCancel?.let {
-            MegaSecondaryButton(text = "Cancel", onClick = it)
-        }
     }
 }

@@ -169,12 +169,36 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         }
         composable(MegaDestinations.SAVED_SESSIONS) {
             LockGuard(appLockViewModel, navController)
+            val coroutineScope = rememberCoroutineScope()
             SavedSessionsScreen(
                 onBack = { navController.popBackStack() },
-                onChangePin = { navController.navigate(MegaDestinations.PIN_SETUP) },
+                onChangePin = {
+                    coroutineScope.launch {
+                        // Changing the PIN must always re-prove knowledge of the
+                        // current one first — being inside Saved Sessions only
+                        // means the PIN was verified at some earlier point, not
+                        // right now. Skip straight to setup only when there's no
+                        // existing PIN to verify against yet.
+                        if (pinManager.isPinEnabled()) {
+                            navController.navigate(MegaDestinations.PIN_CHANGE_VERIFY)
+                        } else {
+                            navController.navigate(MegaDestinations.PIN_SETUP)
+                        }
+                    }
+                },
                 onViewSession = { sessionId ->
                     navController.navigate(MegaDestinations.savedSessionDetailRoute(sessionId))
                 },
+            )
+        }
+        composable(MegaDestinations.PIN_CHANGE_VERIFY) {
+            PinVerifyScreen(
+                onUnlocked = {
+                    navController.navigate(MegaDestinations.PIN_SETUP) {
+                        popUpTo(MegaDestinations.PIN_CHANGE_VERIFY) { inclusive = true }
+                    }
+                },
+                onCancel = { navController.popBackStack() },
             )
         }
         composable(

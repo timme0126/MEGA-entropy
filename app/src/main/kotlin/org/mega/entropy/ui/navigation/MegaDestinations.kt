@@ -33,4 +33,10 @@ object MegaDestinations {
     const val ABOUT = "about"
     const val PIN_ENTRY = "pin_entry"
     const val PIN_SETUP = "pin_setup"
+
+    /** Re-verifying the current PIN before "Change PIN" (Saved Sessions).
+     * Separate from PIN_ENTRY so its onUnlocked routes to PIN_SETUP instead
+     * of SAVED_SESSIONS — changing the PIN must always prove knowledge of
+     * the current one first, even if the app was already unlocked. */
+    const val PIN_CHANGE_VERIFY = "pin_change_verify"
 }
