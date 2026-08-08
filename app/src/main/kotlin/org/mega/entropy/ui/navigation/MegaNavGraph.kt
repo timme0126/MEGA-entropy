@@ -122,7 +122,10 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             PrivacyScreen(onBack = { navController.popBackStack() })
         }
         composable(MegaDestinations.ABOUT) {
-            AboutScreen(onBack = { navController.popBackStack() })
+            AboutScreen(
+                onBack = { navController.popBackStack() },
+                onPrivacy = { navController.navigate(MegaDestinations.PRIVACY) },
+            )
         }
         composable(MegaDestinations.SAVED_SESSIONS) {
             SavedSessionsScreen(
