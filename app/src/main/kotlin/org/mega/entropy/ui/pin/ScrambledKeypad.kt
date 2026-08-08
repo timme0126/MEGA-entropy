@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
@@ -49,39 +48,56 @@ private fun shuffledDigits(): List<Int> {
 private val orderedDigits: List<Int> = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
 
 /**
- * A 3-column grid of digits (last row centers the 10th digit). When
- * [scrambled] is true (the default — used to unlock/verify an existing
- * PIN), positions are reshuffled every time this composable enters
- * composition and again whenever the caller changes [shuffleKey] (used for
- * "reshuffle after an incorrect attempt", per spec section 21). When false
- * (used for choosing a new PIN), digits are always in standard 1-9-then-0
- * dial-pad order.
+ * A 3-column grid of digits. The first 9 digits fill 3 full rows; the 10th
+ * digit occupies the center of a 4th row, flanked by [onClear] (left) and
+ * [onDelete] (right) — the standard phone-dial-pad "0 between functions"
+ * layout, so Enter never needs a 5th row below it. When [scrambled] is true
+ * (the default — used to unlock/verify an existing PIN), digit positions
+ * (including which digit lands in that flanked center slot) are reshuffled
+ * every time this composable enters composition and again whenever the
+ * caller changes [shuffleKey] (used for "reshuffle after an incorrect
+ * attempt", per spec section 21) — Clear/Delete themselves are never part
+ * of the shuffle, always in the same two positions. When [scrambled] is
+ * false (used for choosing a new PIN), digits are always in standard
+ * 1-9-then-0 dial-pad order, so the flanked digit is always 0.
  */
 @Composable
 fun ScrambledKeypad(
     shuffleKey: Any,
     onDigitTapped: (Int) -> Unit,
+    onDelete: () -> Unit,
+    onClear: () -> Unit,
     modifier: Modifier = Modifier,
     scrambled: Boolean = true,
+    deleteEnabled: Boolean = true,
+    clearEnabled: Boolean = true,
 ) {
     val digits = if (scrambled) remember(shuffleKey) { shuffledDigits() } else orderedDigits
-    val rows = digits.chunked(3)
+    val fullRows = digits.subList(0, 9).chunked(3)
+    val lastDigit = digits[9]
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        rows.forEach { row ->
+        fullRows.forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                // A short final row (just the lone 10th digit) is centered
-                // under the middle column above, not left-aligned: split
-                // the missing slots evenly before and after the digit(s).
-                val missing = 3 - row.size
-                val before = missing / 2
-                val after = missing - before
-                repeat(before) { Spacer(modifier = Modifier.weight(1f)) }
                 row.forEach { digit ->
                     KeypadButton(digit = digit, onTapped = onDigitTapped, modifier = Modifier.weight(1f))
                 }
-                repeat(after) { Spacer(modifier = Modifier.weight(1f)) }
             }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            FunctionButton(
+                label = "CLR",
+                onTapped = onClear,
+                enabled = clearEnabled,
+                modifier = Modifier.weight(1f),
+            )
+            KeypadButton(digit = lastDigit, onTapped = onDigitTapped, modifier = Modifier.weight(1f))
+            FunctionButton(
+                label = "⌫",
+                onTapped = onDelete,
+                enabled = deleteEnabled,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -98,6 +114,34 @@ private fun KeypadButton(digit: Int, onTapped: (Int) -> Unit, modifier: Modifier
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
             Text(text = digit.toString(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/** Circular Clear/Delete button flanking the lone 10th digit — same size
+ * and shape as [KeypadButton] but visually distinct (filled, no border) so
+ * it doesn't look like a digit. */
+@Composable
+private fun FunctionButton(
+    label: String,
+    onTapped: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val contentColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+    }
+    Surface(
+        modifier = modifier
+            .aspectRatio(1f)
+            .clickable(enabled = enabled) { onTapped() },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
+            Text(text = label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = contentColor)
         }
     }
 }

@@ -2,10 +2,8 @@ package org.mega.entropy.ui.pin
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -87,22 +85,11 @@ fun PinEntryScreen(
                     enteredDigits = enteredDigits + digit
                 }
             },
+            onDelete = { enteredDigits = enteredDigits.dropLast(1) },
+            onClear = { enteredDigits = emptyList() },
+            deleteEnabled = enteredDigits.isNotEmpty(),
+            clearEnabled = enteredDigits.isNotEmpty(),
         )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            MegaSecondaryButton(
-                text = "Delete",
-                modifier = Modifier.weight(1f),
-                enabled = enteredDigits.isNotEmpty(),
-                onClick = { enteredDigits = enteredDigits.dropLast(1) },
-            )
-            MegaSecondaryButton(
-                text = "Clear",
-                modifier = Modifier.weight(1f),
-                enabled = enteredDigits.isNotEmpty(),
-                onClick = { enteredDigits = emptyList() },
-            )
-        }
 
         MegaSecondaryButton(
             text = "Enter",
