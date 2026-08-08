@@ -23,11 +23,19 @@
         android:hardwareAccelerated="true"
         tools:targetApi="36">
 
+        <!-- launchMode was previously "singleTask", which made Android reset
+             this task to its root activity (Welcome) whenever the app was
+             relaunched from the home-screen icon after being backgrounded —
+             there's no second Activity here for singleTask to deduplicate,
+             so it bought nothing but that reset behavior. standard +
+             alwaysRetainTaskState keeps the Navigation-Compose back stack
+             (and its saved instance state) intact across app switches. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/Theme.MEGA"
-            android:launchMode="singleTask"
+            android:launchMode="standard"
+            android:alwaysRetainTaskState="true"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

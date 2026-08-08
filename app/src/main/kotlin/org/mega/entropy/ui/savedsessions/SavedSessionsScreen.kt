@@ -22,8 +22,10 @@ import java.text.DateFormat
 import java.util.Date
 import org.mega.entropy.storage.SavedSessionMetadata
 import org.mega.entropy.ui.components.MegaCard
+import org.mega.entropy.ui.components.MegaDestructiveButton
 import org.mega.entropy.ui.components.MegaInfoScaffold
-import org.mega.entropy.ui.components.MegaSecondaryButton
+import org.mega.entropy.ui.components.MegaNeutralButton
+import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
 
 /** Spec section 24: "Saved Sessions" entry point from Welcome. */
@@ -44,7 +46,7 @@ fun SavedSessionsScreen(
                 if (state.isPinEnabled) "Enabled — required to view this screen" else "Not set yet",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            MegaSecondaryButton(
+            MegaPrimaryButton(
                 text = if (state.isPinEnabled) "Change PIN" else "Set Up PIN",
                 onClick = onChangePin,
             )
@@ -72,7 +74,7 @@ fun SavedSessionsScreen(
                     )
                 }
 
-                MegaSecondaryButton(text = "Secure Delete All MEGA Data", onClick = { confirmingDeleteAll = true })
+                MegaDestructiveButton(text = "Secure Delete All MEGA Data", onClick = { confirmingDeleteAll = true })
                 if (confirmingDeleteAll) {
                     ConfirmDeleteDialog(
                         text = "This permanently deletes every saved session and its encryption key. This cannot be undone.",
@@ -115,10 +117,10 @@ private fun SavedSessionCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier) {
-            MegaSecondaryButton(text = "View", modifier = Modifier.weight(1f), onClick = onView)
-            MegaSecondaryButton(text = "Label", modifier = Modifier.weight(1f), onClick = { renaming = true })
+            MegaNeutralButton(text = "View", modifier = Modifier.weight(1f), onClick = onView)
+            MegaNeutralButton(text = "Label", modifier = Modifier.weight(1f), onClick = { renaming = true })
         }
-        MegaSecondaryButton(text = "Secure Delete", onClick = { confirmingDelete = true })
+        MegaPrimaryButton(text = "Secure Delete", onClick = { confirmingDelete = true })
     }
 
     if (renaming) {

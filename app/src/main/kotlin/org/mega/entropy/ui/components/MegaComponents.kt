@@ -24,6 +24,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.mega.entropy.ui.theme.MegaError
+import org.mega.entropy.ui.theme.MegaNeutralGray
 
 /**
  * The small uppercase pills used on the Welcome screen: OFFLINE,
@@ -98,6 +100,56 @@ fun MegaSecondaryButton(
             .fillMaxWidth()
             .padding(vertical = 4.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Text(text, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+/** Deliberately neutral filled button (fixed gray, not theme-adaptive) —
+ * used for lower-emphasis actions like "View" / "Label" that shouldn't
+ * compete visually with the orange primary actions on the same card. */
+@Composable
+fun MegaNeutralButton(
+    text: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MegaNeutralGray,
+            contentColor = androidx.compose.ui.graphics.Color.White,
+        ),
+    ) {
+        Text(text, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+/** Destructive filled button (fixed red, not theme-adaptive) — reserved for
+ * irreversible bulk actions like "Secure Delete All", distinct from the
+ * orange used for a single, more contained delete. */
+@Composable
+fun MegaDestructiveButton(
+    text: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MegaError,
+            contentColor = androidx.compose.ui.graphics.Color.White,
+        ),
     ) {
         Text(text, style = MaterialTheme.typography.titleMedium)
     }

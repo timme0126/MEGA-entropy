@@ -6,7 +6,7 @@ import androidx.compose.runtime.Composable
 import org.mega.entropy.BuildConfig
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaMonoText
-import org.mega.entropy.ui.components.MegaSecondaryButton
+import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSection
 
 @Composable
@@ -44,6 +44,6 @@ fun AboutScreen(onBack: () -> Unit, onPrivacy: () -> Unit) {
                 "build time and again at runtime before any mnemonic is " +
                 "derived. See docs/BIP39-DERIVATION.md in the repository.",
         )
-        MegaSecondaryButton(text = "Privacy", onClick = onPrivacy)
+        MegaPrimaryButton(text = "Privacy", onClick = onPrivacy)
     }
 }

@@ -24,3 +24,8 @@ val MegaTextSecondaryLight = Color(0xFF5B5443)
 
 val MegaSuccess = Color(0xFF4CAF7D)
 val MegaError = Color(0xFFD9534F)
+
+// Fixed (non-theme-adaptive) colors for a few specific buttons whose color
+// is meant to signal something about the action itself (destructive, or
+// deliberately neutral/secondary) rather than follow light/dark theming.
+val MegaNeutralGray = Color(0xFF5A5A5A)
