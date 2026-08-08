@@ -166,3 +166,21 @@ enum class MnemonicLength(val wordCount: Int, val rollCount: Int, val entropyBit
     TWELVE_WORDS(wordCount = 12, rollCount = 50, entropyBits = 128),
     TWENTY_FOUR_WORDS(wordCount = 24, rollCount = 100, entropyBits = 256),
 }
+
+/**
+ * The 512-bit BIP39 seed derived from a mnemonic (+ optional passphrase)
+ * via PBKDF2-HMAC-SHA512, per the BIP-0039 spec. Distinct from
+ * MnemonicEntropy: the seed is a *derived* value computed from the words
+ * (and doesn't need dice-roll provenance the way entropy does), so a user
+ * could in principle compute one for a mnemonic MEGA didn't generate — see
+ * deriveSeed's KDoc for why MEGA still only offers this for its own
+ * dice-derived mnemonics in v1.
+ */
+data class Bip39Seed(val bytes: ByteArray) {
+    init {
+        require(bytes.size == 64) { "Bip39Seed must wrap exactly 64 bytes, got: ${bytes.size}" }
+    }
+
+    val hex: String
+        get() = bytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+}

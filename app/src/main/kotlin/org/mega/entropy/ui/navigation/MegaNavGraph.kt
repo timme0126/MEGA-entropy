@@ -32,6 +32,7 @@ import org.mega.entropy.ui.entropy.EntropyScreen
 import org.mega.entropy.ui.howitworks.HowItWorksScreen
 import org.mega.entropy.ui.mnemonic.FinalMnemonicScreen
 import org.mega.entropy.ui.onboarding.BeforeYouBeginScreen
+import org.mega.entropy.ui.passphrase.PassphraseScreen
 import org.mega.entropy.ui.pin.AppLockViewModel
 import org.mega.entropy.ui.pin.PinSetupScreen
 import org.mega.entropy.ui.pin.PinVerifyScreen
@@ -302,6 +303,17 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
                 FinalMnemonicScreen(
                     words = success.words,
                     onDone = { navController.navigate(MegaDestinations.SAVE_SESSION) },
+                    onAddPassphrase = { navController.navigate(MegaDestinations.PASSPHRASE) },
+                )
+            }
+        }
+        composable(MegaDestinations.PASSPHRASE) {
+            val state by sharedViewModel.uiState.collectAsState()
+            val success = state.mnemonicResult as? MnemonicResult.Success
+            if (success != null) {
+                PassphraseScreen(
+                    words = success.words,
+                    onContinue = { navController.navigate(MegaDestinations.SAVE_SESSION) },
                 )
             }
         }

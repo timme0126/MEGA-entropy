@@ -22,6 +22,9 @@ object MegaDestinations {
     const val SPLIT_GROUPS = "split_groups"
     const val WORD_DERIVATION = "word_derivation"
     const val FINAL_MNEMONIC = "final_mnemonic"
+
+    /** Optional step reachable only from FINAL_MNEMONIC — see PassphraseScreen. */
+    const val PASSPHRASE = "passphrase"
     const val SAVE_SESSION = "save_session"
     const val SAVED_SESSIONS = "saved_sessions"
     const val SAVED_SESSION_DETAIL_ARG = "sessionId"

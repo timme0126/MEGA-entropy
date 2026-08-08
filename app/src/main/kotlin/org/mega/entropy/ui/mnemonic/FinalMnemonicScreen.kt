@@ -26,6 +26,7 @@ import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaScreenPadding
+import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 
@@ -39,6 +40,7 @@ import org.mega.entropy.ui.theme.MegaError
 fun FinalMnemonicScreen(
     words: List<String>,
     onDone: () -> Unit,
+    onAddPassphrase: () -> Unit,
 ) {
     SecureScreen()
     var revealed by remember { mutableStateOf(false) }
@@ -82,6 +84,7 @@ fun FinalMnemonicScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            MegaSecondaryButton(text = "Add a Passphrase (Optional)", onClick = onAddPassphrase)
             MegaPrimaryButton(text = "Done", onClick = onDone)
         }
     }

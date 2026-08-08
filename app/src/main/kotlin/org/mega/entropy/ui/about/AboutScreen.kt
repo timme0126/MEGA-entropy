@@ -14,7 +14,7 @@ fun AboutScreen(onBack: () -> Unit, onPrivacy: () -> Unit) {
     MegaInfoScaffold(title = "About", onBack = onBack) {
         Text("MEGA — Make Entropy Great Again", style = MaterialTheme.typography.titleLarge)
         MegaMonoText("Version ${BuildConfig.VERSION_NAME}")
-        MegaMonoText("mega.it")
+        MegaMonoText("Mega.it")
 
         MegaSection(
             heading = "What this is",
