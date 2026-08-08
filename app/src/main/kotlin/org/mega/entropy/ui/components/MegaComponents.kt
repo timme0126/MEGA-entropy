@@ -2,6 +2,7 @@ package org.mega.entropy.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,19 +35,21 @@ import org.mega.entropy.ui.theme.MegaNeutralGray
 
 
 /**
- * Brand wordmark locked to its original black-background treatment. The
- * PNG itself has transparent edges, so light mode must supply the black
- * backing explicitly instead of letting it float on the app background.
+ * Brand wordmark treatment follows the active theme: dark mode keeps the
+ * original transparent wordmark, while light mode supplies the black backing
+ * the original artwork expects.
  */
 @Composable
 fun MegaLogo(
     modifier: Modifier = Modifier,
 ) {
+    val backgroundColor = if (isSystemInDarkTheme()) Color.Transparent else Color.Black
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1672f / 941f)
-            .background(Color.Black)
+            .background(backgroundColor)
             .padding(12.dp),
     ) {
         Image(
