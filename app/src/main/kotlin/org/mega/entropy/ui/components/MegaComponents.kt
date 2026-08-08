@@ -1,11 +1,14 @@
 package org.mega.entropy.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
@@ -17,12 +20,43 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.mega.entropy.R
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropy.ui.theme.MegaNeutralGray
+
+
+/**
+ * Brand wordmark locked to its original black-background treatment. The
+ * PNG itself has transparent edges, so light mode must supply the black
+ * backing explicitly instead of letting it float on the app background.
+ */
+@Composable
+fun MegaLogo(
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(1672f / 941f)
+            .background(Color.Black)
+            .padding(12.dp),
+    ) {
+        Image(
+            painter = painterResource(R.drawable.mega_wordmark),
+            contentDescription = stringResource(R.string.app_name),
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
 
 /** Primary CTA button — large touch target, full width, per spec section 44. */
 @Composable
