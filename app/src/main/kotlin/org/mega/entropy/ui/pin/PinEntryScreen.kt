@@ -3,9 +3,12 @@ package org.mega.entropy.ui.pin
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +45,12 @@ fun PinEntryScreen(
     title: String,
     subtitle: String? = null,
     errorMessage: String? = null,
+    // Scrambled (spec section 21) for unlocking/verifying an existing PIN,
+    // where shoulder-surfing resistance matters. Standard ordered dial-pad
+    // for choosing a new PIN, matching the layout users already expect from
+    // every phone's own PIN/passcode setup — nothing to protect against yet
+    // since no PIN exists until this step completes.
+    scrambled: Boolean = true,
     onSubmit: (String) -> Unit,
     onCancel: (() -> Unit)? = null,
 ) {
@@ -52,6 +61,7 @@ fun PinEntryScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -68,6 +78,7 @@ fun PinEntryScreen(
 
         ScrambledKeypad(
             shuffleKey = shuffleGeneration,
+            scrambled = scrambled,
             onDigitTapped = { digit ->
                 if (enteredDigits.size < PIN_MAX_LENGTH) {
                     enteredDigits = enteredDigits + digit

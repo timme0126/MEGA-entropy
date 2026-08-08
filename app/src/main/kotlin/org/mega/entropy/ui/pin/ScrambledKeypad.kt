@@ -43,19 +43,28 @@ private fun shuffledDigits(): List<Int> {
     return digits
 }
 
+/** Standard phone dial-pad order: 1-9 then 0, the layout every user already
+ * expects. Used for choosing a new PIN, where there's nothing to protect
+ * against yet — see [ScrambledKeypad]'s `scrambled` parameter. */
+private val orderedDigits: List<Int> = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+
 /**
- * A 3-column grid of digits 0–9 (last row centers the 10th digit), reshuffled
- * every time this composable enters composition — i.e. every time the PIN
- * screen opens — and again whenever the caller changes [shuffleKey] (used
- * for "reshuffle after an incorrect attempt", per spec section 21).
+ * A 3-column grid of digits (last row centers the 10th digit). When
+ * [scrambled] is true (the default — used to unlock/verify an existing
+ * PIN), positions are reshuffled every time this composable enters
+ * composition and again whenever the caller changes [shuffleKey] (used for
+ * "reshuffle after an incorrect attempt", per spec section 21). When false
+ * (used for choosing a new PIN), digits are always in standard 1-9-then-0
+ * dial-pad order.
  */
 @Composable
 fun ScrambledKeypad(
     shuffleKey: Any,
     onDigitTapped: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    scrambled: Boolean = true,
 ) {
-    val digits = remember(shuffleKey) { shuffledDigits() }
+    val digits = if (scrambled) remember(shuffleKey) { shuffledDigits() } else orderedDigits
     val rows = digits.chunked(3)
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -3,9 +3,12 @@ package org.mega.entropy.ui.mnemonic
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -43,11 +46,12 @@ fun FinalMnemonicScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .verticalScroll(rememberScrollState())
             .padding(MegaScreenPadding),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Your 24-Word Mnemonic", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text("Your ${words.size}-Word Mnemonic", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
 
         if (!revealed) {
             MegaCard {

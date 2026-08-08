@@ -36,6 +36,7 @@ fun PinSetupScreen(
                 title = "Choose a MEGA PIN",
                 subtitle = "5 to 8 digits",
                 errorMessage = errorMessage,
+                scrambled = false,
                 onCancel = onCancel,
                 onSubmit = { pin ->
                     firstEntry = pin
@@ -49,6 +50,7 @@ fun PinSetupScreen(
                 title = "Confirm Your PIN",
                 subtitle = "Enter the same PIN again",
                 errorMessage = errorMessage,
+                scrambled = false,
                 onCancel = onCancel,
                 onSubmit = { pin ->
                     if (pin == firstEntry) {
