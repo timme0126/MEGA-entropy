@@ -77,12 +77,20 @@ derivation is strictly 11-bit (0–2047) throughout — the padded/duplicated
 as an educational note about what a user might see in other tools, and is
 never part of MEGA's own algorithm.
 
-## Scope: MEGA stops at the mnemonic
+## Scope: mnemonic first, optional BIP-85 children
 
 BIP-0039 separately defines how a mnemonic (plus an optional passphrase) is
-turned into a 512-bit binary seed for BIP-0032 key derivation. MEGA v1
-deliberately does **not** implement that next step, or anything past it
-(no BIP-0032 keys, no addresses, no xpub/xprv, no signing) — this keeps the
-scope, and the attack surface, of a security-sensitive app as small as
-possible. MEGA's job ends at producing a verifiably-correct 24-word BIP39
-mnemonic.
+turned into a 512-bit binary seed for BIP-0032 key derivation. MEGA's primary
+job is still producing a verifiably-correct dice-derived BIP39 mnemonic.
+
+MEGA also supports one narrow downstream operation: BIP-85 English BIP39 child
+mnemonics for 12 or 24 words. For that feature, MEGA derives the parent BIP39
+seed, derives the hardened BIP-85 path
+`m/83696968'/39'/0'/{12|24}'/{index}'`, runs the BIP-85 HMAC-SHA512 step, and
+feeds the resulting 128-bit or 256-bit child entropy back through the same
+BIP39 checksum and word-list code described above.
+
+BIP-85 output is deterministic child material, not new physical entropy. The
+same parent mnemonic, parent passphrase, word count, and index will always
+produce the same child mnemonic. MEGA still does not derive addresses, xpubs,
+or signing keys.

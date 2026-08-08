@@ -85,8 +85,12 @@ is available at [`docs/index.html`](docs/index.html).
 5. Every step is shown on screen, with an expandable "show the math" for
    anyone who wants to verify by hand — see
    [`docs/BIP39-DERIVATION.md`](docs/BIP39-DERIVATION.md).
-6. The 24 words are revealed only after a deliberate confirmation, with no
+6. The words are revealed only after a deliberate confirmation, with no
    copy/share/export anywhere in the app.
+7. Optional: from the final mnemonic screen, MEGA can derive BIP-85 English
+   BIP39 child mnemonics at a chosen index for 12 or 24 words. This is
+   deterministic child derivation from the parent mnemonic, not fresh dice
+   entropy.
 
 ## Building and installing
 
@@ -112,7 +116,7 @@ Inside `entropy-core`, each concern is its own small file, deliberately
 reading like the specification it implements rather than being clever:
 dice mapping, batch accumulation, direct base-6 interpretation, rejection
 sampling, entropy extraction, the SHA-256 checksum step, BIP39 bit
-grouping, and word-list lookup. See
+grouping, word-list lookup, and BIP-85 child mnemonic derivation. See
 [`docs/NO-RNG-PROOF.md`](docs/NO-RNG-PROOF.md) §2 for the full function
 table.
 

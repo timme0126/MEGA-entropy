@@ -25,6 +25,7 @@ import org.mega.entropy.security.pin.PinManager
 import org.mega.entropy.storage.SessionRepository
 import org.mega.entropy.ui.about.AboutScreen
 import org.mega.entropy.ui.biascheck.BiasCheckScreen
+import org.mega.entropy.ui.bip85.Bip85Screen
 import org.mega.entropy.ui.checksum.ChecksumScreen
 import org.mega.entropy.ui.chooselength.ChooseLengthScreen
 import org.mega.entropy.ui.diceentry.DiceEntryScreen
@@ -325,6 +326,17 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
                     words = success.words,
                     onDone = { navController.navigate(MegaDestinations.SAVE_SESSION) },
                     onAddPassphrase = { navController.navigate(MegaDestinations.PASSPHRASE) },
+                    onBip85 = { navController.navigate(MegaDestinations.BIP85) },
+                )
+            }
+        }
+        composable(MegaDestinations.BIP85) {
+            val state by sharedViewModel.uiState.collectAsState()
+            val success = state.mnemonicResult as? MnemonicResult.Success
+            if (success != null) {
+                Bip85Screen(
+                    parentWords = success.words,
+                    onBack = { navController.popBackStack() },
                 )
             }
         }

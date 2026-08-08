@@ -3,7 +3,7 @@
 This document is the single place a reviewer should go to answer one question:
 
 > **Can any source of randomness — device-generated, network-supplied, or
-> otherwise — influence the 24-word mnemonic MEGA produces?**
+> otherwise — influence the parent mnemonic MEGA produces from dice?**
 
 The answer is **no**, and this document shows exactly why, by tracing the
 complete code path from the 100 numbers a user types in to the 24 words
@@ -19,17 +19,17 @@ The entire wallet-entropy derivation is one function call:
 // entropy-core/src/main/kotlin/org/mega/entropycore/MnemonicPipeline.kt
 fun deriveMnemonic(
     rolls: List<Int>,
-    wordList: List<String> = loadOfficialEnglishWordList(),
+    length: MnemonicLength,
 ): MnemonicResult
 ```
 
-`rolls` is a `List<Int>` of exactly 100 values, each 1–6 — the physical die
-results a human typed into the dice-entry UI, one tap per value, over 20
+`rolls` is a `List<Int>` of exactly 50 or 100 values, each 1–6 — the physical die
+results a human typed into the dice-entry UI, one tap per value, over 10 or 20
 batches of 5 (see `app/src/main/kotlin/org/mega/entropy/ui/diceentry/`). There
 is no other parameter, no default that pulls from a device source, and no
-hidden global state `deriveMnemonic` reads from. `wordList` is the vendored,
-hash-verified BIP39 English word list (see §4) — it selects *which word*
-maps to a given index, not any part of the numeric derivation.
+hidden global state `deriveMnemonic` reads from. The word list is loaded only
+from the vendored, hash-verified BIP39 English resource (see §4) — it selects
+*which word* maps to a given index, not any part of the numeric derivation.
 
 ## 2. The deterministic pipeline, function by function
 
@@ -40,14 +40,14 @@ time, on any machine.
 
 | Step | Function | File | Input | Output |
 |---|---|---|---|---|
-| 1 | `mapRollsToBase6` | `DiceMapping.kt` | 100 rolls (1–6) | 100 base-6 digits (0–5) |
-| 2 | `calculateXDirect` | `DirectBase6.kt` | 100 base-6 digits | `X` (a `BigInteger`, positional base-6 interpretation) |
-| 3 | `checkAcceptance` | `RejectionSampling.kt` | `X` | `Accepted(X)` or `Rejected(X)` — compared against the fixed constant `REJECTION_THRESHOLD_T = 5 × 2^256` |
-| 4 | `deriveEntropy256` | `Entropy256.kt` | accepted `X` | `E = X mod 2^256`, encoded as 32 unsigned big-endian bytes |
-| 5 | `sha256` / `calculateChecksum` | `Sha256Checksum.kt` | `E` (32 bytes) | SHA-256 digest of `E`, and its first 8 bits |
-| 6 | `buildBitStream` | `Bip39BitStream.kt` | `E` + 8 checksum bits | 264-bit stream (256 entropy bits, MSB-first, then the 8 checksum bits) |
-| 7 | `splitInto11BitGroups` | `Bip39BitStream.kt` | 264-bit stream | 24 integers, each 0–2047 |
-| 8 | `deriveWords` | `WordList.kt` | 24 indices + word list | 24 words, by direct list lookup |
+| 1 | `mapRollsToBase6` | `DiceMapping.kt` | 50 or 100 rolls (1–6) | 50 or 100 base-6 digits (0–5) |
+| 2 | `calculateXDirect` | `DirectBase6.kt` | base-6 digits | `X` (a `BigInteger`, positional base-6 interpretation) |
+| 3 | `checkAcceptance` | `RejectionSampling.kt` | `X` | `Accepted(X)` or `Rejected(X)` — compared against a fixed threshold for the chosen entropy length |
+| 4 | `deriveEntropyBits` | `Entropy256.kt` | accepted `X` | `E = X mod 2^128` or `E = X mod 2^256`, encoded as 16 or 32 unsigned big-endian bytes |
+| 5 | `sha256` / `calculateChecksum` | `Sha256Checksum.kt` | `E` (16 or 32 bytes) | SHA-256 digest of `E`, and its first 4 or 8 bits |
+| 6 | `buildBitStream` | `Bip39BitStream.kt` | `E` + checksum bits | 132-bit or 264-bit stream, MSB-first |
+| 7 | `splitInto11BitGroups` | `Bip39BitStream.kt` | bit stream | 12 or 24 integers, each 0–2047 |
+| 8 | `deriveWords` | `WordList.kt` | indices + word list | 12 or 24 words, by direct list lookup |
 
 Steps 3 and 4 also depend on the UI-facing batch-accumulation path
 (`calculateChunk` / `accumulate` / `accumulateAllBatches` in
@@ -71,6 +71,23 @@ same 32-byte digest, on any implementation, forever. It is used here exactly
 as BIP-0039 specifies — to derive the checksum — and contributes no bits
 that didn't already exist in `E`. See `docs/ENTROPY-MATH.md` for why this
 doesn't add uncertainty.
+
+### BIP-85 child mnemonics
+
+BIP-85 support does not change the dice-to-parent-mnemonic guarantee above.
+It is an optional downstream derivation from an already-derived parent mnemonic:
+
+1. `deriveSeed(parentWords, parentPassphrase)` computes the parent BIP39 seed
+   with PBKDF2-HMAC-SHA512, exactly as BIP-0039 specifies.
+2. `deriveBip85Bip39Mnemonic` derives the fully hardened BIP-85 path
+   `m/83696968'/39'/0'/{12|24}'/{index}'`.
+3. It runs `HMAC-SHA512(key="bip-entropy-from-k", msg=derived_private_key)`.
+4. It truncates that deterministic output to 128 bits for 12 words or 256 bits
+   for 24 words, then uses MEGA's existing BIP39 checksum and word-list code.
+
+This is deterministic child derivation, not fresh entropy. The only way a BIP-85
+child changes is if the parent mnemonic, parent passphrase, word count, or index
+changes.
 
 ## 3. What `:entropy-core` cannot do, mechanically
 

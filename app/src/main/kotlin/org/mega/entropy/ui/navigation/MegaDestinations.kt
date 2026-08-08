@@ -25,7 +25,8 @@ object MegaDestinations {
     const val WORD_DERIVATION = "word_derivation"
     const val FINAL_MNEMONIC = "final_mnemonic"
 
-    /** Optional step reachable only from FINAL_MNEMONIC — see PassphraseScreen. */
+    /** Optional steps reachable only from FINAL_MNEMONIC. */
+    const val BIP85 = "bip85"
     const val PASSPHRASE = "passphrase"
     const val SAVE_SESSION = "save_session"
     const val SAVED_SESSIONS = "saved_sessions"

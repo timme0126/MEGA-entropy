@@ -41,6 +41,7 @@ fun FinalMnemonicScreen(
     words: List<String>,
     onDone: () -> Unit,
     onAddPassphrase: () -> Unit,
+    onBip85: () -> Unit,
 ) {
     SecureScreen()
     var revealed by remember { mutableStateOf(false) }
@@ -85,6 +86,7 @@ fun FinalMnemonicScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             MegaSecondaryButton(text = "Add a Passphrase (Optional)", onClick = onAddPassphrase)
+            MegaSecondaryButton(text = "Calculate BIP85 Child", onClick = onBip85)
             MegaPrimaryButton(text = "Done", onClick = onDone)
         }
     }
