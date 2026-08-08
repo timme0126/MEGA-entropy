@@ -8,6 +8,21 @@ English BIP39 mnemonic.
 > protect meaningful funds yet. See [`SECURITY.md`](SECURITY.md) for the
 > current audit status and what independent review is still needed.
 
+## Download the beta APK
+
+**Current beta:** [`mega-beta-v0.1.0.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.0/mega-beta-v0.1.0.apk)
+
+Release page: [`MEGA Beta v0.1.0`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.0)
+
+Verify the download before installing:
+
+```bash
+sha256sum mega-beta-v0.1.0.apk
+# 9d50ae9b4a99ae57ff56ec18ca67f10e8f08d9b7e4a910d33f4cfdc5b01aadfe
+```
+
+This is an experimental beta build for disposable test roll sequences only.
+
 ## The core guarantee
 
 ```
