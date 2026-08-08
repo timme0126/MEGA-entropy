@@ -8,8 +8,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
@@ -17,6 +19,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.launch
+import org.mega.entropy.storage.SessionRepository
 import org.mega.entropy.ui.about.AboutScreen
 import org.mega.entropy.ui.biascheck.BiasCheckScreen
 import org.mega.entropy.ui.checksum.ChecksumScreen
@@ -27,6 +31,8 @@ import org.mega.entropy.ui.howitworks.HowItWorksScreen
 import org.mega.entropy.ui.mnemonic.FinalMnemonicScreen
 import org.mega.entropy.ui.onboarding.BeforeYouBeginScreen
 import org.mega.entropy.ui.privacy.PrivacyScreen
+import org.mega.entropy.ui.savedsessions.SavedSessionsScreen
+import org.mega.entropy.ui.savesession.SaveSessionScreen
 import org.mega.entropy.ui.security.SecurityModelScreen
 import org.mega.entropy.ui.splitgroups.SplitGroupsScreen
 import org.mega.entropy.ui.welcome.WelcomeScreen
@@ -63,7 +69,9 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         composable(MegaDestinations.ABOUT) {
             AboutScreen(onBack = { navController.popBackStack() })
         }
-        composable(MegaDestinations.SAVED_SESSIONS) { UnderConstruction("Saved Sessions") }
+        composable(MegaDestinations.SAVED_SESSIONS) {
+            SavedSessionsScreen(onBack = { navController.popBackStack() })
+        }
 
         diceFlow(navController)
     }
@@ -154,12 +162,38 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(navController: NavHostC
             if (success != null) {
                 FinalMnemonicScreen(
                     words = success.words,
-                    onDone = {
-                        sharedViewModel.resetSession()
-                        navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
-                    },
+                    onDone = { navController.navigate(MegaDestinations.SAVE_SESSION) },
                 )
             }
+        }
+        composable(MegaDestinations.SAVE_SESSION) { entry ->
+            val sharedViewModel = diceSessionViewModel(navController, entry)
+            val state by sharedViewModel.uiState.collectAsState()
+            val success = state.mnemonicResult as? MnemonicResult.Success
+            val context = LocalContext.current
+            val coroutineScope = rememberCoroutineScope()
+            val repository = remember { SessionRepository(context) }
+
+            fun finishAndReturnToWelcome() {
+                sharedViewModel.resetSession()
+                navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
+            }
+
+            SaveSessionScreen(
+                onDontSave = { finishAndReturnToWelcome() },
+                onSaveDiceOnly = {
+                    coroutineScope.launch {
+                        repository.saveSession(diceRolls = state.allRolls, mnemonicWords = null)
+                        finishAndReturnToWelcome()
+                    }
+                },
+                onSaveDiceAndMnemonic = {
+                    coroutineScope.launch {
+                        repository.saveSession(diceRolls = state.allRolls, mnemonicWords = success?.words)
+                        finishAndReturnToWelcome()
+                    }
+                },
+            )
         }
     }
 }
