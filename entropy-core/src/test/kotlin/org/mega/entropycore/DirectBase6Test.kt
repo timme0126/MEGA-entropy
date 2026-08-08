@@ -6,9 +6,18 @@ import java.math.BigInteger
 
 class DirectBase6Test {
     @Test
-    fun `calculateXDirect throws if list is not exactly 100 digits`() {
-        assertThrows(IllegalArgumentException::class.java) { calculateXDirect(List(99) { 0 }) }
-        assertThrows(IllegalArgumentException::class.java) { calculateXDirect(List(101) { 0 }) }
+    fun `calculateXDirect throws on an empty list`() {
+        assertThrows(IllegalArgumentException::class.java) { calculateXDirect(emptyList()) }
+    }
+
+    @Test
+    fun `calculateXDirect is not hard-coded to 100 digits - works for 50 (the 12-word case) too`() {
+        // calculateXDirect itself is length-agnostic; the exact roll count
+        // for a given MnemonicLength is enforced by MnemonicPipeline.
+        // deriveMnemonic, not by this function. This proves it still works
+        // correctly at a different length after that generalization.
+        assertEquals(BigInteger.ZERO, calculateXDirect(List(50) { 0 }))
+        assertEquals(BigInteger.valueOf(6).pow(50).subtract(BigInteger.ONE), calculateXDirect(List(50) { 5 }))
     }
 
     @Test

@@ -16,6 +16,18 @@ fun deriveEntropy256(x: BigInteger): Entropy256 {
 }
 
 /**
+ * Generalized entropy derivation covering both mnemonic lengths MEGA
+ * supports (see MnemonicLength): E = x mod 2^entropyBits, encoded as
+ * exactly entropyBits/8 unsigned big-endian bytes. Same math as
+ * deriveEntropy256 above, parametrized instead of hard-coded to 256/32.
+ */
+fun deriveEntropyBits(x: BigInteger, entropyBits: Int): MnemonicEntropy {
+    val e = x.mod(twoPow(entropyBits))
+    val bytes = bigIntegerToUnsignedBytes(e, entropyBits / 8)
+    return MnemonicEntropy(bytes)
+}
+
+/**
  * Converts a BigInteger to a fixed-length unsigned big-endian byte array.
  *
  * WHY this helper is necessary:
