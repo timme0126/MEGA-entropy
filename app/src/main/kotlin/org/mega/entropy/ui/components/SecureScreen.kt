@@ -1,7 +1,5 @@
 package org.mega.entropy.ui.components
 
-import android.app.Activity
-import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalView
@@ -20,13 +18,10 @@ import androidx.compose.ui.platform.LocalView
 fun SecureScreen() {
     val view = LocalView.current
     DisposableEffect(view) {
-        val activity = view.context as? Activity
-        activity?.window?.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE,
-        )
+        val activity = view.context.findActivity()
+        SecureWindowFlag.acquire(activity)
         onDispose {
-            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            SecureWindowFlag.release(activity)
         }
     }
 }
