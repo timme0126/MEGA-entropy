@@ -13,8 +13,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.mega.entropy.R
 import org.mega.entropy.ui.components.MegaBadgeRow
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaScreenPadding
@@ -41,12 +43,12 @@ fun WelcomeScreen(
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "MEGA",
+            text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = "Make Entropy Great Again",
+            text = stringResource(R.string.app_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Monochrome variant for Android 13+ themed icons. The system renders
+    this as a single flat tint using the shape's alpha as a mask, so it
+    must be one opaque color with true transparent negative space (mixing
+    two opaque colors, as in the full-color foreground, would render as a
+    single undifferentiated blob once tinted). Uses evenOdd fill so the
+    five pip circles are cut out as transparent holes in the die shape.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#000000"
+        android:fillType="evenOdd"
+        android:pathData="
+            M31,21 L77,21 A10,10 0 0 1 87,31 L87,77 A10,10 0 0 1 77,87
+            L31,87 A10,10 0 0 1 21,77 L21,31 A10,10 0 0 1 31,21 Z
+            M33,33 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0
+            M75,33 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0
+            M54,54 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0
+            M33,75 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0
+            M75,75 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0
+        " />
+</vector>
