@@ -34,6 +34,7 @@ import org.mega.entropy.ui.components.SecureScreen
 @Composable
 fun SavedSessionsScreen(
     onBack: () -> Unit,
+    onEnablePin: () -> Unit,
     viewModel: SavedSessionsViewModel = viewModel(),
 ) {
     SecureScreen()
@@ -41,6 +42,18 @@ fun SavedSessionsScreen(
     var confirmingDeleteAll by remember { mutableStateOf(false) }
 
     MegaInfoScaffold(title = "Saved Sessions", onBack = onBack) {
+        MegaCard(title = "MEGA PIN") {
+            Text(
+                if (state.isPinEnabled) "Enabled — required to view this screen" else "Disabled",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (state.isPinEnabled) {
+                MegaSecondaryButton(text = "Disable PIN", onClick = { viewModel.disablePin() })
+            } else {
+                MegaSecondaryButton(text = "Enable MEGA PIN", onClick = onEnablePin)
+            }
+        }
+
         when {
             state.isLoading -> {
                 CircularProgressIndicator()

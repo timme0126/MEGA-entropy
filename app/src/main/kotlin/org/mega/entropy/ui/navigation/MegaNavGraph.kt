@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -12,6 +13,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
@@ -20,6 +24,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
+import org.mega.entropy.security.pin.PinManager
 import org.mega.entropy.storage.SessionRepository
 import org.mega.entropy.ui.about.AboutScreen
 import org.mega.entropy.ui.biascheck.BiasCheckScreen
@@ -30,6 +35,9 @@ import org.mega.entropy.ui.entropy.Entropy256Screen
 import org.mega.entropy.ui.howitworks.HowItWorksScreen
 import org.mega.entropy.ui.mnemonic.FinalMnemonicScreen
 import org.mega.entropy.ui.onboarding.BeforeYouBeginScreen
+import org.mega.entropy.ui.pin.AppLockViewModel
+import org.mega.entropy.ui.pin.PinSetupScreen
+import org.mega.entropy.ui.pin.PinVerifyScreen
 import org.mega.entropy.ui.privacy.PrivacyScreen
 import org.mega.entropy.ui.savedsessions.SavedSessionsScreen
 import org.mega.entropy.ui.savesession.SaveSessionScreen
@@ -41,14 +49,61 @@ import org.mega.entropycore.MnemonicResult
 
 @Composable
 fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
+    // Activity-scoped (no back-stack-entry override), so it survives
+    // navigation across the whole app — see AppLockViewModel's doc comment
+    // for why backgrounding from any screen must re-lock saved-session access.
+    val appLockViewModel: AppLockViewModel = viewModel()
+    val context = LocalContext.current
+    val pinManager = remember { PinManager(context) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                appLockViewModel.lock()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     NavHost(navController = navController, startDestination = MegaDestinations.WELCOME) {
         composable(MegaDestinations.WELCOME) {
+            val coroutineScope = rememberCoroutineScope()
             WelcomeScreen(
                 onNewDiceSession = { navController.navigate(MegaDestinations.BEFORE_YOU_BEGIN) },
-                onSavedSessions = { navController.navigate(MegaDestinations.SAVED_SESSIONS) },
+                onSavedSessions = {
+                    coroutineScope.launch {
+                        val needsPin = pinManager.isPinEnabled() && appLockViewModel.isLocked.value
+                        if (needsPin) {
+                            navController.navigate(MegaDestinations.PIN_ENTRY)
+                        } else {
+                            navController.navigate(MegaDestinations.SAVED_SESSIONS)
+                        }
+                    }
+                },
                 onHowItWorks = { navController.navigate(MegaDestinations.HOW_IT_WORKS) },
                 onSecurityModel = { navController.navigate(MegaDestinations.SECURITY_MODEL) },
                 onAbout = { navController.navigate(MegaDestinations.ABOUT) },
+            )
+        }
+        composable(MegaDestinations.PIN_ENTRY) {
+            PinVerifyScreen(
+                onUnlocked = {
+                    appLockViewModel.unlock()
+                    navController.navigate(MegaDestinations.SAVED_SESSIONS) {
+                        popUpTo(MegaDestinations.PIN_ENTRY) { inclusive = true }
+                    }
+                },
+                onCancel = { navController.popBackStack() },
+            )
+        }
+        composable(MegaDestinations.PIN_SETUP) {
+            PinSetupScreen(
+                onPinSet = {
+                    appLockViewModel.unlock()
+                    navController.popBackStack()
+                },
+                onCancel = { navController.popBackStack() },
             )
         }
         composable(MegaDestinations.BEFORE_YOU_BEGIN) {
@@ -70,7 +125,10 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             AboutScreen(onBack = { navController.popBackStack() })
         }
         composable(MegaDestinations.SAVED_SESSIONS) {
-            SavedSessionsScreen(onBack = { navController.popBackStack() })
+            SavedSessionsScreen(
+                onBack = { navController.popBackStack() },
+                onEnablePin = { navController.navigate(MegaDestinations.PIN_SETUP) },
+            )
         }
 
         diceFlow(navController)

@@ -8,12 +8,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.mega.entropy.security.pin.PinManager
 import org.mega.entropy.storage.SavedSessionMetadata
 import org.mega.entropy.storage.SessionRepository
 
 data class SavedSessionsUiState(
     val sessions: List<SavedSessionMetadata> = emptyList(),
     val isLoading: Boolean = true,
+    val isPinEnabled: Boolean = false,
 )
 
 /**
@@ -24,6 +26,7 @@ data class SavedSessionsUiState(
  */
 class SavedSessionsViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SessionRepository(application)
+    private val pinManager = PinManager(application)
 
     private val _uiState = MutableStateFlow(SavedSessionsUiState())
     val uiState: StateFlow<SavedSessionsUiState> = _uiState.asStateFlow()
@@ -32,11 +35,19 @@ class SavedSessionsViewModel(application: Application) : AndroidViewModel(applic
         refresh()
     }
 
+    fun disablePin() {
+        viewModelScope.launch {
+            pinManager.disablePin()
+            refresh()
+        }
+    }
+
     fun refresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val sessions = repository.listSessions()
-            _uiState.update { it.copy(sessions = sessions, isLoading = false) }
+            val pinEnabled = pinManager.isPinEnabled()
+            _uiState.update { it.copy(sessions = sessions, isLoading = false, isPinEnabled = pinEnabled) }
         }
     }
 
