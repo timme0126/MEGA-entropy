@@ -2,6 +2,7 @@ package org.mega.entropy.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -13,10 +14,12 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import org.mega.entropy.security.pin.PinManager
 import org.mega.entropy.storage.SessionRepository
@@ -33,6 +36,7 @@ import org.mega.entropy.ui.pin.AppLockViewModel
 import org.mega.entropy.ui.pin.PinSetupScreen
 import org.mega.entropy.ui.pin.PinVerifyScreen
 import org.mega.entropy.ui.privacy.PrivacyScreen
+import org.mega.entropy.ui.savedsessiondetail.SavedSessionDetailScreen
 import org.mega.entropy.ui.savedsessions.SavedSessionsScreen
 import org.mega.entropy.ui.savesession.SaveSessionScreen
 import org.mega.entropy.ui.security.SecurityModelScreen
@@ -67,10 +71,13 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onNewDiceSession = { navController.navigate(MegaDestinations.BEFORE_YOU_BEGIN) },
                 onSavedSessions = {
                     coroutineScope.launch {
-                        val needsPin = pinManager.isPinEnabled() && appLockViewModel.isLocked.value
-                        if (needsPin) {
+                        // Always re-verify when a PIN is configured — no "already
+                        // unlocked earlier this app session" bypass. Retrieving
+                        // saved data is exactly the action the PIN protects.
+                        if (pinManager.isPinEnabled()) {
                             navController.navigate(MegaDestinations.PIN_ENTRY)
                         } else {
+                            appLockViewModel.unlock()
                             navController.navigate(MegaDestinations.SAVED_SESSIONS)
                         }
                     }
@@ -122,9 +129,24 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             )
         }
         composable(MegaDestinations.SAVED_SESSIONS) {
+            LockGuard(appLockViewModel, navController)
             SavedSessionsScreen(
                 onBack = { navController.popBackStack() },
                 onEnablePin = { navController.navigate(MegaDestinations.PIN_SETUP) },
+                onViewSession = { sessionId ->
+                    navController.navigate(MegaDestinations.savedSessionDetailRoute(sessionId))
+                },
+            )
+        }
+        composable(
+            route = MegaDestinations.SAVED_SESSION_DETAIL,
+            arguments = listOf(navArgument(MegaDestinations.SAVED_SESSION_DETAIL_ARG) { type = NavType.StringType }),
+        ) { entry ->
+            LockGuard(appLockViewModel, navController)
+            val sessionId = entry.arguments?.getString(MegaDestinations.SAVED_SESSION_DETAIL_ARG).orEmpty()
+            SavedSessionDetailScreen(
+                sessionId = sessionId,
+                onBack = { navController.popBackStack() },
             )
         }
 
@@ -257,5 +279,24 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(navController: NavHostC
 private fun diceSessionViewModel(navController: NavHostController, entry: NavBackStackEntry): DiceSessionViewModel {
     val parentEntry = remember(entry) { navController.getBackStackEntry(MegaDestinations.DICE_FLOW) }
     return viewModel(parentEntry)
+}
+
+/**
+ * Kicks the user back to Welcome if the app is backgrounded (and
+ * AppLockViewModel.lock() fires) while a saved-session screen is still on
+ * screen — spec section 22, "obscure the UI immediately when backgrounded"
+ * / "lock again when appropriate after leaving the app". Callers always
+ * call appLockViewModel.unlock() before navigating into a screen that uses
+ * this guard, so the very first composition never triggers it; only a
+ * later ON_STOP flipping isLocked back to true does.
+ */
+@Composable
+private fun LockGuard(appLockViewModel: AppLockViewModel, navController: NavHostController) {
+    val isLocked by appLockViewModel.isLocked.collectAsState()
+    LaunchedEffect(isLocked) {
+        if (isLocked) {
+            navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
+        }
+    }
 }
 

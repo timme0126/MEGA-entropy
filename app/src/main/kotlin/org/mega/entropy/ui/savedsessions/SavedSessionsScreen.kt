@@ -35,6 +35,7 @@ import org.mega.entropy.ui.components.SecureScreen
 fun SavedSessionsScreen(
     onBack: () -> Unit,
     onEnablePin: () -> Unit,
+    onViewSession: (String) -> Unit,
     viewModel: SavedSessionsViewModel = viewModel(),
 ) {
     SecureScreen()
@@ -68,7 +69,11 @@ fun SavedSessionsScreen(
             }
             else -> {
                 state.sessions.forEach { session ->
-                    SavedSessionCard(session = session, onDelete = { viewModel.deleteSession(session.id) })
+                    SavedSessionCard(
+                        session = session,
+                        onView = { onViewSession(session.id) },
+                        onDelete = { viewModel.deleteSession(session.id) },
+                    )
                 }
 
                 if (!confirmingDeleteAll) {
@@ -104,7 +109,7 @@ fun SavedSessionsScreen(
 }
 
 @Composable
-private fun SavedSessionCard(session: SavedSessionMetadata, onDelete: () -> Unit) {
+private fun SavedSessionCard(session: SavedSessionMetadata, onView: () -> Unit, onDelete: () -> Unit) {
     var confirmingDelete by remember { mutableStateOf(false) }
     val dateText = remember(session.createdAtEpochMillis) {
         DateFormat.getDateTimeInstance().format(Date(session.createdAtEpochMillis))
@@ -118,7 +123,10 @@ private fun SavedSessionCard(session: SavedSessionMetadata, onDelete: () -> Unit
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (!confirmingDelete) {
-            MegaSecondaryButton(text = "Delete Session", onClick = { confirmingDelete = true })
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                MegaSecondaryButton(text = "View", modifier = Modifier.weight(1f), onClick = onView)
+                MegaSecondaryButton(text = "Delete Session", modifier = Modifier.weight(1f), onClick = { confirmingDelete = true })
+            }
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 MegaSecondaryButton(
