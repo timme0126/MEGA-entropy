@@ -118,7 +118,7 @@ private fun SavedSessionCard(session: SavedSessionMetadata, onView: () -> Unit, 
     MegaCard {
         Text(dateText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Text(
-            "${session.rollsCount} / 100 rolls" + if (session.hasMnemonic) " · mnemonic saved" else "",
+            "${session.rollsCount} rolls" + if (session.hasMnemonic) " · mnemonic saved" else "",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

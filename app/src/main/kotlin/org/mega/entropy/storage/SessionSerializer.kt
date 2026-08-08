@@ -13,7 +13,9 @@ fun encodePayload(diceRolls: List<Int>, mnemonicWords: List<String>?): ByteArray
     require(diceRolls.size in 1..100) { "diceRolls must contain between 1 and 100 entries, got ${diceRolls.size}" }
     require(diceRolls.all { it in 1..6 }) { "All dice rolls must be between 1 and 6" }
     if (mnemonicWords != null) {
-        require(mnemonicWords.size == 24) { "mnemonicWords must contain exactly 24 entries when present, got ${mnemonicWords.size}" }
+        require(mnemonicWords.size == 12 || mnemonicWords.size == 24) {
+            "mnemonicWords must contain 12 or 24 entries when present, got ${mnemonicWords.size}"
+        }
     }
 
     val lines = mutableListOf<String>()
@@ -65,8 +67,8 @@ fun decodePayload(bytes: ByteArray): Pair<List<Int>, List<String>?> {
             throw IllegalStateException("Invalid payload format: third line must start with 'MNEMONIC:' if present")
         }
         val words = mnemonicLine.substringAfter("MNEMONIC:").split(" ")
-        if (words.size != 24) {
-            throw IllegalStateException("Invalid payload format: mnemonic must contain exactly 24 words, got ${words.size}")
+        if (words.size != 12 && words.size != 24) {
+            throw IllegalStateException("Invalid payload format: mnemonic must contain 12 or 24 words, got ${words.size}")
         }
         mnemonicWords = words
     }

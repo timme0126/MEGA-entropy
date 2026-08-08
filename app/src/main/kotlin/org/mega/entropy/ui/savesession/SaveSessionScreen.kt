@@ -33,6 +33,8 @@ import org.mega.entropy.ui.theme.MegaError
  */
 @Composable
 fun SaveSessionScreen(
+    rollCount: Int,
+    wordCount: Int,
     onDontSave: () -> Unit,
     onSaveDiceOnly: () -> Unit,
     onSaveDiceAndMnemonic: () -> Unit,
@@ -67,10 +69,11 @@ fun SaveSessionScreen(
 
             MegaCard(title = "Save Dice Rolls") {
                 Text(
-                    "Saves only your 100 physical dice results, encrypted on " +
-                        "this device. The mnemonic is recalculated from the " +
-                        "dice each time you reopen this session — nothing " +
-                        "about the words themselves is stored.",
+                    "Saves only your $rollCount physical dice results, " +
+                        "encrypted on this device. The mnemonic is " +
+                        "recalculated from the dice each time you reopen " +
+                        "this session — nothing about the words themselves " +
+                        "is stored.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -78,9 +81,9 @@ fun SaveSessionScreen(
 
             MegaCard(title = "Save Dice Rolls + Derived Mnemonic") {
                 Text(
-                    "Also saves the 24-word mnemonic itself, encrypted " +
-                        "alongside the dice. This increases the amount of " +
-                        "sensitive data stored on this device.",
+                    "Also saves the $wordCount-word mnemonic itself, " +
+                        "encrypted alongside the dice. This increases the " +
+                        "amount of sensitive data stored on this device.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MegaError,
                 )
@@ -92,11 +95,12 @@ fun SaveSessionScreen(
         } else {
             MegaCard {
                 Text(
-                    "Are you sure? Saving the mnemonic means your 24 words " +
-                        "will exist encrypted on this device, in addition to " +
-                        "wherever you've already written them down. Anyone " +
-                        "who defeats both this device's encryption and your " +
-                        "MEGA PIN (if enabled) could recover them.",
+                    "Are you sure? Saving the mnemonic means your $wordCount " +
+                        "words will exist encrypted on this device, in " +
+                        "addition to wherever you've already written them " +
+                        "down. Anyone who defeats both this device's " +
+                        "encryption and your MEGA PIN (if enabled) could " +
+                        "recover them.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MegaError,
                     fontWeight = FontWeight.SemiBold,

@@ -56,9 +56,9 @@ fun FinalMnemonicScreen(
         if (!revealed) {
             MegaCard {
                 Text(
-                    "Your 24 words control any wallet initialized with this " +
-                        "mnemonic. Anyone who obtains them may be able to take " +
-                        "the funds.",
+                    "Your ${words.size} words control any wallet initialized with " +
+                        "this mnemonic. Anyone who obtains them may be able to " +
+                        "take the funds.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MegaError,
                     fontWeight = FontWeight.SemiBold,
@@ -71,7 +71,7 @@ fun FinalMnemonicScreen(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            MegaPrimaryButton(text = "Reveal 24 Words", onClick = { revealed = true })
+            MegaPrimaryButton(text = "Reveal ${words.size} Words", onClick = { revealed = true })
         } else {
             MegaCard {
                 WordGrid(words)

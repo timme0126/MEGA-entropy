@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import org.mega.entropycore.MnemonicLength
 import org.mega.entropycore.MnemonicResult
 import org.mega.entropycore.RejectionResult
 import org.mega.entropycore.accumulate
@@ -16,13 +17,11 @@ import org.mega.entropycore.deriveMnemonic
 import org.mega.entropycore.mapRollsToBase6
 
 const val ROLLS_PER_BATCH = 5
-const val TOTAL_BATCHES = 20
-const val TOTAL_ROLLS = ROLLS_PER_BATCH * TOTAL_BATCHES
 
 /** Everything shown on-screen for one finished 5-roll batch, so the UI can
  * display the full worked calculation per spec section 6. */
 data class CompletedBatch(
-    val batchNumber: Int, // 1..20
+    val batchNumber: Int, // 1-based
     val physicalRolls: List<Int>,
     val base6Digits: List<Int>,
     val chunk: Long,
@@ -31,19 +30,22 @@ data class CompletedBatch(
 )
 
 data class DiceSessionUiState(
+    val mnemonicLength: MnemonicLength = MnemonicLength.TWENTY_FOUR_WORDS,
     val completedBatches: List<CompletedBatch> = emptyList(),
     val currentBatchRolls: List<Int> = emptyList(),
     val mnemonicResult: MnemonicResult? = null,
-    // MnemonicResult.Success doesn't retain the X/T/6^100/2^256 comparison
+    // MnemonicResult.Success doesn't retain the X/T/6^N/2^bits comparison
     // (only MnemonicResult.Rejected does), but the Bias Check screen needs
     // to show that comparison either way — so it's tracked here too,
     // computed via the same public checkAcceptance() call the pipeline
     // itself uses. This never changes which branch was taken.
     val rejectionResult: RejectionResult? = null,
 ) {
+    val totalRolls: Int get() = mnemonicLength.rollCount
+    val totalBatches: Int get() = totalRolls / ROLLS_PER_BATCH
     val rollsEntered: Int get() = completedBatches.size * ROLLS_PER_BATCH + currentBatchRolls.size
-    val currentBatchNumber: Int get() = (completedBatches.size + 1).coerceAtMost(TOTAL_BATCHES)
-    val isSessionComplete: Boolean get() = completedBatches.size == TOTAL_BATCHES
+    val currentBatchNumber: Int get() = (completedBatches.size + 1).coerceAtMost(totalBatches)
+    val isSessionComplete: Boolean get() = completedBatches.size == totalBatches
     val allRolls: List<Int> get() = completedBatches.flatMap { it.physicalRolls } + currentBatchRolls
     val runningX: BigInteger get() = completedBatches.lastOrNull()?.newX ?: BigInteger.ZERO
 }
@@ -54,15 +56,26 @@ data class DiceSessionUiState(
  * SavedStateHandle/logs) unless the user explicitly chooses to save it later.
  * Every derived value (chunks, X, the final mnemonic) is recomputed from the
  * raw rolls by calling straight into :entropy-core, never invented here.
+ *
+ * Activity-scoped (see MegaNavGraph) rather than scoped to the dice-flow
+ * nested graph, so the mnemonic-length choice screen — which sits just
+ * outside that nested graph — can set it via [selectLength] before the
+ * dice-entry screens (inside the nested graph) ever compose. Callers are
+ * responsible for calling [resetSession] when starting a fresh flow;
+ * [selectLength] itself resets, so choosing a length always starts clean.
  */
 class DiceSessionViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow(DiceSessionUiState())
     val uiState: StateFlow<DiceSessionUiState> = _uiState.asStateFlow()
 
+    fun selectLength(length: MnemonicLength) {
+        _uiState.value = DiceSessionUiState(mnemonicLength = length)
+    }
+
     /** Records one physical die outcome (1..6). Completes and appends a
      * batch once 5 rolls have accumulated; computes the final mnemonic once
-     * all 100 rolls are in. */
+     * all rolls for the chosen mnemonic length are in. */
     fun onRollEntered(physicalRoll: Int) {
         require(physicalRoll in 1..6) { "physicalRoll must be 1..6" }
         _uiState.update { state ->
@@ -86,11 +99,15 @@ class DiceSessionViewModel : ViewModel() {
                 newX = newX,
             )
             val newCompletedBatches = state.completedBatches + completed
-            val isNowComplete = newCompletedBatches.size == TOTAL_BATCHES
+            val isNowComplete = newCompletedBatches.size == state.totalBatches
             val allRolls = newCompletedBatches.flatMap { it.physicalRolls }
-            val result = if (isNowComplete) deriveMnemonic(allRolls) else null
+            val result = if (isNowComplete) deriveMnemonic(allRolls, state.mnemonicLength) else null
             val rejection = if (isNowComplete) {
-                checkAcceptance(calculateXDirect(mapRollsToBase6(allRolls)))
+                checkAcceptance(
+                    calculateXDirect(mapRollsToBase6(allRolls)),
+                    state.mnemonicLength.rollCount,
+                    state.mnemonicLength.entropyBits,
+                )
             } else {
                 null
             }
@@ -148,6 +165,6 @@ class DiceSessionViewModel : ViewModel() {
     }
 
     fun resetSession() {
-        _uiState.value = DiceSessionUiState()
+        _uiState.value = DiceSessionUiState(mnemonicLength = _uiState.value.mnemonicLength)
     }
 }

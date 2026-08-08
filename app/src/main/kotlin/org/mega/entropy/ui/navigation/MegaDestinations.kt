@@ -8,6 +8,7 @@ package org.mega.entropy.ui.navigation
  */
 object MegaDestinations {
     const val WELCOME = "welcome"
+    const val CHOOSE_LENGTH = "choose_length"
     const val BEFORE_YOU_BEGIN = "before_you_begin"
 
     /** Route of the nested graph wrapping DICE_ENTRY..FINAL_MNEMONIC, so

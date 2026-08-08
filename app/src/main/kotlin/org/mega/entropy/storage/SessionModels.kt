@@ -33,10 +33,10 @@ data class SavedSessionRecord(
         require(mnemonicMatchesFlag) {
             "mnemonicWords nullability must match hasMnemonic flag"
         }
-        // If mnemonic is present, it must contain exactly 24 BIP39 words
+        // If mnemonic is present, it must be a supported MEGA length: 12 or 24 words
         if (mnemonicWords != null) {
-            require(mnemonicWords.size == 24) {
-                "mnemonicWords must contain exactly 24 entries when present, got ${mnemonicWords.size}"
+            require(mnemonicWords.size == 12 || mnemonicWords.size == 24) {
+                "mnemonicWords must contain 12 or 24 entries when present, got ${mnemonicWords.size}"
             }
         }
     }

@@ -26,6 +26,7 @@ import org.mega.entropy.ui.components.MegaScreenPadding
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropy.ui.theme.MegaSuccess
+import org.mega.entropycore.MnemonicLength
 import org.mega.entropycore.RejectionResult
 
 /**
@@ -35,11 +36,15 @@ import org.mega.entropycore.RejectionResult
  */
 @Composable
 fun BiasCheckScreen(
+    mnemonicLength: MnemonicLength,
     rejectionResult: RejectionResult?,
     onContinueToEntropy: () -> Unit,
     onStartNewSequence: () -> Unit,
 ) {
     SecureScreen()
+    val rollCount = mnemonicLength.rollCount
+    val bits = mnemonicLength.entropyBits
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -50,21 +55,22 @@ fun BiasCheckScreen(
     ) {
         Text("Bias Check", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text(
-            "BIP39 needs exactly 256 bits, but 100 dice rolls carry slightly " +
-                "more raw information than that (~258.5 bits). Rejection " +
-                "sampling discards the small slice of sequences that would " +
-                "otherwise bias the result — see How It Works for why.",
+            "BIP39 needs exactly $bits bits, but $rollCount dice rolls carry " +
+                "slightly more raw information than that. Rejection sampling " +
+                "discards the small slice of sequences that would otherwise " +
+                "bias the result — see How It Works for why.",
             style = MaterialTheme.typography.bodyMedium,
         )
 
         MegaCard(title = "The comparison") {
             if (rejectionResult != null) {
-                MegaMonoText("X            = ${rejectionResult.x}")
-                MegaMonoText("6^100        = ${rejectionResult.sixPow100}")
-                MegaMonoText("2^256        = ${rejectionResult.twoPow256}")
-                MegaMonoText("T = 5×2^256  = ${rejectionResult.thresholdT}")
+                val multiplier = rejectionResult.thresholdT.divide(rejectionResult.twoPowEntropyBits)
+                MegaMonoText("X = ${rejectionResult.x}")
+                MegaMonoText("6^$rollCount = ${rejectionResult.sixPowRollCount}")
+                MegaMonoText("2^$bits = ${rejectionResult.twoPowEntropyBits}")
+                MegaMonoText("T = $multiplier × 2^$bits = ${rejectionResult.thresholdT}")
                 val isAccepted = rejectionResult is RejectionResult.Accepted
-                MegaMonoText("X < T        = $isAccepted")
+                MegaMonoText("X < T = $isAccepted")
             } else {
                 Text("Calculating…", style = MaterialTheme.typography.bodyMedium)
             }
@@ -74,10 +80,10 @@ fun BiasCheckScreen(
             is RejectionResult.Accepted -> {
                 ResultBanner(
                     passed = true,
-                    headline = "PASS — Your 100-roll sequence falls inside the unbiased range.",
+                    headline = "PASS — Your $rollCount-roll sequence falls inside the unbiased range.",
                 )
                 Text(
-                    "Next, E = X mod 2^256 extracts exactly 256 bits from X.",
+                    "Next, E = X mod 2^$bits extracts exactly $bits bits from X.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 MegaPrimaryButton(text = "Continue", onClick = onContinueToEntropy)
@@ -85,12 +91,13 @@ fun BiasCheckScreen(
             is RejectionResult.Rejected -> {
                 ResultBanner(
                     passed = false,
-                    headline = "REJECT — Start a new 100-roll sequence",
+                    headline = "REJECT — Start a new $rollCount-roll sequence",
                 )
                 Text(
                     "Nothing is wrong with your dice. This rejection is " +
-                        "necessary to keep the result uniformly random — " +
-                        "about 1 in 8 valid sequences land here by design.",
+                        "necessary to keep the result uniformly random — a " +
+                        "meaningful fraction of valid sequences land here by " +
+                        "design.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 MegaPrimaryButton(text = "Start New Sequence", onClick = onStartNewSequence)

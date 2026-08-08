@@ -20,15 +20,17 @@ import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaScreenPadding
 import org.mega.entropy.ui.components.SecureScreen
-import org.mega.entropycore.Entropy256
+import org.mega.entropycore.MnemonicEntropy
 
-/** Spec section 10, steps 1–2: display E as 32 bytes / 256 bits / 64 hex chars. */
+/** Spec section 10, steps 1–2: display E as its exact byte/bit/hex length. */
 @Composable
-fun Entropy256Screen(
-    entropy: Entropy256,
+fun EntropyScreen(
+    entropy: MnemonicEntropy,
     onContinue: () -> Unit,
 ) {
     SecureScreen()
+    val bits = entropy.bytes.size * 8
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -37,15 +39,15 @@ fun Entropy256Screen(
             .padding(MegaScreenPadding),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("256-Bit Entropy", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text("$bits-Bit Entropy", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text(
-            "E = X mod 2²⁵⁶ — the last step that touches X directly. " +
+            "E = X mod 2^$bits — the last step that touches X directly. " +
                 "Everything from here on (the checksum, the word indices) is a " +
-                "deterministic function of these exact 32 bytes.",
+                "deterministic function of these exact ${entropy.bytes.size} bytes.",
             style = MaterialTheme.typography.bodyMedium,
         )
 
-        MegaCard(title = "E, as 64 hex characters (32 bytes, 256 bits)") {
+        MegaCard(title = "E, as ${entropy.hex.length} hex characters (${entropy.bytes.size} bytes, $bits bits)") {
             MegaMonoText(entropy.hex.chunked(8).joinToString(" "))
         }
 

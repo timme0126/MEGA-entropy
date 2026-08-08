@@ -12,7 +12,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -26,9 +25,10 @@ import org.mega.entropy.storage.SessionRepository
 import org.mega.entropy.ui.about.AboutScreen
 import org.mega.entropy.ui.biascheck.BiasCheckScreen
 import org.mega.entropy.ui.checksum.ChecksumScreen
+import org.mega.entropy.ui.chooselength.ChooseLengthScreen
 import org.mega.entropy.ui.diceentry.DiceEntryScreen
 import org.mega.entropy.ui.diceentry.DiceSessionViewModel
-import org.mega.entropy.ui.entropy.Entropy256Screen
+import org.mega.entropy.ui.entropy.EntropyScreen
 import org.mega.entropy.ui.howitworks.HowItWorksScreen
 import org.mega.entropy.ui.mnemonic.FinalMnemonicScreen
 import org.mega.entropy.ui.onboarding.BeforeYouBeginScreen
@@ -47,10 +47,13 @@ import org.mega.entropycore.MnemonicResult
 
 @Composable
 fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
-    // Activity-scoped (no back-stack-entry override), so it survives
-    // navigation across the whole app — see AppLockViewModel's doc comment
-    // for why backgrounding from any screen must re-lock saved-session access.
+    // Both Activity-scoped (no back-stack-entry override), so they survive
+    // navigation across the whole app. diceSessionViewModel needs this
+    // because ChooseLengthScreen (which sets the chosen length) and
+    // BeforeYouBeginScreen (which displays it) both sit outside the
+    // "dice_flow" nested graph that the dice-entry screens share.
     val appLockViewModel: AppLockViewModel = viewModel()
+    val diceSessionViewModel: DiceSessionViewModel = viewModel()
     val context = LocalContext.current
     val pinManager = remember { PinManager(context) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -68,7 +71,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         composable(MegaDestinations.WELCOME) {
             val coroutineScope = rememberCoroutineScope()
             WelcomeScreen(
-                onNewDiceSession = { navController.navigate(MegaDestinations.BEFORE_YOU_BEGIN) },
+                onNewDiceSession = { navController.navigate(MegaDestinations.CHOOSE_LENGTH) },
                 onSavedSessions = {
                     coroutineScope.launch {
                         // Always re-verify when a PIN is configured — no "already
@@ -85,6 +88,15 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onHowItWorks = { navController.navigate(MegaDestinations.HOW_IT_WORKS) },
                 onSecurityModel = { navController.navigate(MegaDestinations.SECURITY_MODEL) },
                 onAbout = { navController.navigate(MegaDestinations.ABOUT) },
+            )
+        }
+        composable(MegaDestinations.CHOOSE_LENGTH) {
+            ChooseLengthScreen(
+                onBack = { navController.popBackStack() },
+                onLengthChosen = { length ->
+                    diceSessionViewModel.selectLength(length)
+                    navController.navigate(MegaDestinations.BEFORE_YOU_BEGIN)
+                },
             )
         }
         composable(MegaDestinations.PIN_ENTRY) {
@@ -108,7 +120,9 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             )
         }
         composable(MegaDestinations.BEFORE_YOU_BEGIN) {
+            val state by diceSessionViewModel.uiState.collectAsState()
             BeforeYouBeginScreen(
+                mnemonicLength = state.mnemonicLength,
                 onBack = { navController.popBackStack() },
                 onStartRolling = { navController.navigate(MegaDestinations.DICE_FLOW) },
             )
@@ -150,36 +164,39 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             )
         }
 
-        diceFlow(navController)
+        diceFlow(navController, diceSessionViewModel)
     }
 }
 
 /**
- * The dice-entry-through-final-mnemonic screens all read from ONE
- * DiceSessionViewModel, scoped to this nested graph's own back stack
- * entry rather than to each individual screen. Compose Navigation gives
- * every composable() destination its own ViewModelStore by default, so
- * without this the pipeline's intermediate results wouldn't survive
- * navigating from one calculation screen to the next. Popping the whole
- * "dice_flow" graph off the back stack (e.g. returning to Welcome) clears
- * that shared ViewModel and its in-memory session state — which is
- * correct: per spec section 16, a session is ephemeral unless the user
- * explicitly saved it.
+ * The dice-entry-through-final-mnemonic screens all read from the same
+ * Activity-scoped DiceSessionViewModel (passed in explicitly, since this is
+ * a separate function from MegaNavGraph's body and can't see its local
+ * vals). Popping the whole "dice_flow" graph off the back stack (e.g.
+ * returning to Welcome) does NOT clear it automatically the way scoping it
+ * to the graph's own back stack entry used to — screens that leave the
+ * flow (BiasCheck's "start new sequence", SaveSession's "done") call
+ * resetSession() explicitly instead. This trade-off is what lets
+ * ChooseLengthScreen and BeforeYouBeginScreen, which sit outside this
+ * nested graph, read and set the chosen MnemonicLength on the same
+ * instance.
  */
-private fun androidx.navigation.NavGraphBuilder.diceFlow(navController: NavHostController) {
+private fun androidx.navigation.NavGraphBuilder.diceFlow(
+    navController: NavHostController,
+    sharedViewModel: DiceSessionViewModel,
+) {
     navigation(startDestination = MegaDestinations.DICE_ENTRY, route = MegaDestinations.DICE_FLOW) {
-        composable(MegaDestinations.DICE_ENTRY) { entry ->
-            val sharedViewModel = diceSessionViewModel(navController, entry)
+        composable(MegaDestinations.DICE_ENTRY) {
             DiceEntryScreen(
                 viewModel = sharedViewModel,
                 onSessionComplete = { navController.navigate(MegaDestinations.BIAS_CHECK) },
                 onBack = { navController.popBackStack(MegaDestinations.WELCOME, inclusive = false) },
             )
         }
-        composable(MegaDestinations.BIAS_CHECK) { entry ->
-            val sharedViewModel = diceSessionViewModel(navController, entry)
+        composable(MegaDestinations.BIAS_CHECK) {
             val state by sharedViewModel.uiState.collectAsState()
             BiasCheckScreen(
+                mnemonicLength = state.mnemonicLength,
                 rejectionResult = state.rejectionResult,
                 onContinueToEntropy = { navController.navigate(MegaDestinations.ENTROPY_256) },
                 onStartNewSequence = {
@@ -188,19 +205,17 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(navController: NavHostC
                 },
             )
         }
-        composable(MegaDestinations.ENTROPY_256) { entry ->
-            val sharedViewModel = diceSessionViewModel(navController, entry)
+        composable(MegaDestinations.ENTROPY_256) {
             val state by sharedViewModel.uiState.collectAsState()
             val success = state.mnemonicResult as? MnemonicResult.Success
             if (success != null) {
-                Entropy256Screen(
+                EntropyScreen(
                     entropy = success.entropy,
                     onContinue = { navController.navigate(MegaDestinations.CHECKSUM) },
                 )
             }
         }
-        composable(MegaDestinations.CHECKSUM) { entry ->
-            val sharedViewModel = diceSessionViewModel(navController, entry)
+        composable(MegaDestinations.CHECKSUM) {
             val state by sharedViewModel.uiState.collectAsState()
             val success = state.mnemonicResult as? MnemonicResult.Success
             if (success != null) {
@@ -210,8 +225,7 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(navController: NavHostC
                 )
             }
         }
-        composable(MegaDestinations.SPLIT_GROUPS) { entry ->
-            val sharedViewModel = diceSessionViewModel(navController, entry)
+        composable(MegaDestinations.SPLIT_GROUPS) {
             val state by sharedViewModel.uiState.collectAsState()
             val success = state.mnemonicResult as? MnemonicResult.Success
             if (success != null) {
@@ -221,8 +235,7 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(navController: NavHostC
                 )
             }
         }
-        composable(MegaDestinations.WORD_DERIVATION) { entry ->
-            val sharedViewModel = diceSessionViewModel(navController, entry)
+        composable(MegaDestinations.WORD_DERIVATION) {
             val state by sharedViewModel.uiState.collectAsState()
             val success = state.mnemonicResult as? MnemonicResult.Success
             if (success != null) {
@@ -232,8 +245,7 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(navController: NavHostC
                 )
             }
         }
-        composable(MegaDestinations.FINAL_MNEMONIC) { entry ->
-            val sharedViewModel = diceSessionViewModel(navController, entry)
+        composable(MegaDestinations.FINAL_MNEMONIC) {
             val state by sharedViewModel.uiState.collectAsState()
             val success = state.mnemonicResult as? MnemonicResult.Success
             if (success != null) {
@@ -243,8 +255,7 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(navController: NavHostC
                 )
             }
         }
-        composable(MegaDestinations.SAVE_SESSION) { entry ->
-            val sharedViewModel = diceSessionViewModel(navController, entry)
+        composable(MegaDestinations.SAVE_SESSION) {
             val state by sharedViewModel.uiState.collectAsState()
             val success = state.mnemonicResult as? MnemonicResult.Success
             val context = LocalContext.current
@@ -257,6 +268,8 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(navController: NavHostC
             }
 
             SaveSessionScreen(
+                rollCount = state.mnemonicLength.rollCount,
+                wordCount = state.mnemonicLength.wordCount,
                 onDontSave = { finishAndReturnToWelcome() },
                 onSaveDiceOnly = {
                     coroutineScope.launch {
@@ -273,12 +286,6 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(navController: NavHostC
             )
         }
     }
-}
-
-@Composable
-private fun diceSessionViewModel(navController: NavHostController, entry: NavBackStackEntry): DiceSessionViewModel {
-    val parentEntry = remember(entry) { navController.getBackStackEntry(MegaDestinations.DICE_FLOW) }
-    return viewModel(parentEntry)
 }
 
 /**
@@ -299,4 +306,3 @@ private fun LockGuard(appLockViewModel: AppLockViewModel, navController: NavHost
         }
     }
 }
-

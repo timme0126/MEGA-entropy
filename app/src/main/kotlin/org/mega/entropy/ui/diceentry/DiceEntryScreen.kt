@@ -78,12 +78,12 @@ fun DiceEntryScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "Roll ${(state.rollsEntered + 1).coerceAtMost(TOTAL_ROLLS)} of $TOTAL_ROLLS",
+            text = "Roll ${(state.rollsEntered + 1).coerceAtMost(state.totalRolls)} of ${state.totalRolls}",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
         )
         Text(
-            text = "Batch ${state.currentBatchNumber} of $TOTAL_BATCHES",
+            text = "Batch ${state.currentBatchNumber} of ${state.totalBatches}",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -130,13 +130,13 @@ fun DiceEntryScreen(
 @Composable
 private fun ProgressCard(state: DiceSessionUiState) {
     MegaCard {
-        Text("${state.rollsEntered} / $TOTAL_ROLLS rolls", style = MaterialTheme.typography.bodyMedium)
+        Text("${state.rollsEntered} / ${state.totalRolls} rolls", style = MaterialTheme.typography.bodyMedium)
         LinearProgressIndicator(
-            progress = { state.rollsEntered / TOTAL_ROLLS.toFloat() },
+            progress = { state.rollsEntered / state.totalRolls.toFloat() },
             modifier = Modifier.fillMaxWidth(),
         )
         Text(
-            "${state.completedBatches.size} / $TOTAL_BATCHES batches",
+            "${state.completedBatches.size} / ${state.totalBatches} batches",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

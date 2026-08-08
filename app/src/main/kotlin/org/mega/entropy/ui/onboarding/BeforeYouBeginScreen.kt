@@ -10,13 +10,22 @@ import androidx.compose.ui.unit.dp
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSection
+import org.mega.entropycore.MnemonicLength
 
 /** Spec section 24, "Before You Begin". */
 @Composable
 fun BeforeYouBeginScreen(
+    mnemonicLength: MnemonicLength,
     onBack: () -> Unit,
     onStartRolling: () -> Unit,
 ) {
+    val rollCount = mnemonicLength.rollCount
+    val batchCount = rollCount / 5
+    // Approximate rejection rate, shown to one decimal place: ~11.4% for
+    // 24 words (100 rolls), ~15.8% for 12 words (50 rolls) — see
+    // docs/ENTROPY-MATH.md for the exact derivation.
+    val rejectionRateText = if (mnemonicLength == MnemonicLength.TWELVE_WORDS) "about 16%" else "about 11%"
+
     MegaInfoScaffold(title = "Before You Begin", onBack = onBack) {
         MegaSection(
             heading = "Use a fair six-sided die",
@@ -25,7 +34,7 @@ fun BeforeYouBeginScreen(
                 "on you (see Security Model).",
         )
         MegaSection(
-            heading = "Roll it physically, 100 times",
+            heading = "Roll it physically, $rollCount times",
             body = "Not a die-rolling app, not a simulator. A real die, rolled " +
                 "by you, one outcome at a time.",
         )
@@ -36,22 +45,22 @@ fun BeforeYouBeginScreen(
                 "you expected instead of what you saw.",
         )
         MegaSection(
-            heading = "100 rolls are needed",
-            body = "Entered in 20 batches of 5, so you're never staring at a " +
-                "wall of fields.",
+            heading = "$rollCount rolls are needed",
+            body = "Entered in $batchCount batches of 5, so you're never " +
+                "staring at a wall of fields.",
         )
         MegaSection(
-            heading = "About 1 in 8 sequences gets rejected",
-            body = "Roughly 11–12% of mathematically valid 100-roll sequences " +
-                "will fail the bias check and must be rerolled completely, " +
-                "from roll 1. This is expected and is what keeps the result " +
-                "unbiased — see How It Works for why.",
+            heading = "$rejectionRateText of sequences get rejected",
+            body = "That fraction of mathematically valid $rollCount-roll " +
+                "sequences will fail the bias check and must be rerolled " +
+                "completely, from roll 1. This is expected and is what keeps " +
+                "the result unbiased — see How It Works for why.",
         )
         MegaSection(
             heading = "Don't photograph the final seed",
-            body = "Your 24-word phrase controls real funds if you use it. " +
-                "Camera rolls, cloud photo backup, and screenshots are all " +
-                "attack surface MEGA can't protect you from.",
+            body = "Your ${mnemonicLength.wordCount}-word phrase controls real " +
+                "funds if you use it. Camera rolls, cloud photo backup, and " +
+                "screenshots are all attack surface MEGA can't protect you from.",
         )
 
         Spacer(modifier = Modifier.height(8.dp))

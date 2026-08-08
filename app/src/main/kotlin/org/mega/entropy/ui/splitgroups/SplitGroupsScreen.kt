@@ -39,10 +39,12 @@ fun SplitGroupsScreen(
             .padding(MegaScreenPadding),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        val totalBits = derivations.size * 11
         Text("Split Into ${derivations.size} Groups", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text(
-            "264 bits ÷ 11 bits per group = 24 groups. Each group becomes " +
-                "one word — the full derivation for each is on the next screen.",
+            "$totalBits bits ÷ 11 bits per group = ${derivations.size} groups. Each " +
+                "group becomes one word — the full derivation for each is on " +
+                "the next screen.",
             style = MaterialTheme.typography.bodyMedium,
         )
 

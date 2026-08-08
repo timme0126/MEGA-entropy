@@ -58,11 +58,11 @@ fun WelcomeScreen(
         )
 
         Spacer(modifier = Modifier.height(20.dp))
-        MegaBadgeRow(badges = listOf("OFFLINE", "100 DICE ROLLS", "ZERO DEVICE ENTROPY IN SEED"))
+        MegaBadgeRow(badges = listOf("OFFLINE", "REAL DICE ONLY", "ZERO DEVICE ENTROPY IN SEED"))
         Spacer(modifier = Modifier.height(32.dp))
 
         Text(
-            text = "Convert 100 physical die rolls into a valid 24-word " +
+            text = "Convert physical die rolls into a valid 12- or 24-word " +
                 "BIP39 recovery phrase — with every calculation shown, " +
                 "and nothing else contributing to the result.",
             style = MaterialTheme.typography.bodyMedium,

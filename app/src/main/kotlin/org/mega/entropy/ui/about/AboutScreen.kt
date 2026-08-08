@@ -18,10 +18,10 @@ fun AboutScreen(onBack: () -> Unit, onPrivacy: () -> Unit) {
 
         MegaSection(
             heading = "What this is",
-            body = "An offline tool that converts 100 physical die rolls into " +
-                "a 24-word BIP39 recovery phrase, with every intermediate " +
-                "calculation shown so the result can be independently " +
-                "verified. See How It Works and Security Model.",
+            body = "An offline tool that converts physical die rolls into a " +
+                "12- or 24-word BIP39 recovery phrase, with every " +
+                "intermediate calculation shown so the result can be " +
+                "independently verified. See How It Works and Security Model.",
         )
         MegaSection(
             heading = "Experimental status",
