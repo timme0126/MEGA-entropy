@@ -10,15 +10,15 @@ English BIP39 mnemonic.
 
 ## Download the beta APK
 
-**Current beta:** [`mega-beta-v0.1.0.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.0/mega-beta-v0.1.0.apk)
+**Current beta:** [`mega-beta-v0.1.1.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.1/mega-beta-v0.1.1.apk)
 
-Release page: [`MEGA Beta v0.1.0`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.0)
+Release page: [`MEGA Beta v0.1.1`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.1)
 
 Verify the download before installing:
 
 ```bash
-sha256sum mega-beta-v0.1.0.apk
-# cb6c2ce55e1aeac047b9b7d3a42e1291e125804c7786504a0de313d0f5b43d3d
+sha256sum mega-beta-v0.1.1.apk
+# 4bdded587b99642aa662ef89fc854eeadf5c77da9bfac28afc36d4f357031bae
 ```
 
 This is an experimental beta build for disposable test roll sequences only.
