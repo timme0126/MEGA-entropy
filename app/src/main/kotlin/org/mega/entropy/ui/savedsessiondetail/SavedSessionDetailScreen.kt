@@ -59,8 +59,10 @@ fun SavedSessionDetailScreen(
     sessionId: String,
     allowScreenshots: Boolean,
     allowSeedCopy: Boolean,
+    advancedModeEnabled: Boolean,
     onBack: () -> Unit,
     onBip85: (List<String>, String) -> Unit,
+    onWalletKeys: (List<String>, String) -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
     val context = LocalContext.current
@@ -253,6 +255,16 @@ fun SavedSessionDetailScreen(
                         },
                         onClick = { onBip85(wordsToDisplay, "") },
                     )
+                    if (advancedModeEnabled) {
+                        MegaSecondaryButton(
+                            text = if (currentRecord.metadata.hasPassphraseCheck) {
+                                "Derive Wallet Account Keys (No Passphrase)"
+                            } else {
+                                "Derive Wallet Account Keys"
+                            },
+                            onClick = { onWalletKeys(wordsToDisplay, "") },
+                        )
+                    }
                 }
                 val currentMnemonicActionError = mnemonicActionError
                 if (currentMnemonicActionError != null) {
@@ -404,13 +416,15 @@ fun SavedSessionDetailScreen(
                         // saved session once you've proven you know its
                         // passphrase.
                         if (verifyResult?.matches == true) {
+                            fun resolveWordsForVerifiedPassphrase(): List<String>? =
+                                currentRecord.mnemonicWords ?: derivedMnemonicWords ?: run {
+                                    val length = MnemonicLength.entries.first { it.rollCount == currentRecord.diceRolls.size }
+                                    (deriveMnemonic(currentRecord.diceRolls, length) as? MnemonicResult.Success)?.words
+                                }
                             MegaSecondaryButton(
                                 text = "Calculate BIP85 Child (Verified Passphrase)",
                                 onClick = {
-                                    val words = currentRecord.mnemonicWords ?: derivedMnemonicWords ?: run {
-                                        val length = MnemonicLength.entries.first { it.rollCount == currentRecord.diceRolls.size }
-                                        (deriveMnemonic(currentRecord.diceRolls, length) as? MnemonicResult.Success)?.words
-                                    }
+                                    val words = resolveWordsForVerifiedPassphrase()
                                     if (words == null) {
                                         mnemonicActionError = "These saved rolls do not produce an accepted mnemonic."
                                     } else {
@@ -419,6 +433,20 @@ fun SavedSessionDetailScreen(
                                     }
                                 },
                             )
+                            if (advancedModeEnabled) {
+                                MegaSecondaryButton(
+                                    text = "Derive Wallet Account Keys (Verified Passphrase)",
+                                    onClick = {
+                                        val words = resolveWordsForVerifiedPassphrase()
+                                        if (words == null) {
+                                            mnemonicActionError = "These saved rolls do not produce an accepted mnemonic."
+                                        } else {
+                                            mnemonicActionError = null
+                                            onWalletKeys(words, passphraseField)
+                                        }
+                                    },
+                                )
+                            }
                             if (!seedRevealed) {
                                 MegaSecondaryButton(text = "Reveal BIP39 Seed", onClick = { seedRevealed = true })
                             } else {

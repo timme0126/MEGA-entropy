@@ -16,16 +16,34 @@ sealed class ManualMnemonicValidation {
 }
 
 /**
+ * Every official BIP39 English word list entry is uniquely identified by
+ * its first four letters (a documented property of that specific word
+ * list — no two words share a four-letter prefix). Returns every word
+ * starting with [prefix] (case-insensitive), for autocomplete-style UI —
+ * often just one match well before four letters, since this checks actual
+ * uniqueness rather than assuming exactly four are always needed.
+ */
+fun bip39WordsStartingWith(prefix: String, wordList: List<String> = loadOfficialEnglishWordList()): List<String> {
+    val normalized = prefix.trim().lowercase()
+    if (normalized.isEmpty()) return emptyList()
+    return wordList.filter { it.startsWith(normalized) }
+}
+
+/**
  * Validates a manually entered BIP39 mnemonic: word count (12 or 24),
- * every word present in the official English word list, and the BIP39
- * checksum. This is the "reverse direction" of deriveMnemonic — instead of
- * turning entropy into words, it turns words back into entropy and checks
- * the checksum that entropy would have produced matches the checksum bits
- * actually present in the given words.
+ * every word present in the official English word list (or an unambiguous
+ * prefix of exactly one word — see [bip39WordsStartingWith] — so a user
+ * only has to type as many letters as it takes to be unique, same as the
+ * autocomplete preview in the entry UI), and the BIP39 checksum. This is
+ * the "reverse direction" of deriveMnemonic — instead of turning entropy
+ * into words, it turns words back into entropy and checks the checksum
+ * that entropy would have produced matches the checksum bits actually
+ * present in the given words.
  *
  * Words are trimmed and lowercased before lookup so incidental whitespace
  * or capitalization from a user typing on a phone keyboard doesn't cause a
- * spurious "not a BIP39 word" rejection.
+ * spurious "not a BIP39 word" rejection. The returned Valid.words are
+ * always the full resolved words, never a prefix the caller typed.
  */
 fun validateManualMnemonic(rawWords: List<String>): ManualMnemonicValidation {
     val words = rawWords.map { it.trim().lowercase() }
@@ -41,15 +59,28 @@ fun validateManualMnemonic(rawWords: List<String>): ManualMnemonicValidation {
     }
 
     val wordList = loadOfficialEnglishWordList()
+    val resolvedWords = MutableList(words.size) { "" }
     val indices = IntArray(words.size)
     for (i in words.indices) {
-        val index = wordList.indexOf(words[i])
-        if (index < 0) {
-            return ManualMnemonicValidation.Invalid(
-                "\"${words[i]}\" (word ${i + 1}) is not in the official BIP39 English word list."
-            )
+        val typed = words[i]
+        val exactIndex = wordList.indexOf(typed)
+        if (exactIndex >= 0) {
+            resolvedWords[i] = typed
+            indices[i] = exactIndex
+            continue
         }
-        indices[i] = index
+
+        val prefixMatches = bip39WordsStartingWith(typed, wordList)
+        if (prefixMatches.size == 1) {
+            resolvedWords[i] = prefixMatches[0]
+            indices[i] = wordList.indexOf(prefixMatches[0])
+            continue
+        }
+
+        return ManualMnemonicValidation.Invalid(
+            "\"${words[i]}\" (word ${i + 1}) is not a BIP39 word, or its typed letters don't " +
+                "uniquely match exactly one."
+        )
     }
 
     val bitStream = indicesTo11BitStream(indices.toList())
@@ -66,5 +97,5 @@ fun validateManualMnemonic(rawWords: List<String>): ManualMnemonicValidation {
         )
     }
 
-    return ManualMnemonicValidation.Valid(MnemonicEntropy(entropyBytes), words)
+    return ManualMnemonicValidation.Valid(MnemonicEntropy(entropyBytes), resolvedWords)
 }

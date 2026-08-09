@@ -33,6 +33,10 @@ object MegaDestinations {
     const val SAVED_SESSION_DETAIL_ARG = "sessionId"
     const val SAVED_SESSION_DETAIL = "saved_session_detail/{$SAVED_SESSION_DETAIL_ARG}"
     const val SAVED_SESSION_BIP85 = "saved_session_bip85"
+    /** Advanced Mode's wallet-key derivation tool, reached from a saved
+     * session's already-revealed words — only offered when Advanced Mode
+     * is on (see SavedSessionDetailScreen). */
+    const val SAVED_SESSION_WALLET = "saved_session_wallet"
     const val SAVED_SESSION_UNLOCK = "saved_session_unlock"
     fun savedSessionDetailRoute(sessionId: String) = "saved_session_detail/$sessionId"
     const val HOW_IT_WORKS = "how_it_works"
@@ -56,4 +60,8 @@ object MegaDestinations {
     const val ADVANCED_MODE_HUB = "advanced_mode_hub"
     const val ADVANCED_MODE_BIP85 = "advanced_mode_bip85"
     const val ADVANCED_MODE_WALLET = "advanced_mode_wallet"
+    /** PIN-gated picker (same gate as SAVED_SESSIONS) for importing an
+     * existing saved session's words into Advanced Mode instead of typing
+     * them by hand. */
+    const val ADVANCED_MODE_IMPORT_PICKER = "advanced_mode_import_picker"
 }

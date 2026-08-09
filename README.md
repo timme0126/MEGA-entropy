@@ -10,15 +10,15 @@ six-sided die rolls, supplied entirely by the user,** into a valid 12- or
 
 ## Download the beta APK
 
-**Current beta:** [`mega-beta-v0.1.4.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.4/mega-beta-v0.1.4.apk)
+**Current beta:** [`mega-beta-v0.1.5.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.5/mega-beta-v0.1.5.apk)
 
-Release page: [`MEGA Beta v0.1.4`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.4)
+Release page: [`MEGA Beta v0.1.5`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.5)
 
 Verify the download before installing:
 
 ```bash
-sha256sum mega-beta-v0.1.4.apk
-# f8a0aecb5364911fe1d26fe787eb6d1f30948f7390178bbc66d31c3259ccf816
+sha256sum mega-beta-v0.1.5.apk
+# 01186366f7ce25f3977d3cb82109c1ecb164c771c3ccadb180689825090982d2
 ```
 
 This is an experimental beta build for disposable test roll sequences only.

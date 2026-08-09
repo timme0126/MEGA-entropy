@@ -36,9 +36,9 @@ fun deriveBip85Bip39Mnemonic(
     index: Long,
     parentPassphrase: String = "",
 ): Bip85DerivedMnemonic {
-    validateBip85ParentWords(parentWords)
+    val resolvedParentWords = resolveBip85ParentWords(parentWords)
     validateBip85Index(index)
-    val seed = deriveSeed(parentWords, parentPassphrase)
+    val seed = deriveSeed(resolvedParentWords, parentPassphrase)
     val master = bip32MasterKeyFromSeed(seed.bytes)
     return deriveBip85Bip39Mnemonic(master, childWords, index)
 }
@@ -76,9 +76,9 @@ private fun deriveBip85Bip39Mnemonic(
     return Bip85DerivedMnemonic(index, childWords, path, entropy, mnemonicWords)
 }
 
-private fun validateBip85ParentWords(parentWords: List<String>) {
-    when (val validation = validateManualMnemonic(parentWords)) {
-        is ManualMnemonicValidation.Valid -> Unit
+private fun resolveBip85ParentWords(parentWords: List<String>): List<String> {
+    return when (val validation = validateManualMnemonic(parentWords)) {
+        is ManualMnemonicValidation.Valid -> validation.words
         is ManualMnemonicValidation.Invalid -> {
             throw IllegalArgumentException("Invalid BIP85 parent mnemonic: ${validation.reason}")
         }

@@ -63,6 +63,31 @@ class Bip85Test {
         )
     }
 
+
+    @Test
+    fun `prefix parent words resolve before BIP85 seed derivation`() {
+        val fullParentWords = ("abandon abandon abandon abandon abandon abandon abandon abandon abandon " +
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon " +
+            "abandon abandon abandon art").split(" ")
+        val prefixParentWords = List(23) { "aban" } + "art"
+
+        val full = deriveBip85Bip39Mnemonic(
+            parentWords = fullParentWords,
+            childWords = Bip85MnemonicWords.TWENTY_FOUR,
+            index = 0,
+            parentPassphrase = "TREZOR",
+        )
+        val prefixed = deriveBip85Bip39Mnemonic(
+            parentWords = prefixParentWords,
+            childWords = Bip85MnemonicWords.TWENTY_FOUR,
+            index = 0,
+            parentPassphrase = "TREZOR",
+        )
+
+        assertEquals(full.entropy.hex, prefixed.entropy.hex)
+        assertEquals(full.mnemonicWords, prefixed.mnemonicWords)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `rejects parent words with invalid BIP39 checksum`() {
         deriveBip85Bip39Mnemonic(

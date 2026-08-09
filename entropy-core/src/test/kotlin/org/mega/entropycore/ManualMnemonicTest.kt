@@ -79,4 +79,45 @@ class ManualMnemonicTest {
         val result = validateManualMnemonic(words) as ManualMnemonicValidation.Invalid
         assertTrue(result.reason.contains("blank"))
     }
+
+    @Test
+    fun `accepts four-letter unique prefixes in place of full words`() {
+        // "aban" and "abou" are each a unique four-letter prefix in the
+        // official BIP39 English word list (verified: zero four-letter
+        // prefix collisions across all 2048 words) — the same vector as
+        // the full-word 12-word test, just abbreviated.
+        val words = List(11) { "aban" } + "abou"
+        val result = validateManualMnemonic(words)
+        val valid = result as? ManualMnemonicValidation.Valid
+        assertNotNull("expected Valid, got $result", valid)
+        assertEquals(
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            valid!!.words.joinToString(" "),
+        )
+    }
+
+    @Test
+    fun `accepts a mix of full words and unique prefixes`() {
+        val words = List(11) { "abandon" } + "abou"
+        val result = validateManualMnemonic(words)
+        assertTrue(result is ManualMnemonicValidation.Valid)
+    }
+
+    @Test
+    fun `rejects an ambiguous prefix that matches more than one word`() {
+        // "ab" matches many BIP39 words (abandon, ability, able, about, ...).
+        val words = List(11) { "aban" } + "ab"
+        val result = validateManualMnemonic(words) as ManualMnemonicValidation.Invalid
+        assertTrue(result.reason.contains("\"ab\""))
+    }
+
+    @Test
+    fun `bip39WordsStartingWith returns every match for an ambiguous prefix and one for a unique prefix`() {
+        assertEquals(listOf("about"), bip39WordsStartingWith("abou"))
+        assertTrue(bip39WordsStartingWith("ab").size > 1)
+        assertTrue(bip39WordsStartingWith("ab").contains("about"))
+        assertTrue(bip39WordsStartingWith("ab").contains("abandon"))
+        assertEquals(emptyList<String>(), bip39WordsStartingWith(""))
+        assertEquals(emptyList<String>(), bip39WordsStartingWith("zzzz"))
+    }
 }
