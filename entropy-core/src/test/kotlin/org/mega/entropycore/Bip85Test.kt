@@ -41,6 +41,37 @@ class Bip85Test {
         assertTrue(indexZero.mnemonicWords != indexOne.mnemonicWords)
     }
 
+
+    @Test
+    fun `24-word parent with BIP39 passphrase derives standard 24-word child at index 0`() {
+        val parentWords = ("abandon abandon abandon abandon abandon abandon abandon abandon abandon " +
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon " +
+            "abandon abandon abandon art").split(" ")
+
+        val result = deriveBip85Bip39Mnemonic(
+            parentWords = parentWords,
+            childWords = Bip85MnemonicWords.TWENTY_FOUR,
+            index = 0,
+            parentPassphrase = "TREZOR",
+        )
+
+        assertEquals("m/83696968'/39'/0'/24'/0'", result.path)
+        assertEquals("a0ea8bf0460a0aa19dd7dcbc52feeafce71dbfb400316619830a80549df5816a", result.entropy.hex)
+        assertEquals(
+            "path february winter metal pass express jar wine rough obey rival what impact thank source alert gravity slot section absent endorse width aisle flag",
+            result.mnemonicWords.joinToString(" "),
+        )
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `rejects parent words with invalid BIP39 checksum`() {
+        deriveBip85Bip39Mnemonic(
+            parentWords = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon".split(" "),
+            childWords = Bip85MnemonicWords.TWELVE,
+            index = 0,
+        )
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `rejects negative index`() {
         deriveBip85Bip39Mnemonic(vectorRootXprv, Bip85MnemonicWords.TWELVE, -1)

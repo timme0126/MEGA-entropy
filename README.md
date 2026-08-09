@@ -1,8 +1,8 @@
 # MEGA — Make Entropy Great Again
 
-A transparent, offline Android tool for converting **100 physical
-six-sided die rolls, supplied entirely by the user,** into a valid 24-word
-English BIP39 mnemonic.
+A transparent, offline Android tool for converting **50 or 100 physical
+six-sided die rolls, supplied entirely by the user,** into a valid 12- or
+24-word English BIP39 mnemonic.
 
 > **Status: experimental, not independently audited.** Do not use MEGA to
 > protect meaningful funds yet. See [`SECURITY.md`](SECURITY.md) for the
@@ -10,15 +10,15 @@ English BIP39 mnemonic.
 
 ## Download the beta APK
 
-**Current beta:** [`mega-beta-v0.1.1.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.1/mega-beta-v0.1.1.apk)
+**Current beta:** [`mega-beta-v0.1.4.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.4/mega-beta-v0.1.4.apk)
 
-Release page: [`MEGA Beta v0.1.1`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.1)
+Release page: [`MEGA Beta v0.1.4`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.4)
 
 Verify the download before installing:
 
 ```bash
-sha256sum mega-beta-v0.1.1.apk
-# 46600cf00dbb1a2423add224c9213f6caa9b245fbc14b417711db3869f5b15fe
+sha256sum mega-beta-v0.1.4.apk
+# f8a0aecb5364911fe1d26fe787eb6d1f30948f7390178bbc66d31c3259ccf816
 ```
 
 This is an experimental beta build for disposable test roll sequences only.

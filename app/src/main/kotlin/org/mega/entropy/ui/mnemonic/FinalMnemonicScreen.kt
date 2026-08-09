@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mega.entropy.ui.components.MegaCard
+import org.mega.entropy.ui.components.MegaCopyIconButton
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaScreenPadding
@@ -30,21 +31,30 @@ import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 
-/**
- * Spec section 14, "Final mnemonic display". Deliberately has no Copy,
- * Share, QR, screenshot, PDF, text export, cloud backup, email, NFC, or
- * Bluetooth affordance anywhere on this screen — there is no export
- * feature in v1, by design (spec section 14 and 4, "no export").
- */
 @Composable
 fun FinalMnemonicScreen(
     words: List<String>,
+    allowScreenshots: Boolean,
+    allowSeedCopy: Boolean,
     onDone: () -> Unit,
     onAddPassphrase: () -> Unit,
     onBip85: () -> Unit,
 ) {
-    SecureScreen()
+    SecureScreen(enabled = !allowScreenshots)
     var revealed by remember { mutableStateOf(false) }
+    val exposureGuidance = remember(allowScreenshots, allowSeedCopy) {
+        val screenshotGuidance = if (allowScreenshots) {
+            "Screenshots are enabled in Settings."
+        } else {
+            "Screenshots are off by default."
+        }
+        val copyGuidance = if (allowSeedCopy) {
+            "Copy is enabled in Settings for this session."
+        } else {
+            "Copy is off by default; write the words down by hand if you need a durable record."
+        }
+        "Make sure no one else can see this screen. $screenshotGuidance $copyGuidance"
+    }
 
     Column(
         modifier = Modifier
@@ -67,16 +77,24 @@ fun FinalMnemonicScreen(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "Make sure no one else can see this screen, and never " +
-                        "photograph it. There is no copy, share, or export " +
-                        "option anywhere in this app — write the words down by " +
-                        "hand if you need a durable record.",
+                    exposureGuidance,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
             MegaPrimaryButton(text = "Reveal ${words.size} Words", onClick = { revealed = true })
         } else {
-            MegaCard {
+            MegaCard(
+                leadingAction = if (allowSeedCopy) {
+                    {
+                        MegaCopyIconButton(
+                            contentDescription = "Copy seed words",
+                            getTextToCopy = { words.joinToString(" ") },
+                        )
+                    }
+                } else {
+                    null
+                },
+            ) {
                 WordGrid(words)
             }
             Text(

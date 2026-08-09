@@ -79,6 +79,8 @@ fun WelcomeScreen(
     onSecurityModel: () -> Unit,
     onAbout: () -> Unit,
     onExitApp: () -> Unit,
+    advancedModeEnabled: Boolean,
+    onAdvancedMode: () -> Unit,
 ) {
     var confirmingExit by remember { mutableStateOf(false) }
 
@@ -113,6 +115,13 @@ fun WelcomeScreen(
         MegaSecondaryButton(text = "How It Works", onClick = onHowItWorks)
         MegaSecondaryButton(text = "Security Model", onClick = onSecurityModel)
         MegaSecondaryButton(text = "About", onClick = onAbout)
+
+        // Only shown once explicitly opted into via Saved Session Settings —
+        // keeps this screen free of a power-user path most people never need.
+        if (advancedModeEnabled) {
+            Spacer(modifier = Modifier.height(16.dp))
+            MegaSecondaryButton(text = "Advanced Mode", onClick = onAdvancedMode)
+        }
 
         Spacer(modifier = Modifier.height(32.dp))
         val currentYear = Year.now().value

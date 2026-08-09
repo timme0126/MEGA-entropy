@@ -66,3 +66,44 @@ internal fun splitInto11BitGroups(bitStream: BooleanArray): List<Int> {
     }
     return groups
 }
+
+/**
+ * Inverse of [splitInto11BitGroups]: expands a list of 0..2047 word
+ * indices back into their concatenated 11-bit, MSB-first representation.
+ * Used to validate a manually typed-in mnemonic, where the words (and
+ * therefore their indices) are known and the entropy+checksum bits need to
+ * be reconstructed for verification — the reverse direction of the normal
+ * dice-to-mnemonic pipeline.
+ */
+internal fun indicesTo11BitStream(indices: List<Int>): BooleanArray {
+    require(indices.all { it in 0..2047 }) { "All word indices must be in range 0..2047, found invalid index" }
+
+    val bits = BooleanArray(indices.size * 11)
+    indices.forEachIndexed { groupIndex, value ->
+        val start = groupIndex * 11
+        for (j in 0 until 11) {
+            bits[start + j] = (value shr (10 - j)) and 1 == 1
+        }
+    }
+    return bits
+}
+
+/**
+ * Packs a bit stream (MSB-first, length a multiple of 8) into bytes.
+ * Inverse of the per-byte bit extraction in [buildBitStream].
+ */
+internal fun bitsToBytes(bits: BooleanArray): ByteArray {
+    require(bits.size % 8 == 0) { "Bit count must be a multiple of 8, got ${bits.size}" }
+
+    val bytes = ByteArray(bits.size / 8)
+    for (byteIndex in bytes.indices) {
+        var value = 0
+        for (bitPos in 0 until 8) {
+            if (bits[byteIndex * 8 + bitPos]) {
+                value = value or (1 shl (7 - bitPos))
+            }
+        }
+        bytes[byteIndex] = value.toByte()
+    }
+    return bytes
+}

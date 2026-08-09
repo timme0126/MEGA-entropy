@@ -9,26 +9,44 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import org.mega.entropy.R
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropy.ui.theme.MegaNeutralGray
@@ -154,11 +172,17 @@ fun MegaDestructiveButton(
 }
 
 /** A card section with an optional title, used throughout the explanation
- * and calculation screens so every "show your work" block looks the same. */
+ * and calculation screens so every "show your work" block looks the same.
+ * [leadingAction] and [trailingAction] put a small icon button (copy,
+ * lock/unlock, ...) in the card's header row instead of a separate row —
+ * the small action sits directly in the top-left/top-right corner without
+ * stealing extra vertical space or nesting another card inside this one. */
 @Composable
 fun MegaCard(
     modifier: Modifier = Modifier,
     title: String? = null,
+    leadingAction: (@Composable () -> Unit)? = null,
+    trailingAction: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
@@ -167,15 +191,81 @@ fun MegaCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (title != null) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
+            if (title != null || leadingAction != null || trailingAction != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    leadingAction?.invoke()
+                    if (title != null) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Box(modifier = Modifier.weight(1f))
+                    }
+                    trailingAction?.invoke()
+                }
             }
             content()
         }
+    }
+}
+
+/** Small icon-only copy action for sensitive word lists (seed words, BIP85
+ * child words) — used instead of a full-width "Copy ..." button so the
+ * action reads as low-key and deliberate rather than prominent. Feedback on
+ * a successful copy is the icon itself swapping to a checkmark for a couple
+ * of seconds, not a toast or snackbar that could linger in a screenshot. */
+@Composable
+fun MegaCopyIconButton(
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    getTextToCopy: () -> String,
+) {
+    val clipboardManager = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(1500)
+            copied = false
+        }
+    }
+
+    IconButton(
+        onClick = {
+            clipboardManager.setText(AnnotatedString(getTextToCopy()))
+            copied = true
+        },
+        modifier = modifier,
+    ) {
+        Icon(
+            imageVector = if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
+            contentDescription = if (copied) "Copied" else contentDescription,
+            tint = if (copied) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+        )
+    }
+}
+
+/** Small icon-only lock/unlock toggle for the dice-roll edit affordance —
+ * per-screen UI state (not persisted), defaulting to unlocked so existing
+ * edit behavior is unchanged unless the user deliberately locks it. */
+@Composable
+fun MegaLockIconButton(
+    locked: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    IconButton(onClick = onToggle, modifier = modifier) {
+        Icon(
+            imageVector = if (locked) Icons.Filled.Lock else Icons.Filled.LockOpen,
+            contentDescription = if (locked) "Rolls locked — tap to unlock editing" else "Rolls unlocked — tap to lock editing",
+        )
     }
 }
 

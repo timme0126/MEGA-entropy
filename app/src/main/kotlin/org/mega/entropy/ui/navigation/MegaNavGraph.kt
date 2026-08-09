@@ -29,6 +29,9 @@ import org.mega.entropy.security.settings.SavedSessionSecuritySettings
 import org.mega.entropy.security.pin.PinManager
 import org.mega.entropy.storage.SessionRepository
 import org.mega.entropy.ui.about.AboutScreen
+import org.mega.entropy.ui.advancedmode.AdvancedModeHubScreen
+import org.mega.entropy.ui.advancedmode.AdvancedModeMnemonicEntryScreen
+import org.mega.entropy.ui.advancedmode.AdvancedModeWalletScreen
 import org.mega.entropy.ui.biascheck.BiasCheckScreen
 import org.mega.entropy.ui.bip85.Bip85Screen
 import org.mega.entropy.ui.checksum.ChecksumScreen
@@ -65,6 +68,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     val appLockViewModel: AppLockViewModel = viewModel()
     val diceSessionViewModel: DiceSessionViewModel = viewModel()
     var savedSessionBip85ParentWords by remember { mutableStateOf<List<String>?>(null) }
+    var savedSessionBip85ParentPassphrase by remember { mutableStateOf("") }
     val context = LocalContext.current
     val pinManager = remember { PinManager(context) }
     val savedSessionSecuritySettings = remember { SavedSessionSecuritySettings(context) }
@@ -74,6 +78,17 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     var randomizePinKeypad by remember {
         mutableStateOf(savedSessionSecuritySettings.randomizePinKeypad())
     }
+    var allowScreenshots by remember {
+        mutableStateOf(savedSessionSecuritySettings.allowScreenshots())
+    }
+    var allowSeedCopy by remember {
+        mutableStateOf(savedSessionSecuritySettings.allowSeedCopy())
+    }
+    var advancedModeEnabled by remember {
+        mutableStateOf(savedSessionSecuritySettings.advancedModeEnabled())
+    }
+    var advancedModeWords by remember { mutableStateOf<List<String>?>(null) }
+    var advancedModePassphrase by remember { mutableStateOf("") }
     var stoppedAtElapsedRealtime by remember { mutableStateOf<Long?>(null) }
     val lifecycleCoroutineScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -158,6 +173,12 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onAbout = { navController.navigate(MegaDestinations.ABOUT) },
                 onExitApp = {
                     context.findActivity()?.finishAndRemoveTask()
+                },
+                advancedModeEnabled = advancedModeEnabled,
+                onAdvancedMode = {
+                    advancedModeWords = null
+                    advancedModePassphrase = ""
+                    navController.navigate(MegaDestinations.ADVANCED_MODE_ENTRY)
                 },
             )
         }
@@ -308,6 +329,21 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     savedSessionSecuritySettings.setRandomizePinKeypad(randomize)
                     randomizePinKeypad = savedSessionSecuritySettings.randomizePinKeypad()
                 },
+                allowScreenshots = allowScreenshots,
+                onAllowScreenshotsChanged = { allow ->
+                    savedSessionSecuritySettings.setAllowScreenshots(allow)
+                    allowScreenshots = savedSessionSecuritySettings.allowScreenshots()
+                },
+                allowSeedCopy = allowSeedCopy,
+                onAllowSeedCopyChanged = { allow ->
+                    savedSessionSecuritySettings.setAllowSeedCopy(allow)
+                    allowSeedCopy = savedSessionSecuritySettings.allowSeedCopy()
+                },
+                advancedModeEnabled = advancedModeEnabled,
+                onAdvancedModeChanged = { enabled ->
+                    savedSessionSecuritySettings.setAdvancedModeEnabled(enabled)
+                    advancedModeEnabled = savedSessionSecuritySettings.advancedModeEnabled()
+                },
             )
         }
         composable(MegaDestinations.SAVED_SESSION_UNLOCK) {
@@ -351,9 +387,12 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             val sessionId = entry.arguments?.getString(MegaDestinations.SAVED_SESSION_DETAIL_ARG).orEmpty()
             SavedSessionDetailScreen(
                 sessionId = sessionId,
+                allowScreenshots = allowScreenshots,
+                allowSeedCopy = allowSeedCopy,
                 onBack = { navController.popBackStack() },
-                onBip85 = { parentWords ->
+                onBip85 = { parentWords, parentPassphrase ->
                     savedSessionBip85ParentWords = parentWords
+                    savedSessionBip85ParentPassphrase = parentPassphrase
                     navController.navigate(MegaDestinations.SAVED_SESSION_BIP85)
                 },
             )
@@ -361,15 +400,31 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         composable(MegaDestinations.SAVED_SESSION_BIP85) {
             LockGuard(appLockViewModel, navController)
             val parentWords = savedSessionBip85ParentWords
-            fun leaveBip85() {
-                savedSessionBip85ParentWords = null
-                navController.popBackStack()
+            // Clearing savedSessionBip85ParentWords belongs in onDispose, not
+            // in the back-press handler itself: NavHost keeps this composable
+            // alive during its exit transition, so clearing the state
+            // synchronously on back-press used to recompose THIS same
+            // composable with parentWords == null while it was still on
+            // screen, which hit the "else" branch below and fired a SECOND,
+            // unintended popBackStack() — the actual cause of "Back from
+            // BIP85 lands on the home screen" instead of the saved session.
+            // onDispose only runs once this screen has truly left the
+            // composition, after the pop already completed, so it can't
+            // race with the back-press's own single pop.
+            DisposableEffect(Unit) {
+                onDispose {
+                    savedSessionBip85ParentWords = null
+                    savedSessionBip85ParentPassphrase = ""
+                }
             }
             if (parentWords != null) {
-                BackHandler { leaveBip85() }
+                BackHandler { navController.popBackStack() }
                 Bip85Screen(
                     parentWords = parentWords,
-                    onBack = { leaveBip85() },
+                    initialParentPassphrase = savedSessionBip85ParentPassphrase,
+                    allowScreenshots = allowScreenshots,
+                    allowSeedCopy = allowSeedCopy,
+                    onBack = { navController.popBackStack() },
                 )
             } else {
                 LaunchedEffect(Unit) {
@@ -378,7 +433,79 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             }
         }
 
-        diceFlow(navController, diceSessionViewModel, pinManager)
+        composable(MegaDestinations.ADVANCED_MODE_ENTRY) {
+            fun leaveAdvancedMode() {
+                advancedModeWords = null
+                advancedModePassphrase = ""
+                navController.popBackStack()
+            }
+            BackHandler { leaveAdvancedMode() }
+            AdvancedModeMnemonicEntryScreen(
+                allowScreenshots = allowScreenshots,
+                onBack = { leaveAdvancedMode() },
+                onValidated = { words, passphrase ->
+                    advancedModeWords = words
+                    advancedModePassphrase = passphrase
+                    navController.navigate(MegaDestinations.ADVANCED_MODE_HUB)
+                },
+            )
+        }
+        composable(MegaDestinations.ADVANCED_MODE_HUB) {
+            val words = advancedModeWords
+            if (words != null) {
+                AdvancedModeHubScreen(
+                    wordCount = words.size,
+                    allowScreenshots = allowScreenshots,
+                    onBack = { navController.popBackStack() },
+                    onBip85 = { navController.navigate(MegaDestinations.ADVANCED_MODE_BIP85) },
+                    onWalletKeys = { navController.navigate(MegaDestinations.ADVANCED_MODE_WALLET) },
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.popBackStack()
+                }
+            }
+        }
+        composable(MegaDestinations.ADVANCED_MODE_BIP85) {
+            val words = advancedModeWords
+            if (words != null) {
+                Bip85Screen(
+                    parentWords = words,
+                    initialParentPassphrase = advancedModePassphrase,
+                    allowScreenshots = allowScreenshots,
+                    allowSeedCopy = allowSeedCopy,
+                    onBack = { navController.popBackStack() },
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.popBackStack()
+                }
+            }
+        }
+        composable(MegaDestinations.ADVANCED_MODE_WALLET) {
+            val words = advancedModeWords
+            if (words != null) {
+                AdvancedModeWalletScreen(
+                    mnemonicWords = words,
+                    passphrase = advancedModePassphrase,
+                    allowScreenshots = allowScreenshots,
+                    allowSeedCopy = allowSeedCopy,
+                    onBack = { navController.popBackStack() },
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.popBackStack()
+                }
+            }
+        }
+
+        diceFlow(
+            navController = navController,
+            sharedViewModel = diceSessionViewModel,
+            pinManager = pinManager,
+            allowScreenshots = allowScreenshots,
+            allowSeedCopy = allowSeedCopy,
+        )
     }
 }
 
@@ -399,6 +526,8 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
     navController: NavHostController,
     sharedViewModel: DiceSessionViewModel,
     pinManager: PinManager,
+    allowScreenshots: Boolean,
+    allowSeedCopy: Boolean,
 ) {
     navigation(startDestination = MegaDestinations.DICE_ENTRY, route = MegaDestinations.DICE_FLOW) {
         composable(MegaDestinations.DICE_ENTRY) {
@@ -466,6 +595,8 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
             if (success != null) {
                 FinalMnemonicScreen(
                     words = success.words,
+                    allowScreenshots = allowScreenshots,
+                    allowSeedCopy = allowSeedCopy,
                     onDone = { navController.navigate(MegaDestinations.SAVE_SESSION) },
                     onAddPassphrase = { navController.navigate(MegaDestinations.PASSPHRASE) },
                     onBip85 = { navController.navigate(MegaDestinations.BIP85) },
@@ -478,6 +609,9 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
             if (success != null) {
                 Bip85Screen(
                     parentWords = success.words,
+                    initialParentPassphrase = state.passphrase.orEmpty(),
+                    allowScreenshots = allowScreenshots,
+                    allowSeedCopy = allowSeedCopy,
                     onBack = { navController.popBackStack() },
                 )
             }

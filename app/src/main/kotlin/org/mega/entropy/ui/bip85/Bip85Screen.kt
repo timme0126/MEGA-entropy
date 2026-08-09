@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import org.mega.entropy.ui.components.MegaCard
+import org.mega.entropy.ui.components.MegaCopyIconButton
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
@@ -36,13 +37,16 @@ import org.mega.entropycore.deriveBip85Bip39Mnemonic
 @Composable
 fun Bip85Screen(
     parentWords: List<String>,
+    initialParentPassphrase: String = "",
+    allowScreenshots: Boolean,
+    allowSeedCopy: Boolean,
     onBack: () -> Unit,
 ) {
-    SecureScreen()
+    SecureScreen(enabled = !allowScreenshots)
 
     var selectedWords by remember { mutableStateOf(Bip85MnemonicWords.TWELVE) }
     var indexText by remember { mutableStateOf("0") }
-    var parentPassphrase by remember { mutableStateOf("") }
+    var parentPassphrase by remember(parentWords, initialParentPassphrase) { mutableStateOf(initialParentPassphrase) }
     var showPassphrase by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<Bip85DerivedMnemonic?>(null) }
     var revealed by remember { mutableStateOf(false) }
@@ -103,6 +107,19 @@ fun Bip85Screen(
         )
 
         MegaCard(title = "Parent passphrase") {
+            if (initialParentPassphrase.isNotEmpty()) {
+                Text(
+                    "A verified parent passphrase is prefilled for this derivation. Changing it changes every BIP85 child mnemonic.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MegaError,
+                )
+            } else {
+                Text(
+                    "Leave blank only when the parent wallet uses no BIP39 passphrase. A missing or different passphrase produces different child words.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             OutlinedTextField(
                 value = parentPassphrase,
                 onValueChange = {
@@ -168,7 +185,19 @@ fun Bip85Screen(
                 MegaCard(title = "Child entropy") {
                     MegaMonoText(currentResult.entropy.hex)
                 }
-                MegaCard(title = "Child mnemonic") {
+                MegaCard(
+                    title = "Child mnemonic",
+                    leadingAction = if (allowSeedCopy) {
+                        {
+                            MegaCopyIconButton(
+                                contentDescription = "Copy child words",
+                                getTextToCopy = { currentResult.mnemonicWords.joinToString(" ") },
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                ) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         currentResult.mnemonicWords.forEachIndexed { index, word ->
                             MegaMonoText("${(index + 1).toString().padStart(2, '0')}. $word")

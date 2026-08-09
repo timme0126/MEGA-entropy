@@ -3,6 +3,7 @@ package org.mega.entropy.ui.components
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalView
+import org.mega.entropy.security.settings.SavedSessionSecuritySettings
 
 /**
  * Applies FLAG_SECURE for as long as the caller is composed, per spec
@@ -15,13 +16,18 @@ import androidx.compose.ui.platform.LocalView
  * abnormally, since FLAG_SECURE is a window-level flag, not per-composable.
  */
 @Composable
-fun SecureScreen() {
+fun SecureScreen(enabled: Boolean = true) {
     val view = LocalView.current
-    DisposableEffect(view) {
+    DisposableEffect(view, enabled) {
         val activity = view.context.findActivity()
-        SecureWindowFlag.acquire(activity)
+        val shouldSecure = enabled && !SavedSessionSecuritySettings(view.context).allowScreenshots()
+        if (shouldSecure) {
+            SecureWindowFlag.acquire(activity)
+        }
         onDispose {
-            SecureWindowFlag.release(activity)
+            if (shouldSecure) {
+                SecureWindowFlag.release(activity)
+            }
         }
     }
 }

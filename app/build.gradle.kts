@@ -12,8 +12,8 @@ android {
         applicationId = "org.mega.entropy"
         minSdk = 29
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 5
+        versionName = "0.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -71,6 +71,11 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.core)
+    implementation(libs.androidx.material.icons.extended)
+    // QR rendering only (BitMatrix -> Bitmap for public xpub/ypub/zpub
+    // display) — no barcode *scanning*, no camera, no network. Not used for
+    // any cryptography; entropy-core's own crypto stays dependency-free.
+    implementation(libs.zxing.core)
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

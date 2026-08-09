@@ -14,6 +14,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,9 +52,15 @@ fun SavedSessionsScreen(
     onLockTimeoutSelected: (Long) -> Unit,
     randomizePinKeypad: Boolean,
     onRandomizePinKeypadChanged: (Boolean) -> Unit,
+    allowScreenshots: Boolean,
+    onAllowScreenshotsChanged: (Boolean) -> Unit,
+    allowSeedCopy: Boolean,
+    onAllowSeedCopyChanged: (Boolean) -> Unit,
+    advancedModeEnabled: Boolean,
+    onAdvancedModeChanged: (Boolean) -> Unit,
     viewModel: SavedSessionsViewModel = viewModel(),
 ) {
-    SecureScreen()
+    SecureScreen(enabled = !allowScreenshots)
     val state by viewModel.uiState.collectAsState()
     var confirmingDeleteAll by remember { mutableStateOf(false) }
     var showingSettings by remember { mutableStateOf(false) }
@@ -67,6 +74,12 @@ fun SavedSessionsScreen(
             onLockTimeoutSelected = onLockTimeoutSelected,
             randomizePinKeypad = randomizePinKeypad,
             onRandomizePinKeypadChanged = onRandomizePinKeypadChanged,
+            allowScreenshots = allowScreenshots,
+            onAllowScreenshotsChanged = onAllowScreenshotsChanged,
+            allowSeedCopy = allowSeedCopy,
+            onAllowSeedCopyChanged = onAllowSeedCopyChanged,
+            advancedModeEnabled = advancedModeEnabled,
+            onAdvancedModeChanged = onAdvancedModeChanged,
             onChangePin = {
                 showingSettings = false
                 onChangePin()
@@ -158,6 +171,12 @@ private fun SavedSessionSettingsScreen(
     onLockTimeoutSelected: (Long) -> Unit,
     randomizePinKeypad: Boolean,
     onRandomizePinKeypadChanged: (Boolean) -> Unit,
+    allowScreenshots: Boolean,
+    onAllowScreenshotsChanged: (Boolean) -> Unit,
+    allowSeedCopy: Boolean,
+    onAllowSeedCopyChanged: (Boolean) -> Unit,
+    advancedModeEnabled: Boolean,
+    onAdvancedModeChanged: (Boolean) -> Unit,
     onChangePin: () -> Unit,
     onChangeDuressPin: () -> Unit,
     onClearDuressPin: () -> Unit,
@@ -165,6 +184,7 @@ private fun SavedSessionSettingsScreen(
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
+    var confirmingAdvancedMode by remember { mutableStateOf(false) }
 
     MegaInfoScaffold(title = "Saved Session Settings", onBack = onBack) {
         MegaCard(title = "Auto-lock") {
@@ -213,6 +233,22 @@ private fun SavedSessionSettingsScreen(
             )
         }
 
+
+        MegaCard(title = "Sensitive Display") {
+            SettingSwitchRow(
+                label = "Allow screenshots",
+                description = "Permit Android screenshots and recent-app previews on MEGA sensitive screens.",
+                checked = allowScreenshots,
+                onCheckedChange = onAllowScreenshotsChanged,
+            )
+            SettingSwitchRow(
+                label = "Allow seed word copy",
+                description = "Show copy buttons for seed words and BIP85 child words after reveal.",
+                checked = allowSeedCopy,
+                onCheckedChange = onAllowSeedCopyChanged,
+            )
+        }
+
         MegaCard(title = "Duress PIN") {
             Text(
                 "Entering the duress PIN at a MEGA PIN prompt securely deletes all saved MEGA session data instead of unlocking.",
@@ -230,6 +266,26 @@ private fun SavedSessionSettingsScreen(
             }
         }
 
+        MegaCard(title = "Advanced Mode") {
+            Text(
+                "Manually enter an existing seed phrase to derive BIP85 children or wallet account keys. Off by default — MEGA's core purpose is generating a phrase from dice, not typing one in.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SettingSwitchRow(
+                label = "Advanced Mode",
+                description = "Adds a manual seed entry and wallet key derivation flow, reachable from the main screen.",
+                checked = advancedModeEnabled,
+                onCheckedChange = { enable ->
+                    if (enable) {
+                        confirmingAdvancedMode = true
+                    } else {
+                        onAdvancedModeChanged(false)
+                    }
+                },
+            )
+        }
+
         MegaCard {
             Text(
                 "Danger Zone",
@@ -244,6 +300,65 @@ private fun SavedSessionSettingsScreen(
             )
             MegaSecondaryButton(text = "Secure Delete All MEGA Data", onClick = onDeleteAll)
         }
+    }
+
+    if (confirmingAdvancedMode) {
+        AlertDialog(
+            onDismissRequest = { confirmingAdvancedMode = false },
+            title = { Text("Enable Advanced Mode?") },
+            text = {
+                Text(
+                    "Advanced Mode is for advanced users. Entering an existing seed phrase " +
+                        "or passphrase on any connected Android device can expose the funds it " +
+                        "controls if the device is compromised — MEGA cannot guarantee safety on " +
+                        "an internet-connected device. Prefer an offline GrapheneOS phone for " +
+                        "sensitive seed workflows.\n\n" +
+                        "A mistake in the seed words, passphrase, derivation path, script type, " +
+                        "or account index produces a completely different wallet.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onAdvancedModeChanged(true)
+                    confirmingAdvancedMode = false
+                }) {
+                    Text("I Understand, Enable", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingAdvancedMode = false }) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun SettingSwitchRow(
+    label: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        androidx.compose.foundation.layout.Column(
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

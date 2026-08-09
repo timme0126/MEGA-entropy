@@ -48,4 +48,12 @@ object MegaDestinations {
      * of SAVED_SESSIONS — changing the PIN must always prove knowledge of
      * the current one first, even if the app was already unlocked. */
     const val PIN_CHANGE_VERIFY = "pin_change_verify"
+
+    /** Advanced Mode: manual mnemonic entry + BIP85 / wallet key derivation
+     * for an existing (not dice-generated) seed phrase. Reachable from
+     * Welcome only when the Advanced Mode setting is on. */
+    const val ADVANCED_MODE_ENTRY = "advanced_mode_entry"
+    const val ADVANCED_MODE_HUB = "advanced_mode_hub"
+    const val ADVANCED_MODE_BIP85 = "advanced_mode_bip85"
+    const val ADVANCED_MODE_WALLET = "advanced_mode_wallet"
 }

@@ -33,6 +33,8 @@ import org.mega.entropy.security.passphrase.PassphraseVerification
 import org.mega.entropy.storage.SavedSessionRecord
 import org.mega.entropy.storage.SessionRepository
 import org.mega.entropy.ui.components.MegaCard
+import org.mega.entropy.ui.components.MegaCopyIconButton
+import org.mega.entropy.ui.components.MegaLockIconButton
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
@@ -55,10 +57,12 @@ private enum class PassphraseUiMode { NONE, SETTING, VERIFYING }
 @Composable
 fun SavedSessionDetailScreen(
     sessionId: String,
+    allowScreenshots: Boolean,
+    allowSeedCopy: Boolean,
     onBack: () -> Unit,
-    onBip85: (List<String>) -> Unit,
+    onBip85: (List<String>, String) -> Unit,
 ) {
-    SecureScreen()
+    SecureScreen(enabled = !allowScreenshots)
     val context = LocalContext.current
     val repository = remember { SessionRepository(context) }
     val coroutineScope = rememberCoroutineScope()
@@ -71,6 +75,10 @@ fun SavedSessionDetailScreen(
     var editingBatchIndex by remember { mutableStateOf<Int?>(null) }
     var editRollTexts by remember { mutableStateOf(List(5) { "" }) }
     var editRollError by remember { mutableStateOf<String?>(null) }
+    // Per-screen only, not persisted — default unlocked preserves the prior
+    // always-editable behavior; locking is a deliberate, transient choice
+    // the user can make while reviewing this session.
+    var diceRollsLocked by remember { mutableStateOf(false) }
 
     suspend fun reload() {
         record = try {
@@ -119,7 +127,29 @@ fun SavedSessionDetailScreen(
                 }
                 Text(dateText, style = MaterialTheme.typography.titleMedium)
 
-                MegaCard(title = "Dice rolls (${currentRecord.diceRolls.size} / ${currentRecord.diceRolls.size})") {
+                MegaCard(
+                    title = "Dice rolls (${currentRecord.diceRolls.size} / ${currentRecord.diceRolls.size})",
+                    trailingAction = {
+                        MegaLockIconButton(
+                            locked = diceRollsLocked,
+                            onToggle = {
+                                val newLocked = !diceRollsLocked
+                                diceRollsLocked = newLocked
+                                if (newLocked) {
+                                    editingBatchIndex = null
+                                    editRollError = null
+                                }
+                            },
+                        )
+                    },
+                ) {
+                    if (!diceRollsLocked) {
+                        Text(
+                            "Editing a batch changes the derived seed for this session.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MegaError,
+                        )
+                    }
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         currentRecord.diceRolls.chunked(5).forEachIndexed { index, batch ->
                             Row(
@@ -131,12 +161,14 @@ fun SavedSessionDetailScreen(
                                     "Batch ${(index + 1).toString().padStart(2, '0')}:  ${batch.joinToString(" ")}",
                                     modifier = Modifier.weight(1f),
                                 )
-                                TextButton(onClick = {
-                                    editingBatchIndex = index
-                                    editRollTexts = batch.map { it.toString() }
-                                    editRollError = null
-                                }) {
-                                    Text("Edit")
+                                if (!diceRollsLocked) {
+                                    TextButton(onClick = {
+                                        editingBatchIndex = index
+                                        editRollTexts = batch.map { it.toString() }
+                                        editRollError = null
+                                    }) {
+                                        Text("Edit")
+                                    }
                                 }
                             }
                         }
@@ -176,7 +208,19 @@ fun SavedSessionDetailScreen(
                     }
                     MegaPrimaryButton(text = "Reveal Seed Words", onClick = { mnemonicRevealed = true })
                 } else {
-                    MegaCard(title = "Seed Words") {
+                    MegaCard(
+                        title = "Seed Words",
+                        leadingAction = if (allowSeedCopy) {
+                            {
+                                MegaCopyIconButton(
+                                    contentDescription = "Copy seed words",
+                                    getTextToCopy = { wordsToDisplay.joinToString(" ") },
+                                )
+                            }
+                        } else {
+                            null
+                        },
+                    ) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             wordsToDisplay.forEachIndexed { index, word ->
                                 MegaMonoText("${(index + 1).toString().padStart(2, '0')}. $word")
@@ -202,8 +246,12 @@ fun SavedSessionDetailScreen(
                         )
                     }
                     MegaSecondaryButton(
-                        text = "Calculate BIP85 Child",
-                        onClick = { onBip85(wordsToDisplay) },
+                        text = if (currentRecord.metadata.hasPassphraseCheck) {
+                            "Calculate BIP85 Child (No Passphrase)"
+                        } else {
+                            "Calculate BIP85 Child"
+                        },
+                        onClick = { onBip85(wordsToDisplay, "") },
                     )
                 }
                 val currentMnemonicActionError = mnemonicActionError
@@ -356,6 +404,21 @@ fun SavedSessionDetailScreen(
                         // saved session once you've proven you know its
                         // passphrase.
                         if (verifyResult?.matches == true) {
+                            MegaSecondaryButton(
+                                text = "Calculate BIP85 Child (Verified Passphrase)",
+                                onClick = {
+                                    val words = currentRecord.mnemonicWords ?: derivedMnemonicWords ?: run {
+                                        val length = MnemonicLength.entries.first { it.rollCount == currentRecord.diceRolls.size }
+                                        (deriveMnemonic(currentRecord.diceRolls, length) as? MnemonicResult.Success)?.words
+                                    }
+                                    if (words == null) {
+                                        mnemonicActionError = "These saved rolls do not produce an accepted mnemonic."
+                                    } else {
+                                        mnemonicActionError = null
+                                        onBip85(words, passphraseField)
+                                    }
+                                },
+                            )
                             if (!seedRevealed) {
                                 MegaSecondaryButton(text = "Reveal BIP39 Seed", onClick = { seedRevealed = true })
                             } else {
