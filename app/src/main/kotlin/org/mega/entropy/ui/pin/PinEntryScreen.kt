@@ -2,6 +2,7 @@ package org.mega.entropy.ui.pin
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +11,10 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -56,59 +61,71 @@ fun PinEntryScreen(
     onCancel: (() -> Unit)? = null,
 ) {
     SecureScreen()
-    // No visible Cancel button (most screens using this already have a back
-    // gesture/tray in the system UI) — but callers that pass onCancel still
-    // need its cleanup (e.g. clearing a pending save) to run on that back
-    // gesture, so it's wired here instead of dropped.
+    // Callers that pass onCancel get both a visible top-left back arrow
+    // (matching the rest of the app) and the gesture/system back button —
+    // either one runs the same cleanup (e.g. clearing a pending save).
     onCancel?.let { BackHandler(onBack = it) }
     var enteredDigits by remember { mutableStateOf(listOf<Int>()) }
     var shuffleGeneration by remember { mutableIntStateOf(0) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        subtitle?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            subtitle?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            errorMessage?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+            }
+
+            PinDots(enteredCount = enteredDigits.size, maxLength = PIN_MAX_LENGTH)
+
+            ScrambledKeypad(
+                shuffleKey = shuffleGeneration,
+                scrambled = scrambled,
+                onDigitTapped = { digit ->
+                    if (enteredDigits.size < PIN_MAX_LENGTH) {
+                        enteredDigits = enteredDigits + digit
+                    }
+                },
+                onDelete = { enteredDigits = enteredDigits.dropLast(1) },
+                onClear = { enteredDigits = emptyList() },
+                deleteEnabled = enteredDigits.isNotEmpty(),
+                clearEnabled = enteredDigits.isNotEmpty(),
+            )
+
+            MegaPrimaryButton(
+                text = "Submit",
+                enabled = enteredDigits.size in PIN_MIN_LENGTH..PIN_MAX_LENGTH,
+                onClick = {
+                    onSubmit(enteredDigits.joinToString(""))
+                    enteredDigits = emptyList()
+                    // Reshuffle after every submit attempt, matching "after an
+                    // incorrect attempt" from spec section 21 — harmless to also
+                    // reshuffle on a correct one, since the screen is about to
+                    // navigate away anyway.
+                    shuffleGeneration++
+                },
+            )
         }
-        errorMessage?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+
+        onCancel?.let {
+            IconButton(
+                onClick = it,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .windowInsetsPadding(WindowInsets.safeDrawing),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
         }
-
-        PinDots(enteredCount = enteredDigits.size, maxLength = PIN_MAX_LENGTH)
-
-        ScrambledKeypad(
-            shuffleKey = shuffleGeneration,
-            scrambled = scrambled,
-            onDigitTapped = { digit ->
-                if (enteredDigits.size < PIN_MAX_LENGTH) {
-                    enteredDigits = enteredDigits + digit
-                }
-            },
-            onDelete = { enteredDigits = enteredDigits.dropLast(1) },
-            onClear = { enteredDigits = emptyList() },
-            deleteEnabled = enteredDigits.isNotEmpty(),
-            clearEnabled = enteredDigits.isNotEmpty(),
-        )
-
-        MegaPrimaryButton(
-            text = "Submit",
-            enabled = enteredDigits.size in PIN_MIN_LENGTH..PIN_MAX_LENGTH,
-            onClick = {
-                onSubmit(enteredDigits.joinToString(""))
-                enteredDigits = emptyList()
-                // Reshuffle after every submit attempt, matching "after an
-                // incorrect attempt" from spec section 21 — harmless to also
-                // reshuffle on a correct one, since the screen is about to
-                // navigate away anyway.
-                shuffleGeneration++
-            },
-        )
     }
 }

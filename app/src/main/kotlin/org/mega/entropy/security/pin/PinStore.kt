@@ -23,20 +23,24 @@ class PinStore(private val context: Context) {
     }
 
     private fun pinRecordFile(): File = File(securityDir(), "pin.record")
+    private fun duressPinRecordFile(): File = File(securityDir(), "pin.duress.record")
     private fun attemptStateFile(): File = File(securityDir(), "pin.attempts")
 
     // Hex encoding/decoding helpers for plain-text storage format
     private fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it.toInt() and 0xFF) }
     private fun String.hexToByteArray(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
-    fun readPinRecord(): PinRecord? {
-        val file = pinRecordFile()
+    fun readPinRecord(): PinRecord? = readRecord(pinRecordFile(), "pin.record")
+
+    fun readDuressPinRecord(): PinRecord? = readRecord(duressPinRecordFile(), "pin.duress.record")
+
+    private fun readRecord(file: File, label: String): PinRecord? {
         if (!file.exists()) return null
 
         return try {
             val lines = file.readLines(StandardCharsets.UTF_8)
-            if (lines.size != 5) throw IllegalStateException("Malformed pin.record: expected 5 lines, got ${lines.size}")
-            if (lines[0] != "MEGA-PIN-V1") throw IllegalStateException("Malformed pin.record: invalid header")
+            if (lines.size != 5) throw IllegalStateException("Malformed $label: expected 5 lines, got ${lines.size}")
+            if (lines[0] != "MEGA-PIN-V1") throw IllegalStateException("Malformed $label: invalid header")
 
             val saltHex = lines[1].removePrefix("salt:")
             val hashHex = lines[2].removePrefix("hash:")
@@ -50,14 +54,21 @@ class PinStore(private val context: Context) {
                 createdAtEpochMillis = createdAtStr.toLong()
             )
         } catch (e: IllegalStateException) {
-            throw e // already a clear, specific message (bad line count / header) — don't bury it
+            throw e
         } catch (e: Exception) {
-            throw IllegalStateException("Malformed pin.record: failed to parse fields", e)
+            throw IllegalStateException("Malformed $label: failed to parse fields", e)
         }
     }
 
     fun writePinRecord(record: PinRecord) {
-        val file = pinRecordFile()
+        writeRecord(pinRecordFile(), record)
+    }
+
+    fun writeDuressPinRecord(record: PinRecord) {
+        writeRecord(duressPinRecordFile(), record)
+    }
+
+    private fun writeRecord(file: File, record: PinRecord) {
         val content = buildString {
             appendLine("MEGA-PIN-V1")
             appendLine("salt:${record.salt.toHexString()}")
@@ -70,6 +81,11 @@ class PinStore(private val context: Context) {
 
     fun deletePinRecord() {
         pinRecordFile().delete()
+        duressPinRecordFile().delete()
+    }
+
+    fun deleteDuressPinRecord() {
+        duressPinRecordFile().delete()
     }
 
     fun readAttemptState(): PinAttemptState {

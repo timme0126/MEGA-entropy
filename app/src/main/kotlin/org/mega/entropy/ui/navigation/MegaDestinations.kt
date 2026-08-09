@@ -33,6 +33,7 @@ object MegaDestinations {
     const val SAVED_SESSION_DETAIL_ARG = "sessionId"
     const val SAVED_SESSION_DETAIL = "saved_session_detail/{$SAVED_SESSION_DETAIL_ARG}"
     const val SAVED_SESSION_BIP85 = "saved_session_bip85"
+    const val SAVED_SESSION_UNLOCK = "saved_session_unlock"
     fun savedSessionDetailRoute(sessionId: String) = "saved_session_detail/$sessionId"
     const val HOW_IT_WORKS = "how_it_works"
     const val SECURITY_MODEL = "security_model"
@@ -40,6 +41,7 @@ object MegaDestinations {
     const val ABOUT = "about"
     const val PIN_ENTRY = "pin_entry"
     const val PIN_SETUP = "pin_setup"
+    const val PIN_DURESS_SETUP = "pin_duress_setup"
 
     /** Re-verifying the current PIN before "Change PIN" (Saved Sessions).
      * Separate from PIN_ENTRY so its onUnlocked routes to PIN_SETUP instead

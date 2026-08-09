@@ -21,6 +21,10 @@ private enum class SetupStep { ENTER, CONFIRM }
 fun PinSetupScreen(
     onPinSet: () -> Unit,
     onCancel: () -> Unit,
+    title: String = "Choose a MEGA PIN",
+    confirmTitle: String = "Confirm Your PIN",
+    subtitle: String = "5 to 8 digits",
+    onSavePin: (suspend (String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val pinManager = remember { PinManager(context) }
@@ -33,8 +37,8 @@ fun PinSetupScreen(
     when (step) {
         SetupStep.ENTER -> {
             PinEntryScreen(
-                title = "Choose a MEGA PIN",
-                subtitle = "5 to 8 digits",
+                title = title,
+                subtitle = subtitle,
                 errorMessage = errorMessage,
                 scrambled = false,
                 onCancel = onCancel,
@@ -47,7 +51,7 @@ fun PinSetupScreen(
         }
         SetupStep.CONFIRM -> {
             PinEntryScreen(
-                title = "Confirm Your PIN",
+                title = confirmTitle,
                 subtitle = "Enter the same PIN again",
                 errorMessage = errorMessage,
                 scrambled = false,
@@ -55,8 +59,22 @@ fun PinSetupScreen(
                 onSubmit = { pin ->
                     if (pin == firstEntry) {
                         coroutineScope.launch {
-                            pinManager.setPin(pin)
-                            onPinSet()
+                            try {
+                                if (onSavePin != null) {
+                                    onSavePin(pin)
+                                } else {
+                                    pinManager.setPin(pin)
+                                }
+                                onPinSet()
+                            } catch (e: IllegalArgumentException) {
+                                errorMessage = e.message ?: "PIN could not be saved."
+                                firstEntry = null
+                                step = SetupStep.ENTER
+                            } catch (e: Exception) {
+                                errorMessage = "PIN could not be saved."
+                                firstEntry = null
+                                step = SetupStep.ENTER
+                            }
                         }
                     } else {
                         errorMessage = "PINs didn't match — start over."

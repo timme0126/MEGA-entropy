@@ -1,5 +1,7 @@
 package org.mega.entropy.ui.navigation
 
+import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -23,12 +25,14 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import org.mega.entropy.security.passphrase.buildPassphraseCheck
+import org.mega.entropy.security.settings.SavedSessionSecuritySettings
 import org.mega.entropy.security.pin.PinManager
 import org.mega.entropy.storage.SessionRepository
 import org.mega.entropy.ui.about.AboutScreen
 import org.mega.entropy.ui.biascheck.BiasCheckScreen
 import org.mega.entropy.ui.bip85.Bip85Screen
 import org.mega.entropy.ui.checksum.ChecksumScreen
+import org.mega.entropy.ui.components.findActivity
 import org.mega.entropy.ui.chooselength.ChooseLengthScreen
 import org.mega.entropy.ui.diceentry.DiceEntryScreen
 import org.mega.entropy.ui.diceentry.DiceSessionViewModel
@@ -63,11 +67,48 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     var savedSessionBip85ParentWords by remember { mutableStateOf<List<String>?>(null) }
     val context = LocalContext.current
     val pinManager = remember { PinManager(context) }
+    val savedSessionSecuritySettings = remember { SavedSessionSecuritySettings(context) }
+    var savedSessionLockTimeoutMillis by remember {
+        mutableStateOf(savedSessionSecuritySettings.lockTimeoutMillis())
+    }
+    var randomizePinKeypad by remember {
+        mutableStateOf(savedSessionSecuritySettings.randomizePinKeypad())
+    }
+    var stoppedAtElapsedRealtime by remember { mutableStateOf<Long?>(null) }
+    val lifecycleCoroutineScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
+
+    // Shared by app backgrounding (ON_STOP/ON_START below) AND by simply
+    // navigating back out of Saved Sessions to Welcome — both count as
+    // "leaving saved sessions" for auto-lock purposes, so a quick trip to
+    // Welcome and straight back in doesn't force a fresh PIN entry unless
+    // the configured timeout actually elapsed (or is set to "Immediately").
+    suspend fun armSavedSessionLock() {
+        if (!pinManager.isPinEnabled()) return
+        if (savedSessionLockTimeoutMillis == 0L) {
+            appLockViewModel.lock()
+        } else {
+            stoppedAtElapsedRealtime = SystemClock.elapsedRealtime()
+        }
+    }
+    suspend fun consumeSavedSessionLockElapsed() {
+        val stoppedAt = stoppedAtElapsedRealtime
+        if (
+            stoppedAt != null &&
+            pinManager.isPinEnabled() &&
+            SystemClock.elapsedRealtime() - stoppedAt >= savedSessionLockTimeoutMillis
+        ) {
+            appLockViewModel.lock()
+        }
+        stoppedAtElapsedRealtime = null
+    }
+
+    DisposableEffect(lifecycleOwner, savedSessionLockTimeoutMillis) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
-                appLockViewModel.lock()
+            when (event) {
+                Lifecycle.Event.ON_STOP -> lifecycleCoroutineScope.launch { armSavedSessionLock() }
+                Lifecycle.Event.ON_START -> lifecycleCoroutineScope.launch { consumeSavedSessionLockElapsed() }
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -86,15 +127,26 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         }
         composable(MegaDestinations.WELCOME) {
             val coroutineScope = rememberCoroutineScope()
+            val repository = remember { SessionRepository(context) }
             WelcomeScreen(
                 onNewDiceSession = { navController.navigate(MegaDestinations.CHOOSE_LENGTH) },
                 onSavedSessions = {
                     coroutineScope.launch {
-                        // Always re-verify when a PIN is configured — no "already
-                        // unlocked earlier this app session" bypass. Retrieving
-                        // saved data is exactly the action the PIN protects.
-                        if (pinManager.isPinEnabled()) {
-                            navController.navigate(MegaDestinations.PIN_ENTRY)
+                        val hasSavedSessions = repository.listSessions().isNotEmpty()
+                        if (hasSavedSessions && pinManager.isPinEnabled()) {
+                            // A PIN is required whenever saved data exists. The
+                            // only bypass is the explicit saved-session timeout
+                            // window armed when leaving Saved Sessions.
+                            val hasActiveReturnWindow = stoppedAtElapsedRealtime != null
+                            consumeSavedSessionLockElapsed()
+                            if (!hasActiveReturnWindow) {
+                                appLockViewModel.lock()
+                            }
+                            if (appLockViewModel.isLocked.value) {
+                                navController.navigate(MegaDestinations.PIN_ENTRY)
+                            } else {
+                                navController.navigate(MegaDestinations.SAVED_SESSIONS)
+                            }
                         } else {
                             appLockViewModel.unlock()
                             navController.navigate(MegaDestinations.SAVED_SESSIONS)
@@ -104,6 +156,9 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onHowItWorks = { navController.navigate(MegaDestinations.HOW_IT_WORKS) },
                 onSecurityModel = { navController.navigate(MegaDestinations.SECURITY_MODEL) },
                 onAbout = { navController.navigate(MegaDestinations.ABOUT) },
+                onExitApp = {
+                    context.findActivity()?.finishAndRemoveTask()
+                },
             )
         }
         composable(MegaDestinations.CHOOSE_LENGTH) {
@@ -124,6 +179,11 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     }
                 },
                 onCancel = { navController.popBackStack() },
+                randomizeKeypad = randomizePinKeypad,
+                onDuressWipe = {
+                    appLockViewModel.lock()
+                    navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
+                },
             )
         }
         composable(MegaDestinations.PIN_SETUP) {
@@ -170,6 +230,18 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 },
             )
         }
+        composable(MegaDestinations.PIN_DURESS_SETUP) {
+            val context = LocalContext.current
+            val pinManagerForDuress = remember { PinManager(context) }
+            PinSetupScreen(
+                title = "Choose a Duress PIN",
+                confirmTitle = "Confirm Duress PIN",
+                subtitle = "5 to 8 digits. Must differ from your normal MEGA PIN.",
+                onSavePin = { pin -> pinManagerForDuress.setDuressPin(pin) },
+                onPinSet = { navController.popBackStack() },
+                onCancel = { navController.popBackStack() },
+            )
+        }
         composable(MegaDestinations.BEFORE_YOU_BEGIN) {
             val state by diceSessionViewModel.uiState.collectAsState()
             BeforeYouBeginScreen(
@@ -196,8 +268,13 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         composable(MegaDestinations.SAVED_SESSIONS) {
             LockGuard(appLockViewModel, navController)
             val coroutineScope = rememberCoroutineScope()
+            fun leaveSavedSessions() {
+                coroutineScope.launch { armSavedSessionLock() }
+                navController.popBackStack()
+            }
+            BackHandler { leaveSavedSessions() }
             SavedSessionsScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { leaveSavedSessions() },
                 onChangePin = {
                     coroutineScope.launch {
                         // Changing the PIN must always re-prove knowledge of the
@@ -215,6 +292,40 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onViewSession = { sessionId ->
                     navController.navigate(MegaDestinations.savedSessionDetailRoute(sessionId))
                 },
+                onNewDiceSession = {
+                    coroutineScope.launch { armSavedSessionLock() }
+                    navController.navigate(MegaDestinations.CHOOSE_LENGTH)
+                },
+                onChangeDuressPin = { navController.navigate(MegaDestinations.PIN_DURESS_SETUP) },
+                selectedLockTimeoutMillis = savedSessionLockTimeoutMillis,
+                lockTimeoutOptions = SavedSessionSecuritySettings.LOCK_TIMEOUT_OPTIONS,
+                onLockTimeoutSelected = { millis ->
+                    savedSessionSecuritySettings.setLockTimeoutMillis(millis)
+                    savedSessionLockTimeoutMillis = savedSessionSecuritySettings.lockTimeoutMillis()
+                },
+                randomizePinKeypad = randomizePinKeypad,
+                onRandomizePinKeypadChanged = { randomize ->
+                    savedSessionSecuritySettings.setRandomizePinKeypad(randomize)
+                    randomizePinKeypad = savedSessionSecuritySettings.randomizePinKeypad()
+                },
+            )
+        }
+        composable(MegaDestinations.SAVED_SESSION_UNLOCK) {
+            PinVerifyScreen(
+                onUnlocked = {
+                    appLockViewModel.unlock()
+                    navController.popBackStack()
+                },
+                onCancel = {
+                    savedSessionBip85ParentWords = null
+                    navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
+                },
+                randomizeKeypad = randomizePinKeypad,
+                onDuressWipe = {
+                    savedSessionBip85ParentWords = null
+                    appLockViewModel.lock()
+                    navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
+                },
             )
         }
         composable(MegaDestinations.PIN_CHANGE_VERIFY) {
@@ -225,6 +336,11 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     }
                 },
                 onCancel = { navController.popBackStack() },
+                randomizeKeypad = randomizePinKeypad,
+                onDuressWipe = {
+                    appLockViewModel.lock()
+                    navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
+                },
             )
         }
         composable(
@@ -244,14 +360,16 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         }
         composable(MegaDestinations.SAVED_SESSION_BIP85) {
             LockGuard(appLockViewModel, navController)
-            DisposableEffect(Unit) {
-                onDispose { savedSessionBip85ParentWords = null }
-            }
             val parentWords = savedSessionBip85ParentWords
+            fun leaveBip85() {
+                savedSessionBip85ParentWords = null
+                navController.popBackStack()
+            }
             if (parentWords != null) {
+                BackHandler { leaveBip85() }
                 Bip85Screen(
                     parentWords = parentWords,
-                    onBack = { navController.popBackStack() },
+                    onBack = { leaveBip85() },
                 )
             } else {
                 LaunchedEffect(Unit) {
@@ -433,20 +551,19 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
 }
 
 /**
- * Kicks the user back to Welcome if the app is backgrounded (and
- * AppLockViewModel.lock() fires) while a saved-session screen is still on
- * screen — spec section 22, "obscure the UI immediately when backgrounded"
- * / "lock again when appropriate after leaving the app". Callers always
- * call appLockViewModel.unlock() before navigating into a screen that uses
- * this guard, so the very first composition never triggers it; only a
- * later ON_STOP flipping isLocked back to true does.
+ * Covers saved-session screens with a PIN prompt after the app lock flips
+ * back on. The unlock screen is pushed over the current saved-session route,
+ * so a correct PIN returns the user to the same saved-session context instead
+ * of dumping them back at Welcome.
  */
 @Composable
 private fun LockGuard(appLockViewModel: AppLockViewModel, navController: NavHostController) {
     val isLocked by appLockViewModel.isLocked.collectAsState()
     LaunchedEffect(isLocked) {
         if (isLocked) {
-            navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
+            navController.navigate(MegaDestinations.SAVED_SESSION_UNLOCK) {
+                launchSingleTop = true
+            }
         }
     }
 }

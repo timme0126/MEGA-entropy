@@ -3,6 +3,7 @@ package org.mega.entropy.ui.savedsessiondetail
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -18,7 +19,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -35,6 +39,9 @@ import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
+import org.mega.entropycore.MnemonicLength
+import org.mega.entropycore.MnemonicResult
+import org.mega.entropycore.deriveMnemonic
 
 private enum class PassphraseUiMode { NONE, SETTING, VERIFYING }
 
@@ -59,6 +66,11 @@ fun SavedSessionDetailScreen(
     var record by remember { mutableStateOf<SavedSessionRecord?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var mnemonicRevealed by remember { mutableStateOf(false) }
+    var derivedMnemonicWords by remember { mutableStateOf<List<String>?>(null) }
+    var mnemonicActionError by remember { mutableStateOf<String?>(null) }
+    var editingBatchIndex by remember { mutableStateOf<Int?>(null) }
+    var editRollTexts by remember { mutableStateOf(List(5) { "" }) }
+    var editRollError by remember { mutableStateOf<String?>(null) }
 
     suspend fun reload() {
         record = try {
@@ -107,39 +119,96 @@ fun SavedSessionDetailScreen(
                 }
                 Text(dateText, style = MaterialTheme.typography.titleMedium)
 
-                MegaCard(title = "Dice rolls (${currentRecord.diceRolls.size} / 100)") {
+                MegaCard(title = "Dice rolls (${currentRecord.diceRolls.size} / ${currentRecord.diceRolls.size})") {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         currentRecord.diceRolls.chunked(5).forEachIndexed { index, batch ->
-                            MegaMonoText("Batch ${(index + 1).toString().padStart(2, '0')}:  ${batch.joinToString(" ")}")
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                MegaMonoText(
+                                    "Batch ${(index + 1).toString().padStart(2, '0')}:  ${batch.joinToString(" ")}",
+                                    modifier = Modifier.weight(1f),
+                                )
+                                TextButton(onClick = {
+                                    editingBatchIndex = index
+                                    editRollTexts = batch.map { it.toString() }
+                                    editRollError = null
+                                }) {
+                                    Text("Edit")
+                                }
+                            }
                         }
                     }
                 }
 
-                if (currentRecord.mnemonicWords != null) {
-                    if (!mnemonicRevealed) {
-                        MegaCard {
-                            Text(
-                                "This session also has its derived mnemonic saved. " +
-                                    "Anyone who sees it may be able to take funds from " +
-                                    "any wallet initialized with it.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MegaError,
-                            )
-                        }
-                        MegaPrimaryButton(text = "Reveal Mnemonic", onClick = { mnemonicRevealed = true })
-                    } else {
-                        MegaCard(title = "Mnemonic") {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                currentRecord.mnemonicWords.forEachIndexed { index, word ->
-                                    MegaMonoText("${(index + 1).toString().padStart(2, '0')}. $word")
-                                }
-                            }
-                        }
-                        MegaSecondaryButton(
-                            text = "Calculate BIP85 Child",
-                            onClick = { onBip85(currentRecord.mnemonicWords) },
+                val wordsToDisplay = currentRecord.mnemonicWords ?: derivedMnemonicWords
+                if (wordsToDisplay == null) {
+                    MegaCard(title = "Seed Words") {
+                        Text(
+                            "This session was saved as dice-only. You can calculate the derived seed words from the saved dice rolls without saving the words yet.",
+                            style = MaterialTheme.typography.bodyMedium,
                         )
                     }
+                    MegaPrimaryButton(
+                        text = "Calculate Seed Words",
+                        onClick = {
+                            val length = MnemonicLength.entries.first { it.rollCount == currentRecord.diceRolls.size }
+                            val result = deriveMnemonic(currentRecord.diceRolls, length)
+                            val success = result as? MnemonicResult.Success
+                            if (success == null) {
+                                mnemonicActionError = "These saved rolls do not produce an accepted mnemonic."
+                            } else {
+                                derivedMnemonicWords = success.words
+                                mnemonicRevealed = true
+                                mnemonicActionError = null
+                            }
+                        },
+                    )
+                } else if (!mnemonicRevealed) {
+                    MegaCard {
+                        Text(
+                            "Anyone who sees these seed words may be able to take funds from any wallet initialized with them.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MegaError,
+                        )
+                    }
+                    MegaPrimaryButton(text = "Reveal Seed Words", onClick = { mnemonicRevealed = true })
+                } else {
+                    MegaCard(title = "Seed Words") {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            wordsToDisplay.forEachIndexed { index, word ->
+                                MegaMonoText("${(index + 1).toString().padStart(2, '0')}. $word")
+                            }
+                        }
+                    }
+                    if (currentRecord.mnemonicWords == null) {
+                        MegaPrimaryButton(
+                            text = "Save Seed Words to Session",
+                            onClick = {
+                                coroutineScope.launch {
+                                    try {
+                                        repository.saveMnemonicWords(sessionId)
+                                        reload()
+                                        mnemonicRevealed = true
+                                        derivedMnemonicWords = null
+                                        mnemonicActionError = null
+                                    } catch (e: Exception) {
+                                        mnemonicActionError = "Couldn't save the seed words. Please try again."
+                                    }
+                                }
+                            },
+                        )
+                    }
+                    MegaSecondaryButton(
+                        text = "Calculate BIP85 Child",
+                        onClick = { onBip85(wordsToDisplay) },
+                    )
+                }
+                val currentMnemonicActionError = mnemonicActionError
+                if (currentMnemonicActionError != null) {
+                    Text(currentMnemonicActionError, style = MaterialTheme.typography.bodySmall, color = MegaError)
                 }
 
                 val visualTransformation = if (showPassphraseField) VisualTransformation.None else PasswordVisualTransformation()
@@ -307,6 +376,53 @@ fun SavedSessionDetailScreen(
         }
     }
 
+    val batchIndex = editingBatchIndex
+    val currentRecordForEdit = record
+    if (batchIndex != null && currentRecordForEdit != null) {
+        EditDiceBatchDialog(
+            batchNumber = batchIndex + 1,
+            rollTexts = editRollTexts,
+            errorMessage = editRollError,
+            onRollChanged = { index, value ->
+                editRollTexts = editRollTexts.toMutableList().also { values ->
+                    values[index] = value.filter { it in '1'..'6' }.take(1)
+                }
+                editRollError = null
+            },
+            onConfirm = {
+                val editedBatch = editRollTexts.mapNotNull { it.toIntOrNull() }
+                if (editedBatch.size != 5 || editedBatch.any { it !in 1..6 }) {
+                    editRollError = "Enter five die rolls, each 1 through 6."
+                } else {
+                    val updatedRolls = currentRecordForEdit.diceRolls.toMutableList()
+                    editedBatch.forEachIndexed { offset, roll ->
+                        updatedRolls[batchIndex * 5 + offset] = roll
+                    }
+                    coroutineScope.launch {
+                        try {
+                            repository.updateDiceRolls(sessionId, updatedRolls)
+                            reload()
+                            mnemonicRevealed = false
+                            derivedMnemonicWords = null
+                            mnemonicActionError = null
+                            resetPassphraseUi()
+                            editingBatchIndex = null
+                            editRollError = null
+                        } catch (e: IllegalArgumentException) {
+                            editRollError = "Those edited rolls do not produce an accepted mnemonic. Try a different correction."
+                        } catch (e: Exception) {
+                            editRollError = "Couldn't save the edited rolls. Please try again."
+                        }
+                    }
+                }
+            },
+            onDismiss = {
+                editingBatchIndex = null
+                editRollError = null
+            },
+        )
+    }
+
     if (confirmingClearCheck) {
         AlertDialog(
             onDismissRequest = { confirmingClearCheck = false },
@@ -329,4 +445,55 @@ fun SavedSessionDetailScreen(
             },
         )
     }
+}
+
+
+@Composable
+private fun EditDiceBatchDialog(
+    batchNumber: Int,
+    rollTexts: List<String>,
+    errorMessage: String?,
+    onRollChanged: (Int, String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Batch ${batchNumber.toString().padStart(2, '0')}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Warning: changing saved dice rolls changes the derived seed. If the current seed is not properly backed up and has funds on it, those funds could be lost forever without the correct backup.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MegaError,
+                )
+                Text(
+                    "Saving an edit also clears any saved passphrase check for this session.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    repeat(5) { index ->
+                        OutlinedTextField(
+                            value = rollTexts.getOrElse(index) { "" },
+                            onValueChange = { onRollChanged(index, it) },
+                            label = { Text((index + 1).toString()) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                if (errorMessage != null) {
+                    Text(errorMessage, style = MaterialTheme.typography.bodySmall, color = MegaError)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Save Changes") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }

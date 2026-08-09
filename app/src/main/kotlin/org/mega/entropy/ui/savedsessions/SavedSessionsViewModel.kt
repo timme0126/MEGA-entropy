@@ -16,6 +16,7 @@ data class SavedSessionsUiState(
     val sessions: List<SavedSessionMetadata> = emptyList(),
     val isLoading: Boolean = true,
     val isPinEnabled: Boolean = false,
+    val isDuressPinEnabled: Boolean = false,
 )
 
 /**
@@ -47,7 +48,15 @@ class SavedSessionsViewModel(application: Application) : AndroidViewModel(applic
             _uiState.update { it.copy(isLoading = true) }
             val sessions = repository.listSessions()
             val pinEnabled = pinManager.isPinEnabled()
-            _uiState.update { it.copy(sessions = sessions, isLoading = false, isPinEnabled = pinEnabled) }
+            val duressPinEnabled = pinManager.isDuressPinEnabled()
+            _uiState.update {
+                it.copy(
+                    sessions = sessions,
+                    isLoading = false,
+                    isPinEnabled = pinEnabled,
+                    isDuressPinEnabled = duressPinEnabled,
+                )
+            }
         }
     }
 
@@ -61,6 +70,13 @@ class SavedSessionsViewModel(application: Application) : AndroidViewModel(applic
     fun deleteAllSessions() {
         viewModelScope.launch {
             repository.deleteAllSessions()
+            refresh()
+        }
+    }
+
+    fun clearDuressPin() {
+        viewModelScope.launch {
+            pinManager.clearDuressPin()
             refresh()
         }
     }

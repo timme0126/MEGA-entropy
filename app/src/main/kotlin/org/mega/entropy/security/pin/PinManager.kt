@@ -23,6 +23,10 @@ class PinManager(private val context: Context) {
         store.readPinRecord() != null
     }
 
+    suspend fun isDuressPinEnabled(): Boolean = withContext(Dispatchers.IO) {
+        store.readDuressPinRecord() != null
+    }
+
     suspend fun setPin(pin: String) = withContext(Dispatchers.IO) {
         // Validate invariants at function boundary; fail closed.
         require(pin.length in 5..8) { "PIN must be between 5 and 8 digits long, got ${pin.length}" }
@@ -31,9 +35,33 @@ class PinManager(private val context: Context) {
         // Generate fresh salt and hash. A new PIN always clears prior lockout/failure history.
         val salt = generateSalt()
         val hash = hashPin(pin, salt, DEFAULT_PBKDF2_ITERATIONS)
+        val existingDuress = store.readDuressPinRecord()
+        if (existingDuress != null && constantTimeEquals(hashPin(pin, existingDuress.salt, existingDuress.iterations), existingDuress.hash)) {
+            throw IllegalArgumentException("Normal PIN must not match duress PIN")
+        }
+
         val record = PinRecord(salt, hash, DEFAULT_PBKDF2_ITERATIONS, currentTimeMillis())
         store.writePinRecord(record)
         store.resetAttemptState()
+    }
+
+    suspend fun setDuressPin(pin: String) = withContext(Dispatchers.IO) {
+        require(pin.length in 5..8) { "PIN must be between 5 and 8 digits long, got ${pin.length}" }
+        require(pin.all { it.isDigit() }) { "PIN must contain only numeric digits" }
+
+        val normalRecord = store.readPinRecord()
+            ?: throw IllegalStateException("Normal PIN must be configured before duress PIN")
+        if (constantTimeEquals(hashPin(pin, normalRecord.salt, normalRecord.iterations), normalRecord.hash)) {
+            throw IllegalArgumentException("Duress PIN must not match normal PIN")
+        }
+
+        val salt = generateSalt()
+        val hash = hashPin(pin, salt, DEFAULT_PBKDF2_ITERATIONS)
+        store.writeDuressPinRecord(PinRecord(salt, hash, DEFAULT_PBKDF2_ITERATIONS, currentTimeMillis()))
+    }
+
+    suspend fun clearDuressPin() = withContext(Dispatchers.IO) {
+        store.deleteDuressPinRecord()
     }
 
     suspend fun disablePin() = withContext(Dispatchers.IO) {
@@ -48,9 +76,19 @@ class PinManager(private val context: Context) {
         val state = store.readAttemptState()
         val now = currentTimeMillis()
 
+        val duressRecord = store.readDuressPinRecord()
+        if (duressRecord != null) {
+            val duressHash = hashPin(pin, duressRecord.salt, duressRecord.iterations)
+            if (constantTimeEquals(duressHash, duressRecord.hash)) {
+                store.resetAttemptState()
+                return@withContext PinVerifyResult.Duress
+            }
+        }
+
         // If currently locked out, return Locked immediately WITHOUT hashing the input
         // or incrementing the failure counter. This prevents active lockouts from
-        // being extended by repeated calls.
+        // being extended by repeated calls. Duress PIN is checked first so it
+        // can still wipe data during an active lockout.
         if (now < state.lockedUntilEpochMillis) {
             return@withContext PinVerifyResult.Locked(state.lockedUntilEpochMillis)
         }

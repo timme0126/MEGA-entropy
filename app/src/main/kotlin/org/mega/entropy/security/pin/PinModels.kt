@@ -42,5 +42,6 @@ sealed class PinVerifyResult {
     object Correct : PinVerifyResult()
     data class Incorrect(val failedAttempts: Int) : PinVerifyResult()
     data class Locked(val lockedUntilEpochMillis: Long) : PinVerifyResult()
+    object Duress : PinVerifyResult()
     object NoPinConfigured : PinVerifyResult()
 }

@@ -31,7 +31,7 @@ class SessionFileStore(private val context: Context) {
 
     fun readMetaFile(sessionId: String): SavedSessionMetadata? {
         val file = File(sessionsDir(), "$sessionId.meta")
-        return file.takeIf { it.exists() }?.readBytes()?.let { decodeMetadata(it) }
+        return file.takeIf { it.exists() }?.let { decodeMetadataFile(it) }
     }
 
     fun readEncFile(sessionId: String): ByteArray? {
@@ -50,13 +50,27 @@ class SessionFileStore(private val context: Context) {
         return sessionsDir()
             .listFiles { _, name -> name.endsWith(".meta") }
             ?.mapNotNull { file ->
-                runCatching { decodeMetadata(file.readBytes()) }.getOrNull()
+                runCatching { decodeMetadataFile(file) }.getOrNull()
             }
             ?: emptyList()
+    }
+
+    private fun decodeMetadataFile(file: File): SavedSessionMetadata {
+        val metadata = decodeMetadata(file.readBytes())
+        val modifiedAt = file.lastModified()
+        return if (metadata.createdAtEpochMillis < FIRST_PUBLIC_BETA_EPOCH_MILLIS && modifiedAt >= FIRST_PUBLIC_BETA_EPOCH_MILLIS) {
+            metadata.copy(createdAtEpochMillis = modifiedAt)
+        } else {
+            metadata
+        }
     }
 
     fun deleteSessionFiles(sessionId: String) {
         File(sessionsDir(), "$sessionId.meta").delete()
         File(sessionsDir(), "$sessionId.enc").delete()
+    }
+
+    companion object {
+        private const val FIRST_PUBLIC_BETA_EPOCH_MILLIS = 1_786_147_200_000L
     }
 }

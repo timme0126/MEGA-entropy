@@ -89,6 +89,51 @@ class SessionRepository(private val context: Context) {
         }
     }
 
+
+
+    /**
+     * Stores the mnemonic words derived from this session's saved dice rolls.
+     * Used when a session was originally saved as dice-only and the user later
+     * chooses to keep the words in encrypted saved-session storage as well.
+     */
+    suspend fun saveMnemonicWords(sessionId: String): List<String> {
+        return withContext(Dispatchers.IO) {
+            val metadata = fileStore.readMetaFile(sessionId)
+                ?: throw NoSuchElementException("Session metadata not found for ID: $sessionId")
+            val payload = decryptPayload(sessionId, metadata)
+            val words = resolveMnemonicWords(payload.diceRolls, payload.mnemonicWords)
+            val newPayload = encodePayload(payload.diceRolls, words, payload.passphraseCheck)
+            fileStore.writeEncFile(sessionId, encrypt(metadata.keystoreAlias, newPayload))
+            fileStore.writeMetaFile(metadata.copy(hasMnemonic = true))
+            words
+        }
+    }
+
+    /**
+     * Replaces the dice rolls for an existing saved session and re-encrypts
+     * the payload under the same per-session Keystore key. If the session
+     * stored mnemonic words, they are recomputed from the edited rolls so the
+     * saved data stays internally consistent. Any passphrase check is cleared:
+     * it was derived from the old mnemonic and cannot be safely migrated
+     * without knowing the user's passphrase.
+     */
+    suspend fun updateDiceRolls(sessionId: String, diceRolls: List<Int>) {
+        withContext(Dispatchers.IO) {
+            val metadata = fileStore.readMetaFile(sessionId)
+                ?: throw NoSuchElementException("Session metadata not found for ID: $sessionId")
+            val length = MnemonicLength.entries.firstOrNull { it.rollCount == diceRolls.size }
+                ?: throw IllegalArgumentException("Saved sessions can only contain 50 or 100 rolls")
+            val result = deriveMnemonic(diceRolls, length)
+            val success = result as? MnemonicResult.Success
+                ?: throw IllegalArgumentException("Edited dice rolls do not produce an accepted mnemonic")
+
+            val newMnemonicWords = if (metadata.hasMnemonic) success.words else null
+            val newPayload = encodePayload(diceRolls, newMnemonicWords, passphraseCheck = null)
+            fileStore.writeEncFile(sessionId, encrypt(metadata.keystoreAlias, newPayload))
+            fileStore.writeMetaFile(metadata.copy(hasPassphraseCheck = false))
+        }
+    }
+
     /**
      * Attaches a PassphraseCheck to an already-saved session, so a
      * passphrase can be verified later without ever being displayed again —

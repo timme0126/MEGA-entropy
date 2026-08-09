@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 fun MegaInfoScaffold(
     title: String,
     onBack: () -> Unit,
+    actions: @Composable () -> Unit = {},
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     Scaffold(
@@ -45,6 +46,7 @@ fun MegaInfoScaffold(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
+                actions = { actions() },
             )
         },
     ) { innerPadding ->
