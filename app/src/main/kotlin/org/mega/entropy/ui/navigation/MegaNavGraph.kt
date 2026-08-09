@@ -6,6 +6,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -58,6 +60,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     // "dice_flow" nested graph that the dice-entry screens share.
     val appLockViewModel: AppLockViewModel = viewModel()
     val diceSessionViewModel: DiceSessionViewModel = viewModel()
+    var savedSessionBip85ParentWords by remember { mutableStateOf<List<String>?>(null) }
     val context = LocalContext.current
     val pinManager = remember { PinManager(context) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -233,7 +236,28 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             SavedSessionDetailScreen(
                 sessionId = sessionId,
                 onBack = { navController.popBackStack() },
+                onBip85 = { parentWords ->
+                    savedSessionBip85ParentWords = parentWords
+                    navController.navigate(MegaDestinations.SAVED_SESSION_BIP85)
+                },
             )
+        }
+        composable(MegaDestinations.SAVED_SESSION_BIP85) {
+            LockGuard(appLockViewModel, navController)
+            DisposableEffect(Unit) {
+                onDispose { savedSessionBip85ParentWords = null }
+            }
+            val parentWords = savedSessionBip85ParentWords
+            if (parentWords != null) {
+                Bip85Screen(
+                    parentWords = parentWords,
+                    onBack = { navController.popBackStack() },
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.popBackStack()
+                }
+            }
         }
 
         diceFlow(navController, diceSessionViewModel, pinManager)

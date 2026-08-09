@@ -32,6 +32,7 @@ object MegaDestinations {
     const val SAVED_SESSIONS = "saved_sessions"
     const val SAVED_SESSION_DETAIL_ARG = "sessionId"
     const val SAVED_SESSION_DETAIL = "saved_session_detail/{$SAVED_SESSION_DETAIL_ARG}"
+    const val SAVED_SESSION_BIP85 = "saved_session_bip85"
     fun savedSessionDetailRoute(sessionId: String) = "saved_session_detail/$sessionId"
     const val HOW_IT_WORKS = "how_it_works"
     const val SECURITY_MODEL = "security_model"

@@ -49,6 +49,7 @@ private enum class PassphraseUiMode { NONE, SETTING, VERIFYING }
 fun SavedSessionDetailScreen(
     sessionId: String,
     onBack: () -> Unit,
+    onBip85: (List<String>) -> Unit,
 ) {
     SecureScreen()
     val context = LocalContext.current
@@ -134,6 +135,10 @@ fun SavedSessionDetailScreen(
                                 }
                             }
                         }
+                        MegaSecondaryButton(
+                            text = "Calculate BIP85 Child",
+                            onClick = { onBip85(currentRecord.mnemonicWords) },
+                        )
                     }
                 }
 
