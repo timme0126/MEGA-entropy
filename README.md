@@ -18,7 +18,7 @@ Verify the download before installing:
 
 ```bash
 sha256sum mega-beta-v0.1.6.apk
-# 0996b1a13e2c18cef3d5addb7b44a82840358bdf7a7dd7d2195566e24b0f09ff
+# f5db5a1ebf968a88cc891be0e570e3ac5290be63d7e62339246fb6540dd529b9
 ```
 
 This is an experimental beta build for disposable test roll sequences only.

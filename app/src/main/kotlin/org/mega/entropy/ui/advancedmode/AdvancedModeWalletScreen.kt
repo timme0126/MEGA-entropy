@@ -29,7 +29,6 @@ import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPassphraseCard
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaQrCode
-import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.WalletAccountKeys
@@ -181,7 +180,7 @@ fun AdvancedModeWalletScreen(
             }
 
             MegaCard(title = "QR code (public account data only)") {
-                MegaQrCode(currentResult.extendedPublicKey)
+                MegaQrCode(currentResult.extendedPublicKey, contentDescription = "QR code for extended public key")
             }
 
             MegaCard(
@@ -219,7 +218,7 @@ fun AdvancedModeWalletScreen(
 
                 val currentPrivateKeyResult = privateKeyResult
                 if (currentPrivateKeyResult == null) {
-                    MegaSecondaryButton(
+                    MegaPrimaryButton(
                         text = "Generate Private Key (WIF)",
                         onClick = { confirmingPrivateKeyExport = true },
                     )
@@ -234,6 +233,20 @@ fun AdvancedModeWalletScreen(
                     ) {
                         MegaMonoText(currentPrivateKeyResult.derivationPath)
                         MegaMonoText(currentPrivateKeyResult.wif)
+                    }
+
+                    MegaCard {
+                        Text(
+                            "Scanning this QR code sweeps the same private key shown above " +
+                                "— e.g. Sparrow Wallet's \"Sweep Private Key\" — into whatever " +
+                                "app or camera scans it. Only reveal it to a wallet you intend " +
+                                "to sweep these funds into.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MegaError,
+                        )
+                    }
+                    MegaCard(title = "QR code (WIF private key)") {
+                        MegaQrCode(currentPrivateKeyResult.wif, contentDescription = "QR code for WIF private key")
                     }
 
                     MegaCard(

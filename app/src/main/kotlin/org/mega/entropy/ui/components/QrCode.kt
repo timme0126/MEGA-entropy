@@ -18,16 +18,24 @@ import com.google.zxing.qrcode.QRCodeWriter
 
 /**
  * Renders [content] as a QR code. Purely local rendering (zxing's encoder
- * runs entirely on-device, no network) — used only for public account
- * data (an xpub/ypub/zpub), never for private seed words; see the
- * "Do not expose private seed QR codes" constraint on Advanced Mode.
+ * runs entirely on-device, no network) — used for public account data (an
+ * xpub/ypub/zpub), and, in the Danger Zone's explicit WIF private-key
+ * export flow only (behind allowPrivateKeyExport + its own confirmation
+ * dialog), a single derived private key — the same "Sweep Private Key via
+ * QR" pattern Sparrow Wallet and other desktop wallets use to scan a WIF
+ * key from a phone screen. Never used for the mnemonic/seed words
+ * themselves, which stay off every QR path in the app.
  */
 @Composable
-fun MegaQrCode(content: String, modifier: Modifier = Modifier) {
+fun MegaQrCode(
+    content: String,
+    contentDescription: String = "QR code",
+    modifier: Modifier = Modifier,
+) {
     val bitmap = remember(content) { qrBitmap(content) }
     Image(
         bitmap = bitmap.asImageBitmap(),
-        contentDescription = "QR code for extended public key",
+        contentDescription = contentDescription,
         contentScale = ContentScale.Fit,
         modifier = modifier
             .fillMaxWidth()
