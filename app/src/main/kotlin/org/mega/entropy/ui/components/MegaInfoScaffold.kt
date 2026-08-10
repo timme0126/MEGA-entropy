@@ -3,6 +3,7 @@ package org.mega.entropy.ui.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -55,6 +56,13 @@ fun MegaInfoScaffold(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
+                // Inside the scroll, not outside: this extends the
+                // scrollable content's height by the keyboard's height
+                // while it's open, so fields (and anything below them,
+                // like word-entry suggestion chips) near the bottom of a
+                // long form can still be scrolled up above the keyboard
+                // instead of staying hidden behind it.
+                .imePadding()
                 .padding(MegaScreenPadding),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {

@@ -3,9 +3,12 @@ package org.mega.entropy.ui.advancedmode
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AssistChip
@@ -14,6 +17,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,13 +30,10 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
-import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.ManualMnemonicValidation
@@ -50,19 +51,28 @@ private const val MAX_SUGGESTIONS = 6
  * visible reminder of the same risk, not the first (or only) time the user
  * sees it.
  *
- * Word entry has a Samourai-Wallet-style autocomplete preview: every
- * official BIP39 word is uniquely identified by its first four letters
- * (some fewer), so as soon as the focused field's text narrows down to one
- * or a few matches, they appear as tappable chips below the grid — tapping
- * fills the word and advances focus to the next field. validateManualMnemonic
- * also accepts an unambiguous prefix directly, so submitting works even
- * without tapping a suggestion.
+ * Word entry has a Samourai-Wallet-style autocomplete preview (see
+ * MnemonicSeedEditText in samourai-wallet-android, which pops a dropdown
+ * once its focused token is 2-4 characters): every official BIP39 word is
+ * uniquely identified by its first four letters (some fewer), so once the
+ * focused field's text narrows to one or a few matches, they appear as
+ * tappable chips directly under the row containing that field — not fixed
+ * at the bottom of the whole 12/24-field grid, where they'd be scrolled out
+ * of view for every row but the last. Tapping a chip fills the word and
+ * advances focus to the next field. validateManualMnemonic also accepts an
+ * unambiguous prefix directly, so submitting works even without tapping a
+ * suggestion.
+ *
+ * The passphrase is asked for on the next screen (AdvancedModeHubScreen),
+ * not here — that's the one place both this manual-entry path and
+ * "Import from Saved Session" converge, so there's exactly one spot to
+ * answer "do you want a passphrase" no matter how the words got loaded.
  */
 @Composable
 fun AdvancedModeMnemonicEntryScreen(
     allowScreenshots: Boolean,
     onBack: () -> Unit,
-    onValidated: (words: List<String>, passphrase: String) -> Unit,
+    onValidated: (words: List<String>) -> Unit,
     onImportFromSavedSession: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
@@ -71,9 +81,13 @@ fun AdvancedModeMnemonicEntryScreen(
     var wordCount by remember { mutableStateOf(12) }
     var wordFields by remember(wordCount) { mutableStateOf(List(wordCount) { "" }) }
     val focusRequesters = remember(wordCount) { List(wordCount) { FocusRequester() } }
+    // One per row (pair of fields): wraps that row's fields together with
+    // its suggestion chips (when shown) so bringIntoView() scrolls the
+    // whole block — not just the text field itself — above the keyboard.
+    val rowBringIntoViewRequesters = remember(wordCount) {
+        List((wordCount + 1) / 2) { BringIntoViewRequester() }
+    }
     var focusedIndex by remember { mutableStateOf<Int?>(null) }
-    var passphrase by remember { mutableStateOf("") }
-    var showPassphrase by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val suggestions = remember(focusedIndex, wordFields) {
@@ -85,6 +99,17 @@ fun AdvancedModeMnemonicEntryScreen(
             val matches = bip39WordsStartingWith(typed)
             if (matches.size == 1 && matches[0] == typed) emptyList() else matches.take(MAX_SUGGESTIONS)
         }
+    }
+
+    // Re-scrolls whenever focus moves to a new row, AND again once
+    // suggestion chips appear for the already-focused row (the row's
+    // height grows at that point, so the earlier scroll position may no
+    // longer show the chips) — keeps the field being typed into, plus its
+    // suggestions, above the on-screen keyboard automatically instead of
+    // relying on the user to scroll manually.
+    LaunchedEffect(focusedIndex, suggestions) {
+        val index = focusedIndex ?: return@LaunchedEffect
+        rowBringIntoViewRequesters.getOrNull(index / 2)?.bringIntoView()
     }
 
     fun fillSuggestion(word: String) {
@@ -100,7 +125,7 @@ fun AdvancedModeMnemonicEntryScreen(
     }
 
     MegaInfoScaffold(title = "Advanced Mode", onBack = onBack) {
-        MegaSecondaryButton(text = "Import from Saved Session", onClick = onImportFromSavedSession)
+        MegaPrimaryButton(text = "Import from Saved Session", onClick = onImportFromSavedSession)
 
         MegaCard {
             Text(
@@ -133,59 +158,52 @@ fun AdvancedModeMnemonicEntryScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             wordFields.chunked(2).forEachIndexed { rowIndex, pair ->
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    pair.forEachIndexed { colIndex, word ->
-                        val index = rowIndex * 2 + colIndex
-                        OutlinedTextField(
-                            value = word,
-                            onValueChange = { value ->
-                                wordFields = wordFields.toMutableList().also { it[index] = value }
-                                error = null
-                            },
-                            label = { Text((index + 1).toString()) },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-                            modifier = Modifier
-                                .weight(1f)
-                                .focusRequester(focusRequesters[index])
-                                .onFocusChanged { if (it.isFocused) focusedIndex = index },
-                        )
-                    }
-                }
-            }
-
-            if (suggestions.isNotEmpty()) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
+                        .bringIntoViewRequester(rowBringIntoViewRequesters[rowIndex]),
                 ) {
-                    suggestions.forEach { word ->
-                        AssistChip(onClick = { fillSuggestion(word) }, label = { Text(word) })
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        pair.forEachIndexed { colIndex, word ->
+                            val index = rowIndex * 2 + colIndex
+                            OutlinedTextField(
+                                value = word,
+                                onValueChange = { value ->
+                                    wordFields = wordFields.toMutableList().also { it[index] = value }
+                                    error = null
+                                },
+                                label = { Text((index + 1).toString()) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(focusRequesters[index])
+                                    .onFocusChanged { if (it.isFocused) focusedIndex = index },
+                            )
+                        }
+                    }
+                    // Anchored directly under the row containing the focused
+                    // field — like a dropdown pinned under the field being
+                    // typed into — rather than in one fixed spot at the bottom
+                    // of the whole 12/24-field grid, where it'd be scrolled
+                    // out of view for every row except the last.
+                    if (focusedIndex?.let { it / 2 } == rowIndex && suggestions.isNotEmpty()) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                        ) {
+                            suggestions.forEach { word ->
+                                AssistChip(onClick = { fillSuggestion(word) }, label = { Text(word) })
+                            }
+                        }
                     }
                 }
             }
-        }
-
-        MegaCard(title = "Passphrase (optional)") {
-            OutlinedTextField(
-                value = passphrase,
-                onValueChange = { passphrase = it },
-                label = { Text("BIP39 passphrase, if used") },
-                singleLine = true,
-                visualTransformation = if (showPassphrase) VisualTransformation.None else PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                text = if (showPassphrase) "Hide passphrase" else "Show passphrase",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { showPassphrase = !showPassphrase },
-            )
         }
 
         val currentError = error
@@ -199,7 +217,7 @@ fun AdvancedModeMnemonicEntryScreen(
                 when (val validation = validateManualMnemonic(wordFields)) {
                     is ManualMnemonicValidation.Valid -> {
                         error = null
-                        onValidated(validation.words, passphrase)
+                        onValidated(validation.words)
                     }
                     is ManualMnemonicValidation.Invalid -> {
                         error = validation.reason

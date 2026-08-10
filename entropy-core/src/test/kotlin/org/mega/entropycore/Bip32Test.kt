@@ -27,6 +27,12 @@ class Bip32Test {
     private val seed = hexToBytes("000102030405060708090a0b0c0d0e0f")
 
     @Test
+    fun `master key fingerprint matches an independently computed value`() {
+        val master = bip32MasterKeyFromSeed(seed)
+        assertEquals("3442193e", master.fingerprint().toHex())
+    }
+
+    @Test
     fun `master key public point and xpub match the official vector`() {
         val master = bip32MasterKeyFromSeed(seed)
         assertEquals(

@@ -2,6 +2,7 @@ package org.mega.entropy.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -14,10 +15,13 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -27,7 +31,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,6 +56,7 @@ import kotlinx.coroutines.delay
 import org.mega.entropy.R
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropy.ui.theme.MegaNeutralGray
+import org.mega.entropy.ui.theme.MegaSuccess
 
 
 /**
@@ -286,6 +293,108 @@ fun MegaMonoText(
         fontSize = fontSize,
         color = color,
     )
+}
+
+/**
+ * Read-only display of a passphrase decided on an earlier screen — a
+ * green check or red X shows at a glance whether one was used at all,
+ * and (only when one was) a reveal toggle shows the actual value without
+ * ever offering a text field to re-type or edit it. Used anywhere a
+ * derivation reuses a passphrase the user already committed to elsewhere
+ * (BIP85 child derivation, standalone wallet-key derivation from Advanced
+ * Mode) — re-entering the same decision on a second screen invites it to
+ * silently drift from what was actually typed upstream.
+ */
+@Composable
+fun MegaPassphraseCard(passphrase: String) {
+    var revealed by remember(passphrase) { mutableStateOf(false) }
+    val used = passphrase.isNotEmpty()
+    MegaCard(title = "Passphrase") {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(
+                imageVector = if (used) Icons.Filled.CheckCircle else Icons.Filled.Cancel,
+                contentDescription = if (used) "A passphrase was used" else "No passphrase was used",
+                tint = if (used) MegaSuccess else MegaError,
+            )
+            Text(
+                text = if (used) "A passphrase was used." else "No passphrase was used.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        if (used) {
+            MegaMonoText(if (revealed) passphrase else "•".repeat(passphrase.length))
+            Text(
+                text = if (revealed) "Hide passphrase" else "Show passphrase",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { revealed = !revealed },
+            )
+        }
+    }
+}
+
+/**
+ * The label dialog opened by a save-icon action (Advanced Mode hub, BIP85
+ * child mnemonic, dice-flow Save Session, renaming an existing saved
+ * session via [initialLabel]) — every saved session must have a label, so
+ * it can be told apart from every other one later; Save stays disabled
+ * until something is actually typed.
+ */
+@Composable
+fun MegaLabelSessionDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+    initialLabel: String = "",
+) {
+    var label by remember { mutableStateOf(initialLabel) }
+    val trimmed = label.trim()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Label This Session") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it },
+                    singleLine = true,
+                    placeholder = { Text("e.g. Cold storage") },
+                    isError = label.isNotEmpty() && trimmed.isEmpty(),
+                )
+                Text(
+                    "A label is required so this session can be told apart from others later.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(trimmed) }, enabled = trimmed.isNotEmpty()) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+/**
+ * Transient "Saved as ..." banner shown after a save-icon action (Advanced
+ * Mode hub, BIP85 child mnemonic) — auto-dismisses itself after a few
+ * seconds via [onDismissed], which the caller uses to clear whatever
+ * state is holding [label].
+ */
+@Composable
+fun MegaSavedConfirmationCard(label: String, onDismissed: () -> Unit) {
+    LaunchedEffect(label) {
+        delay(3000)
+        onDismissed()
+    }
+    MegaCard {
+        Text(
+            text = "Saved as \"$label\".",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
 }
 
 @Composable

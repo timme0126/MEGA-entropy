@@ -43,17 +43,11 @@ data class DiceSessionUiState(
     // Non-null while a save is waiting on the user to set up a MEGA PIN
     // first (spec: saving any data requires a PIN to already exist).
     // MegaNavGraph sets this before routing to PIN_SETUP and reads/clears
-    // it once setup completes, to perform the deferred save.
+    // it once setup completes, to perform the deferred save. The label
+    // (mandatory, already validated non-blank by MegaLabelSessionDialog
+    // before requestPendingSave is ever called) rides alongside it.
     val pendingSaveWithMnemonic: Boolean? = null,
-    // Mirrors pendingSaveWithMnemonic: whether the deferred save (waiting on
-    // PIN setup) should also attach a PassphraseCheck for `passphrase`.
-    val pendingSavePassphraseCheck: Boolean = false,
-    // The passphrase entered on PassphraseScreen (null if skipped or never
-    // visited), held only long enough for SaveSessionScreen to optionally
-    // turn it into a PassphraseCheck. Like everything else here, this is
-    // in-memory only and is wiped by resetSession() same as the rest of the
-    // session state.
-    val passphrase: String? = null,
+    val pendingSaveLabel: String = "",
 ) {
     val totalRolls: Int get() = mnemonicLength.rollCount
     val totalBatches: Int get() = totalRolls / ROLLS_PER_BATCH
@@ -182,15 +176,11 @@ class DiceSessionViewModel : ViewModel() {
         _uiState.value = DiceSessionUiState(mnemonicLength = _uiState.value.mnemonicLength)
     }
 
-    fun requestPendingSave(withMnemonic: Boolean, withPassphraseCheck: Boolean = false) {
-        _uiState.update { it.copy(pendingSaveWithMnemonic = withMnemonic, pendingSavePassphraseCheck = withPassphraseCheck) }
+    fun requestPendingSave(withMnemonic: Boolean, label: String) {
+        _uiState.update { it.copy(pendingSaveWithMnemonic = withMnemonic, pendingSaveLabel = label) }
     }
 
     fun clearPendingSave() {
-        _uiState.update { it.copy(pendingSaveWithMnemonic = null, pendingSavePassphraseCheck = false) }
-    }
-
-    fun setPassphrase(passphrase: String?) {
-        _uiState.update { it.copy(passphrase = passphrase) }
+        _uiState.update { it.copy(pendingSaveWithMnemonic = null, pendingSaveLabel = "") }
     }
 }

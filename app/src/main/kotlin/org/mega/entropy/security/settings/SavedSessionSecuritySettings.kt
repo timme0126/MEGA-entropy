@@ -56,6 +56,36 @@ class SavedSessionSecuritySettings(context: Context) {
         prefs.edit().putBoolean(KEY_ADVANCED_MODE, enabled).apply()
     }
 
+    /** Whether the dice-roll edit lock (see SavedSessionDetailScreen)
+     * starts locked when a saved session is opened. Per-screen UI state
+     * still governs the current session while it's open; this only
+     * carries the last choice forward as the default for the next one —
+     * "remembered for future saved sessions", not persisted per-session.
+     * Off by default, preserving the original always-editable behavior. */
+    fun diceRollsLockedByDefault(): Boolean {
+        return prefs.getBoolean(KEY_DICE_ROLLS_LOCKED, DEFAULT_DICE_ROLLS_LOCKED)
+    }
+
+    fun setDiceRollsLockedByDefault(locked: Boolean) {
+        prefs.edit().putBoolean(KEY_DICE_ROLLS_LOCKED, locked).apply()
+    }
+
+    /** Gates the Advanced Mode "Generate Private Key (WIF)" affordance —
+     * categorically riskier than anything else this app shows: an xpub
+     * leak only exposes address history, but a private key can spend
+     * whatever funds are sent to that one address, with nothing else
+     * required. Off by default; even with this on, generating one still
+     * requires its own explicit confirmation each time (see
+     * AdvancedModeWalletScreen) — this setting only controls whether the
+     * button exists at all. */
+    fun allowPrivateKeyExport(): Boolean {
+        return prefs.getBoolean(KEY_ALLOW_PRIVATE_KEY_EXPORT, DEFAULT_ALLOW_PRIVATE_KEY_EXPORT)
+    }
+
+    fun setAllowPrivateKeyExport(allow: Boolean) {
+        prefs.edit().putBoolean(KEY_ALLOW_PRIVATE_KEY_EXPORT, allow).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "mega_saved_session_security"
         private const val KEY_LOCK_TIMEOUT_MILLIS = "lock_timeout_millis"
@@ -63,12 +93,16 @@ class SavedSessionSecuritySettings(context: Context) {
         private const val KEY_ALLOW_SCREENSHOTS = "allow_screenshots"
         private const val KEY_ALLOW_SEED_COPY = "allow_seed_copy"
         private const val KEY_ADVANCED_MODE = "advanced_mode_enabled"
+        private const val KEY_DICE_ROLLS_LOCKED = "dice_rolls_locked_default"
+        private const val KEY_ALLOW_PRIVATE_KEY_EXPORT = "allow_private_key_export"
 
         const val DEFAULT_LOCK_TIMEOUT_MILLIS = 0L
         const val DEFAULT_RANDOMIZE_PIN_KEYPAD = true
         const val DEFAULT_ALLOW_SCREENSHOTS = false
         const val DEFAULT_ALLOW_SEED_COPY = false
         const val DEFAULT_ADVANCED_MODE = false
+        const val DEFAULT_DICE_ROLLS_LOCKED = false
+        const val DEFAULT_ALLOW_PRIVATE_KEY_EXPORT = false
 
         val LOCK_TIMEOUT_OPTIONS = listOf(
             SavedSessionLockTimeoutOption("Immediately", 0L),

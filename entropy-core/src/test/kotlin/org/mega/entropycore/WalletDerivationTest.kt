@@ -30,6 +30,29 @@ class WalletDerivationTest {
             result.extendedPublicKey,
         )
         assertEquals("1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA", result.firstReceiveAddress)
+        assertEquals("73c5da0a", result.masterFingerprint)
+    }
+
+    @Test
+    fun `master fingerprint is the same across script types and accounts - it identifies the seed, not the account`() {
+        val legacy = deriveWalletAccountKeys(testMnemonic, "", WalletScriptType.LEGACY, WalletNetwork.MAINNET, 0)
+        val nativeSegwit = deriveWalletAccountKeys(testMnemonic, "", WalletScriptType.NATIVE_SEGWIT, WalletNetwork.MAINNET, 0)
+        val account1 = deriveWalletAccountKeys(testMnemonic, "", WalletScriptType.NATIVE_SEGWIT, WalletNetwork.MAINNET, 1)
+        assertEquals("73c5da0a", legacy.masterFingerprint)
+        assertEquals("73c5da0a", nativeSegwit.masterFingerprint)
+        assertEquals("73c5da0a", account1.masterFingerprint)
+    }
+
+    @Test
+    fun `master fingerprint changes with the passphrase - it's a different seed entirely`() {
+        val result = deriveWalletAccountKeys(
+            testMnemonic,
+            "correct horse battery staple",
+            WalletScriptType.NATIVE_SEGWIT,
+            WalletNetwork.MAINNET,
+            0,
+        )
+        assertEquals("6090b661", result.masterFingerprint)
     }
 
     @Test

@@ -24,11 +24,24 @@ class SessionRepository(private val context: Context) {
      * of wallet/mnemonic entropy handled by :entropy-core.
      */
     suspend fun saveSession(
-        diceRolls: List<Int>,
+        diceRolls: List<Int> = emptyList(),
         mnemonicWords: List<String>? = null,
         label: String = "",
         passphraseCheck: PassphraseCheck? = null,
+        childSeedInfo: String = "",
     ): SavedSessionMetadata {
+        // A dice-only save always has diceRolls; an Advanced-Mode manual
+        // entry has no dice at all, so it must bring its own words instead
+        // — one or the other has to be present for the session to be
+        // reconstructible later.
+        require(diceRolls.isNotEmpty() || mnemonicWords != null) {
+            "A session must have either dice rolls or mnemonic words"
+        }
+        // Every saved session must be labeled — MegaLabelSessionDialog
+        // already blocks its own Save button on a blank label, but every
+        // caller reaches this through that same dialog, so it costs
+        // nothing to also refuse it here at the actual point of writing.
+        require(label.isNotBlank()) { "label must not be blank" }
         return withContext(Dispatchers.IO) {
             val sessionId = UUID.randomUUID().toString()
             val alias = aliasForSession(sessionId)
@@ -43,6 +56,7 @@ class SessionRepository(private val context: Context) {
                 keystoreAlias = alias,
                 label = label,
                 hasPassphraseCheck = passphraseCheck != null,
+                childSeedInfo = childSeedInfo,
             )
 
             fileStore.writeMetaFile(metadata)

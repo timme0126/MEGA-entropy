@@ -177,7 +177,7 @@ internal fun decodeBip32RootXprv(xprv: String): Bip32ExtendedPrivateKey {
     )
 }
 
-private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+internal fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it.toInt() and 0xFF) }
 
 /** Bitcoin network for address/extended-key formatting. Derivation math
  * itself doesn't depend on network — only version bytes and address

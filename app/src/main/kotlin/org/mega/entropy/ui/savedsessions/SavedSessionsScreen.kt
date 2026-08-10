@@ -12,7 +12,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -34,6 +33,7 @@ import org.mega.entropy.security.settings.SavedSessionLockTimeoutOption
 import org.mega.entropy.storage.SavedSessionMetadata
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaInfoScaffold
+import org.mega.entropy.ui.components.MegaLabelSessionDialog
 import org.mega.entropy.ui.components.MegaNeutralButton
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
@@ -56,6 +56,8 @@ fun SavedSessionsScreen(
     onAllowScreenshotsChanged: (Boolean) -> Unit,
     allowSeedCopy: Boolean,
     onAllowSeedCopyChanged: (Boolean) -> Unit,
+    allowPrivateKeyExport: Boolean,
+    onAllowPrivateKeyExportChanged: (Boolean) -> Unit,
     advancedModeEnabled: Boolean,
     onAdvancedModeChanged: (Boolean) -> Unit,
     viewModel: SavedSessionsViewModel = viewModel(),
@@ -78,6 +80,8 @@ fun SavedSessionsScreen(
             onAllowScreenshotsChanged = onAllowScreenshotsChanged,
             allowSeedCopy = allowSeedCopy,
             onAllowSeedCopyChanged = onAllowSeedCopyChanged,
+            allowPrivateKeyExport = allowPrivateKeyExport,
+            onAllowPrivateKeyExportChanged = onAllowPrivateKeyExportChanged,
             advancedModeEnabled = advancedModeEnabled,
             onAdvancedModeChanged = onAdvancedModeChanged,
             onChangePin = {
@@ -175,6 +179,8 @@ private fun SavedSessionSettingsScreen(
     onAllowScreenshotsChanged: (Boolean) -> Unit,
     allowSeedCopy: Boolean,
     onAllowSeedCopyChanged: (Boolean) -> Unit,
+    allowPrivateKeyExport: Boolean,
+    onAllowPrivateKeyExportChanged: (Boolean) -> Unit,
     advancedModeEnabled: Boolean,
     onAdvancedModeChanged: (Boolean) -> Unit,
     onChangePin: () -> Unit,
@@ -255,7 +261,7 @@ private fun SavedSessionSettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            MegaSecondaryButton(
+            MegaPrimaryButton(
                 text = if (duressPinEnabled) "Change Duress PIN" else "Set Duress PIN",
                 onClick = onChangeDuressPin,
             )
@@ -283,6 +289,23 @@ private fun SavedSessionSettingsScreen(
                         onAdvancedModeChanged(false)
                     }
                 },
+            )
+        }
+
+        MegaCard(title = "Private Key Export") {
+            Text(
+                "Adds a button in Advanced Mode to generate a WIF private key for a " +
+                    "derived address. Unlike an xpub, a private key can spend whatever " +
+                    "funds are sent there — anyone who sees it can take them. Off by " +
+                    "default; each generation still requires its own confirmation.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            SettingSwitchRow(
+                label = "Allow private key export",
+                description = "Show the Generate Private Key (WIF) button in Advanced Mode.",
+                checked = allowPrivateKeyExport,
+                onCheckedChange = onAllowPrivateKeyExportChanged,
             )
         }
 
@@ -409,12 +432,19 @@ private fun SavedSessionCard(
             Text(dateText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         }
         Text(
-            "${session.rollsCount} rolls" +
+            (if (session.rollsCount > 0) "${session.rollsCount} rolls" else "Manually entered seed") +
                 (if (session.hasMnemonic) " · mnemonic saved" else "") +
                 (if (session.hasPassphraseCheck) " · passphrase check saved" else ""),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (session.childSeedInfo.isNotBlank()) {
+            Text(
+                session.childSeedInfo,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier) {
             MegaNeutralButton(text = "View", modifier = Modifier.weight(1f), onClick = onView)
             MegaNeutralButton(text = "Label", modifier = Modifier.weight(1f), onClick = { renaming = true })
@@ -423,7 +453,7 @@ private fun SavedSessionCard(
     }
 
     if (renaming) {
-        RenameDialog(
+        MegaLabelSessionDialog(
             initialLabel = session.label,
             onConfirm = { newLabel ->
                 onRename(newLabel)
@@ -461,33 +491,6 @@ private fun ConfirmDeleteDialog(
             TextButton(onClick = onConfirm) {
                 Text(confirmText, color = MaterialTheme.colorScheme.error)
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
-}
-
-@Composable
-private fun RenameDialog(
-    initialLabel: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var text by remember { mutableStateOf(initialLabel) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Label This Session") },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                singleLine = true,
-                placeholder = { Text("e.g. Cold storage") },
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(text.trim()) }) { Text("Save") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

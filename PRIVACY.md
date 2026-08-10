@@ -7,8 +7,9 @@ MEGA’s privacy model is intentionally simple: there is no network channel for 
 - No analytics, telemetry, or crash reporting
 - No user accounts or server communication
 - No cloud sync or advertising SDKs
-- No export features (no clipboard, share, QR, screenshot, or file export of dice rolls or mnemonics)
+- Screenshots and seed-word clipboard copy are disabled by default and require an explicit local settings change
 - No collection of user data by the developer under any circumstance
+- No file export, share sheet, camera, or network upload path
 
 ## On-Device Storage
 Anything you explicitly save stays encrypted (AES-256-GCM via Android Keystore) in this app's private on-device storage only. This data is excluded from Android backups (both legacy `android:allowBackup="false"` and modern `android:dataExtractionRules` mechanisms).

@@ -36,6 +36,7 @@
             android:theme="@style/Theme.MEGA"
             android:launchMode="standard"
             android:alwaysRetainTaskState="true"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

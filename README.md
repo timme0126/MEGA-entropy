@@ -10,15 +10,15 @@ six-sided die rolls, supplied entirely by the user,** into a valid 12- or
 
 ## Download the beta APK
 
-**Current beta:** [`mega-beta-v0.1.5.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.5/mega-beta-v0.1.5.apk)
+**Current beta:** [`mega-beta-v0.1.6.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.6/mega-beta-v0.1.6.apk)
 
-Release page: [`MEGA Beta v0.1.5`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.5)
+Release page: [`MEGA Beta v0.1.6`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.6)
 
 Verify the download before installing:
 
 ```bash
-sha256sum mega-beta-v0.1.5.apk
-# 01186366f7ce25f3977d3cb82109c1ecb164c771c3ccadb180689825090982d2
+sha256sum mega-beta-v0.1.6.apk
+# 0996b1a13e2c18cef3d5addb7b44a82840358bdf7a7dd7d2195566e24b0f09ff
 ```
 
 This is an experimental beta build for disposable test roll sequences only.
@@ -85,12 +85,16 @@ is available at [`docs/index.html`](docs/index.html).
 5. Every step is shown on screen, with an expandable "show the math" for
    anyone who wants to verify by hand — see
    [`docs/BIP39-DERIVATION.md`](docs/BIP39-DERIVATION.md).
-6. The words are revealed only after a deliberate confirmation, with no
-   copy/share/export anywhere in the app.
-7. Optional: from the final mnemonic screen, MEGA can derive BIP-85 English
-   BIP39 child mnemonics at a chosen index for 12 or 24 words. This is
-   deterministic child derivation from the parent mnemonic, not fresh dice
-   entropy.
+6. The words are revealed only after a deliberate confirmation. Screenshots
+   and seed-word copy actions are disabled by default and must be enabled in
+   Saved Session Settings.
+7. Optional Advanced Mode can import a saved session or manually enter a 12-
+   or 24-word BIP39 mnemonic, add a passphrase for the current derivation,
+   derive BIP85 child mnemonics, and derive wallet account public keys plus
+   the first receive address for BIP44, BIP49, and BIP84.
+8. Private-key WIF export is separately disabled by default. Enabling it only
+   exposes a per-use confirmation inside Advanced Mode; treat it as test-only
+   beta functionality.
 
 ## Building and installing
 

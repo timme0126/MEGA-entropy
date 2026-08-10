@@ -25,18 +25,10 @@ object MegaDestinations {
     const val WORD_DERIVATION = "word_derivation"
     const val FINAL_MNEMONIC = "final_mnemonic"
 
-    /** Optional steps reachable only from FINAL_MNEMONIC. */
-    const val BIP85 = "bip85"
-    const val PASSPHRASE = "passphrase"
     const val SAVE_SESSION = "save_session"
     const val SAVED_SESSIONS = "saved_sessions"
     const val SAVED_SESSION_DETAIL_ARG = "sessionId"
     const val SAVED_SESSION_DETAIL = "saved_session_detail/{$SAVED_SESSION_DETAIL_ARG}"
-    const val SAVED_SESSION_BIP85 = "saved_session_bip85"
-    /** Advanced Mode's wallet-key derivation tool, reached from a saved
-     * session's already-revealed words — only offered when Advanced Mode
-     * is on (see SavedSessionDetailScreen). */
-    const val SAVED_SESSION_WALLET = "saved_session_wallet"
     const val SAVED_SESSION_UNLOCK = "saved_session_unlock"
     fun savedSessionDetailRoute(sessionId: String) = "saved_session_detail/$sessionId"
     const val HOW_IT_WORKS = "how_it_works"

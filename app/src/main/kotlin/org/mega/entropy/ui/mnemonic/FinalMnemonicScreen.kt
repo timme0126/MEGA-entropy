@@ -27,7 +27,6 @@ import org.mega.entropy.ui.components.MegaCopyIconButton
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaScreenPadding
-import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 
@@ -37,8 +36,6 @@ fun FinalMnemonicScreen(
     allowScreenshots: Boolean,
     allowSeedCopy: Boolean,
     onDone: () -> Unit,
-    onAddPassphrase: () -> Unit,
-    onBip85: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
     var revealed by remember { mutableStateOf(false) }
@@ -84,7 +81,7 @@ fun FinalMnemonicScreen(
             MegaPrimaryButton(text = "Reveal ${words.size} Words", onClick = { revealed = true })
         } else {
             MegaCard(
-                leadingAction = if (allowSeedCopy) {
+                trailingAction = if (allowSeedCopy) {
                     {
                         MegaCopyIconButton(
                             contentDescription = "Copy seed words",
@@ -103,8 +100,6 @@ fun FinalMnemonicScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            MegaSecondaryButton(text = "Add a Passphrase (Optional)", onClick = onAddPassphrase)
-            MegaSecondaryButton(text = "Calculate BIP85 Child", onClick = onBip85)
             MegaPrimaryButton(text = "Done", onClick = onDone)
         }
     }

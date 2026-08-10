@@ -28,7 +28,8 @@ fun PrivacyScreen(onBack: () -> Unit) {
                 "No server",
                 "No cloud sync",
                 "No advertising",
-                "No export of dice rolls or mnemonics (copy, share, QR, screenshot, or otherwise)",
+                "Screenshots and seed-word copy are disabled by default and require an explicit local settings change",
+                "No file export, share sheet, camera, or network upload path",
                 "No collection of user data by the developer, ever",
             )
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

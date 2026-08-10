@@ -2,13 +2,16 @@ package org.mega.entropy.ui.advancedmode
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,20 +19,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaCopyIconButton
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaMonoText
+import org.mega.entropy.ui.components.MegaPassphraseCard
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaQrCode
+import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.WalletAccountKeys
 import org.mega.entropycore.WalletNetwork
+import org.mega.entropycore.WalletReceivePrivateKey
 import org.mega.entropycore.WalletScriptType
 import org.mega.entropycore.deriveWalletAccountKeys
+import org.mega.entropycore.deriveWalletReceivePrivateKey
 
 /**
  * Advanced Mode wallet-derivation tool (spec "Advanced Mode wallet
@@ -37,13 +45,20 @@ import org.mega.entropycore.deriveWalletAccountKeys
  * address, for cross-checking against another wallet — never a private
  * key or signing capability. Taproot (BIP86) is deferred; see
  * WalletScriptType's KDoc in entropy-core for why.
+ *
+ * [passphrase] was already decided once on AdvancedModeHubScreen — this
+ * screen only displays it (masked, with a reveal toggle) and uses it
+ * as-is for every derivation below. There's no field to re-type or edit
+ * it: a second editable copy of the same decision invites it to silently
+ * drift from what was actually entered upstream.
  */
 @Composable
 fun AdvancedModeWalletScreen(
     mnemonicWords: List<String>,
-    passphrase: String,
+    passphrase: String = "",
     allowScreenshots: Boolean,
     allowSeedCopy: Boolean,
+    allowPrivateKeyExport: Boolean,
     onBack: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
@@ -53,13 +68,20 @@ fun AdvancedModeWalletScreen(
     var accountText by remember { mutableStateOf("0") }
     var result by remember { mutableStateOf<WalletAccountKeys?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var privateKeyResult by remember { mutableStateOf<WalletReceivePrivateKey?>(null) }
+    var confirmingPrivateKeyExport by remember { mutableStateOf(false) }
+    var privateKeyError by remember { mutableStateOf<String?>(null) }
 
     fun clearResult() {
         result = null
         error = null
+        privateKeyResult = null
+        privateKeyError = null
     }
 
-    MegaInfoScaffold(title = "Wallet Account Keys", onBack = onBack) {
+    MegaInfoScaffold(title = "Wallet Public Keys", onBack = onBack) {
+        MegaPassphraseCard(passphrase)
+
         MegaCard(title = "Script type") {
             WalletScriptType.entries.forEach { type ->
                 ScriptTypeOption(
@@ -102,7 +124,7 @@ fun AdvancedModeWalletScreen(
         }
 
         MegaPrimaryButton(
-            text = "Derive Account Keys",
+            text = "Derive Public Keys",
             onClick = {
                 val account = accountText.toIntOrNull()
                 if (account == null) {
@@ -126,6 +148,17 @@ fun AdvancedModeWalletScreen(
                 MegaMonoText(currentResult.derivationPath)
             }
 
+            MegaCard(
+                title = "Master Fingerprint",
+                trailingAction = if (allowSeedCopy) {
+                    { MegaCopyIconButton(contentDescription = "Copy master fingerprint", getTextToCopy = { currentResult.masterFingerprint }) }
+                } else {
+                    null
+                },
+            ) {
+                MegaMonoText(currentResult.masterFingerprint)
+            }
+
             MegaCard {
                 Text(
                     "Exporting this extended public key reveals every address and the " +
@@ -138,7 +171,7 @@ fun AdvancedModeWalletScreen(
 
             MegaCard(
                 title = "Extended public key",
-                leadingAction = if (allowSeedCopy) {
+                trailingAction = if (allowSeedCopy) {
                     { MegaCopyIconButton(contentDescription = "Copy extended public key", getTextToCopy = { currentResult.extendedPublicKey }) }
                 } else {
                     null
@@ -153,7 +186,7 @@ fun AdvancedModeWalletScreen(
 
             MegaCard(
                 title = "First receive address (external chain, index 0)",
-                leadingAction = if (allowSeedCopy) {
+                trailingAction = if (allowSeedCopy) {
                     { MegaCopyIconButton(contentDescription = "Copy first receive address", getTextToCopy = { currentResult.firstReceiveAddress }) }
                 } else {
                     null
@@ -161,7 +194,103 @@ fun AdvancedModeWalletScreen(
             ) {
                 MegaMonoText(currentResult.firstReceiveAddress)
             }
+
+            if (allowPrivateKeyExport) {
+                MegaCard {
+                    Text(
+                        "Danger Zone",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        "A private key can spend whatever funds are sent to that one " +
+                            "address — unlike the public data above, anyone who sees it, " +
+                            "or any copy of it, can take them.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                val currentPrivateKeyError = privateKeyError
+                if (currentPrivateKeyError != null) {
+                    Text(currentPrivateKeyError, style = MaterialTheme.typography.bodyMedium, color = MegaError)
+                }
+
+                val currentPrivateKeyResult = privateKeyResult
+                if (currentPrivateKeyResult == null) {
+                    MegaSecondaryButton(
+                        text = "Generate Private Key (WIF)",
+                        onClick = { confirmingPrivateKeyExport = true },
+                    )
+                } else {
+                    MegaCard(
+                        title = "Private key (WIF)",
+                        trailingAction = if (allowSeedCopy) {
+                            { MegaCopyIconButton(contentDescription = "Copy private key", getTextToCopy = { currentPrivateKeyResult.wif }) }
+                        } else {
+                            null
+                        },
+                    ) {
+                        MegaMonoText(currentPrivateKeyResult.derivationPath)
+                        MegaMonoText(currentPrivateKeyResult.wif)
+                    }
+
+                    MegaCard(
+                        title = "Output descriptor",
+                        trailingAction = if (allowSeedCopy) {
+                            { MegaCopyIconButton(contentDescription = "Copy output descriptor", getTextToCopy = { currentPrivateKeyResult.descriptor }) }
+                        } else {
+                            null
+                        },
+                    ) {
+                        MegaMonoText(currentPrivateKeyResult.descriptor)
+                    }
+                }
+            }
         }
+    }
+
+    if (confirmingPrivateKeyExport) {
+        val account = accountText.toIntOrNull()
+        AlertDialog(
+            onDismissRequest = { confirmingPrivateKeyExport = false },
+            title = { Text("Generate Private Key?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "This reveals a WIF private key for the first receive address " +
+                            "shown above. That key alone can spend any funds sent to that " +
+                            "address — treat it exactly like the funds themselves.",
+                    )
+                    Text(
+                        "Anyone who sees this key, or any copy of it (screenshot, " +
+                            "clipboard, screen share), can take those funds. Only " +
+                            "continue if you understand and accept that risk.",
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (account == null) {
+                        privateKeyError = "Enter a valid account index."
+                    } else {
+                        try {
+                            privateKeyResult = deriveWalletReceivePrivateKey(mnemonicWords, passphrase, scriptType, network, account)
+                            privateKeyError = null
+                        } catch (e: IllegalArgumentException) {
+                            privateKeyError = e.message ?: "Could not generate the private key."
+                        }
+                    }
+                    confirmingPrivateKeyExport = false
+                }) {
+                    Text("Generate", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingPrivateKeyExport = false }) { Text("Cancel") }
+            },
+        )
     }
 }
 

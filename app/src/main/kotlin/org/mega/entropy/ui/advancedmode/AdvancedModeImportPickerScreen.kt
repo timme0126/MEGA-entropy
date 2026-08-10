@@ -19,7 +19,7 @@ import org.mega.entropy.storage.SavedSessionMetadata
 import org.mega.entropy.storage.SessionRepository
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaInfoScaffold
-import org.mega.entropy.ui.components.MegaSecondaryButton
+import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.MnemonicLength
@@ -41,7 +41,7 @@ import org.mega.entropycore.deriveMnemonic
 fun AdvancedModeImportPickerScreen(
     allowScreenshots: Boolean,
     onBack: () -> Unit,
-    onImported: (List<String>) -> Unit,
+    onImported: (words: List<String>, sourceLabel: String) -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
     val context = LocalContext.current
@@ -75,7 +75,7 @@ fun AdvancedModeImportPickerScreen(
                     error = "This session's saved rolls do not produce an accepted mnemonic."
                     importingSessionId = null
                 } else {
-                    onImported(words)
+                    onImported(words, session.label)
                 }
             } catch (e: Exception) {
                 error = "Couldn't open this session."
@@ -133,11 +133,12 @@ private fun ImportableSessionCard(
             Text(dateText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         }
         Text(
-            "${session.rollsCount} rolls" + if (session.hasMnemonic) " · mnemonic saved" else "",
+            (if (session.rollsCount > 0) "${session.rollsCount} rolls" else "Manually entered seed") +
+                (if (session.hasMnemonic) " · mnemonic saved" else ""),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        MegaSecondaryButton(
+        MegaPrimaryButton(
             text = if (importing) "Importing…" else "Import",
             enabled = !importing,
             onClick = onClick,

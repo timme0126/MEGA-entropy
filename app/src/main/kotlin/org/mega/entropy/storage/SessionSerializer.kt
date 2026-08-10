@@ -31,7 +31,13 @@ fun encodePayload(
     mnemonicWords: List<String>?,
     passphraseCheck: PassphraseCheck? = null,
 ): ByteArray {
-    require(diceRolls.size in 1..100) { "diceRolls must contain between 1 and 100 entries, got ${diceRolls.size}" }
+    // Empty is valid for an Advanced-Mode session saved with no dice
+    // behind it at all — but then it must bring its own words, or there'd
+    // be nothing to reconstruct the session from.
+    require(diceRolls.size in 0..100) { "diceRolls must contain between 0 and 100 entries, got ${diceRolls.size}" }
+    require(diceRolls.isNotEmpty() || mnemonicWords != null) {
+        "A session must have either dice rolls or mnemonic words"
+    }
     require(diceRolls.all { it in 1..6 }) { "All dice rolls must be between 1 and 6" }
     if (mnemonicWords != null) {
         require(mnemonicWords.size == 12 || mnemonicWords.size == 24) {
@@ -73,17 +79,24 @@ fun decodePayload(bytes: ByteArray): SessionPayload {
         throw IllegalStateException("Invalid payload format: ROLLS line must start with 'ROLLS:'")
     }
     val rollsStr = rollsLine.substringAfter("ROLLS:")
-    val diceRolls = rollsStr.split(",").map { rollStr ->
-        rollStr.toIntOrNull()
-            ?: throw IllegalStateException("Invalid payload format: malformed dice roll value '$rollStr'")
+    // An Advanced-Mode session saved with no dice at all encodes this as
+    // an empty ROLLS line — "".split(",") would otherwise yield a single
+    // empty-string "roll" and fail to parse.
+    val diceRolls = if (rollsStr.isEmpty()) {
+        emptyList()
+    } else {
+        rollsStr.split(",").map { rollStr ->
+            rollStr.toIntOrNull()
+                ?: throw IllegalStateException("Invalid payload format: malformed dice roll value '$rollStr'")
+        }
     }
     // Defense in depth: GCM authentication already guarantees these bytes are
     // exactly what encodePayload wrote, but re-validating the decoded values
     // against the same invariants encodePayload enforced costs nothing and
     // keeps this function safe to call on its own (e.g. future callers, or
     // a future format migration) without relying on that guarantee.
-    if (diceRolls.isEmpty() || diceRolls.size > 100 || diceRolls.any { it !in 1..6 }) {
-        throw IllegalStateException("Invalid payload format: dice rolls must be 1..100 entries each in 1..6")
+    if (diceRolls.size > 100 || diceRolls.any { it !in 1..6 }) {
+        throw IllegalStateException("Invalid payload format: dice rolls must be 0..100 entries each in 1..6")
     }
 
     var mnemonicWords: List<String>? = null
@@ -117,19 +130,21 @@ fun decodePayload(bytes: ByteArray): SessionPayload {
 
 /**
  * Encodes session metadata into the exact plaintext format for the unencrypted
- * .meta file. V3 adds the hasPassphraseCheck line; there is no migration
- * from V2 (see decodeMetadata) since this predates any real saved data.
+ * .meta file. V4 adds the childSeedInfo line; V3 files (no childSeedInfo,
+ * defaults to "") are still readable — see decodeMetadata — since real
+ * beta-tester data exists in that format by now, unlike the V2-to-V3 jump.
  */
 fun encodeMetadata(metadata: SavedSessionMetadata): ByteArray {
     val lines = listOf(
-        "MEGA-META-V3",
+        "MEGA-META-V4",
         "id:${metadata.id}",
         "createdAt:${metadata.createdAtEpochMillis}",
         "rollsCount:${metadata.rollsCount}",
         "hasMnemonic:${metadata.hasMnemonic}",
         "alias:${metadata.keystoreAlias}",
         "label:${metadata.label}",
-        "hasPassphraseCheck:${metadata.hasPassphraseCheck}"
+        "hasPassphraseCheck:${metadata.hasPassphraseCheck}",
+        "childSeedInfo:${metadata.childSeedInfo}",
     )
     return lines.joinToString("\n").toByteArray(StandardCharsets.UTF_8)
 }
@@ -138,23 +153,31 @@ fun encodeMetadata(metadata: SavedSessionMetadata): ByteArray {
  * Decodes the unencrypted .meta file back into SavedSessionMetadata.
  *
  * WHY: We validate the header and parse strictly. A mismatched header
- * indicates a corrupted or incompatible file, so we fail closed — this
- * includes the older MEGA-META-V1 and MEGA-META-V2 formats (no
- * hasPassphraseCheck field), which are treated as unreadable rather than
- * silently guessing a default. SessionFileStore.listAllMetadata() already
- * skips (not crashes on) individual files that fail to parse, so pre-V3
- * test sessions simply stop being listed rather than breaking the app.
+ * indicates a corrupted or incompatible file, so we fail closed for
+ * anything older than V3 (no hasPassphraseCheck field) — those are
+ * treated as unreadable rather than silently guessing a default.
+ * SessionFileStore.listAllMetadata() already skips (not crashes on)
+ * individual files that fail to parse, so pre-V3 test sessions simply
+ * stop being listed rather than breaking the app. V3 itself IS still
+ * read (childSeedInfo defaults to "") since real beta-tester saved
+ * sessions exist in that format.
  */
 fun decodeMetadata(bytes: ByteArray): SavedSessionMetadata {
     val text = bytes.decodeToString()
     val lines = text.split("\n")
-    require(lines.size == 8) { "Invalid metadata format: expected exactly 8 lines, got ${lines.size}" }
-    require(lines[0] == "MEGA-META-V3") { "Invalid metadata format: first line must be exactly 'MEGA-META-V3'" }
 
     fun extractValue(index: Int, key: String): String {
         val line = lines[index]
         require(line.startsWith("$key:")) { "Invalid metadata format: line $index must start with '$key:'" }
         return line.substringAfter("$key:")
+    }
+
+    val childSeedInfo = when {
+        lines.size == 9 && lines[0] == "MEGA-META-V4" -> extractValue(8, "childSeedInfo")
+        lines.size == 8 && lines[0] == "MEGA-META-V3" -> ""
+        else -> throw IllegalArgumentException(
+            "Invalid metadata format: expected 'MEGA-META-V3' (8 lines) or 'MEGA-META-V4' (9 lines), got ${lines.size} line(s) starting with '${lines.getOrNull(0)}'",
+        )
     }
 
     return SavedSessionMetadata(
@@ -165,5 +188,6 @@ fun decodeMetadata(bytes: ByteArray): SavedSessionMetadata {
         keystoreAlias = extractValue(5, "alias"),
         label = extractValue(6, "label"),
         hasPassphraseCheck = extractValue(7, "hasPassphraseCheck").toBoolean(),
+        childSeedInfo = childSeedInfo,
     )
 }

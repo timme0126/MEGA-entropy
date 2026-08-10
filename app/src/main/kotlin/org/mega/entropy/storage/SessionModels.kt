@@ -16,12 +16,18 @@ data class SavedSessionMetadata(
     // session's encrypted payload. Tracked here, unencrypted, purely so the
     // UI can decide whether to offer "Set" or "Verify" without decrypting.
     val hasPassphraseCheck: Boolean = false,
+    // Auto-generated (never user-typed) note shown alongside label on the
+    // Saved Sessions list — e.g. "Child Seed of "Cold storage" · Native
+    // SegWit · Index 5" for a BIP85 child mnemonic saved from
+    // Bip85Screen. Empty for every other kind of saved session.
+    val childSeedInfo: String = "",
 ) {
     init {
         require(id.isNotBlank()) { "id must not be blank" }
         require(rollsCount in 0..100) { "rollsCount must be between 0 and 100, got $rollsCount" }
         require(keystoreAlias.isNotBlank()) { "keystoreAlias must not be blank" }
         require(!label.contains('\n')) { "label must not contain a newline" }
+        require(!childSeedInfo.contains('\n')) { "childSeedInfo must not contain a newline" }
     }
 }
 

@@ -24,7 +24,6 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
-import org.mega.entropy.security.passphrase.buildPassphraseCheck
 import org.mega.entropy.security.settings.SavedSessionSecuritySettings
 import org.mega.entropy.security.pin.PinManager
 import org.mega.entropy.storage.SessionRepository
@@ -45,7 +44,6 @@ import org.mega.entropy.ui.howitworks.HowItWorksScreen
 import org.mega.entropy.ui.loading.LoadingScreen
 import org.mega.entropy.ui.mnemonic.FinalMnemonicScreen
 import org.mega.entropy.ui.onboarding.BeforeYouBeginScreen
-import org.mega.entropy.ui.passphrase.PassphraseScreen
 import org.mega.entropy.ui.pin.AppLockViewModel
 import org.mega.entropy.ui.pin.PinSetupScreen
 import org.mega.entropy.ui.pin.PinVerifyScreen
@@ -59,6 +57,12 @@ import org.mega.entropy.ui.welcome.WelcomeScreen
 import org.mega.entropy.ui.words.WordDerivationScreen
 import org.mega.entropycore.MnemonicResult
 
+private data class PendingAdvancedModeSave(
+    val words: List<String>,
+    val label: String,
+    val childSeedInfo: String = "",
+)
+
 @Composable
 fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     // Both Activity-scoped (no back-stack-entry override), so they survive
@@ -68,10 +72,6 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     // "dice_flow" nested graph that the dice-entry screens share.
     val appLockViewModel: AppLockViewModel = viewModel()
     val diceSessionViewModel: DiceSessionViewModel = viewModel()
-    var savedSessionBip85ParentWords by remember { mutableStateOf<List<String>?>(null) }
-    var savedSessionBip85ParentPassphrase by remember { mutableStateOf("") }
-    var savedSessionWalletParentWords by remember { mutableStateOf<List<String>?>(null) }
-    var savedSessionWalletParentPassphrase by remember { mutableStateOf("") }
     val context = LocalContext.current
     val pinManager = remember { PinManager(context) }
     val repository = remember { SessionRepository(context) }
@@ -88,11 +88,39 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     var allowSeedCopy by remember {
         mutableStateOf(savedSessionSecuritySettings.allowSeedCopy())
     }
+    var allowPrivateKeyExport by remember {
+        mutableStateOf(savedSessionSecuritySettings.allowPrivateKeyExport())
+    }
     var advancedModeEnabled by remember {
         mutableStateOf(savedSessionSecuritySettings.advancedModeEnabled())
     }
+    var diceRollsLockedDefault by remember {
+        mutableStateOf(savedSessionSecuritySettings.diceRollsLockedByDefault())
+    }
     var advancedModeWords by remember { mutableStateOf<List<String>?>(null) }
     var advancedModePassphrase by remember { mutableStateOf("") }
+    // Null when advancedModeWords came from typing them in by hand
+    // (AdvancedModeMnemonicEntryScreen.onValidated); non-null — possibly
+    // "" — when they came from "Import from Saved Session", holding that
+    // source session's own label. Used to hide AdvancedModeHubScreen's
+    // save icon (they're already a saved session — saving again would
+    // just duplicate it) and to describe a BIP85 child as "Child Seed of
+    // <this label>" when saving one from Bip85Screen.
+    var advancedModeSourceSessionLabel by remember { mutableStateOf<String?>(null) }
+    // Only the passphrase needs its own slot here — ADVANCED_MODE_WALLET
+    // reads advancedModeWords directly for the words themselves (the hub
+    // is the only screen that navigates there, always with the same
+    // words), and just needs a place to carry the passphrase typed on the
+    // hub as that screen's own editable field's initial value.
+    var advancedModeWalletPassphrase by remember { mutableStateOf("") }
+    // Set when AdvancedModeHubScreen's or Bip85Screen's save icon is used
+    // but no MEGA PIN exists yet — the same "must have a PIN before
+    // saving" redirect the dice flow's SAVE_SESSION uses, just carrying
+    // words/label/childSeedInfo instead of a DiceSessionViewModel result.
+    // PIN_SETUP performs the deferred save itself once a PIN is set (see
+    // below) and pops back to whichever screen it came from.
+    var pendingAdvancedModeSave by remember { mutableStateOf<PendingAdvancedModeSave?>(null) }
+    var advancedModeSavedConfirmation by remember { mutableStateOf<String?>(null) }
     var stoppedAtElapsedRealtime by remember { mutableStateOf<Long?>(null) }
     val lifecycleCoroutineScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -163,6 +191,18 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         }
     }
 
+    // Saving any data requires a MEGA PIN to already exist, same rule the
+    // dice flow's Save screen enforces — see saveOrRequirePin in diceFlow.
+    suspend fun saveAdvancedModeSession(words: List<String>, label: String, childSeedInfo: String = "") {
+        if (pinManager.isPinEnabled()) {
+            repository.saveSession(mnemonicWords = words, label = label, childSeedInfo = childSeedInfo)
+            advancedModeSavedConfirmation = label
+        } else {
+            pendingAdvancedModeSave = PendingAdvancedModeSave(words, label, childSeedInfo)
+            navController.navigate(MegaDestinations.PIN_SETUP)
+        }
+    }
+
     NavHost(navController = navController, startDestination = MegaDestinations.LOADING) {
         composable(MegaDestinations.LOADING) {
             LoadingScreen(
@@ -229,36 +269,52 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             PinSetupScreen(
                 onPinSet = {
                     appLockViewModel.unlock()
-                    if (pendingSaveWithMnemonic != null) {
-                        // Reached via a forced "you must set a PIN before
-                        // saving" redirect (see SAVE_SESSION below) — finish
-                        // the save that was waiting on this, then leave the
-                        // whole dice flow, exactly like a normal save does.
-                        coroutineScope.launch {
-                            val success = state.mnemonicResult as? MnemonicResult.Success
-                            val mnemonicWords = if (pendingSaveWithMnemonic) success?.words else null
-                            val passphrase = state.passphrase
-                            val passphraseCheck = if (state.pendingSavePassphraseCheck && success != null && passphrase != null) {
-                                buildPassphraseCheck(success.words, passphrase)
-                            } else {
-                                null
+                    when {
+                        pendingSaveWithMnemonic != null -> {
+                            // Reached via a forced "you must set a PIN before
+                            // saving" redirect (see SAVE_SESSION below) — finish
+                            // the save that was waiting on this, then leave the
+                            // whole dice flow, exactly like a normal save does.
+                            coroutineScope.launch {
+                                val success = state.mnemonicResult as? MnemonicResult.Success
+                                val mnemonicWords = if (pendingSaveWithMnemonic) success?.words else null
+                                repository.saveSession(
+                                    diceRolls = state.allRolls,
+                                    mnemonicWords = mnemonicWords,
+                                    label = state.pendingSaveLabel,
+                                )
+                                diceSessionViewModel.clearPendingSave()
+                                diceSessionViewModel.resetSession()
+                                navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
                             }
-                            repository.saveSession(
-                                diceRolls = state.allRolls,
-                                mnemonicWords = mnemonicWords,
-                                passphraseCheck = passphraseCheck,
-                            )
-                            diceSessionViewModel.clearPendingSave()
-                            diceSessionViewModel.resetSession()
-                            navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
                         }
-                    } else {
-                        // Reached via "Change PIN" from Saved Sessions.
-                        navController.popBackStack()
+                        pendingAdvancedModeSave != null -> {
+                            // Reached via AdvancedModeHubScreen's or
+                            // Bip85Screen's save icon — finish the deferred
+                            // save, then return to that same screen (still
+                            // underneath on the back stack) instead of
+                            // leaving Advanced Mode.
+                            val pending = pendingAdvancedModeSave!!
+                            coroutineScope.launch {
+                                repository.saveSession(
+                                    mnemonicWords = pending.words,
+                                    label = pending.label,
+                                    childSeedInfo = pending.childSeedInfo,
+                                )
+                                pendingAdvancedModeSave = null
+                                advancedModeSavedConfirmation = pending.label
+                                navController.popBackStack()
+                            }
+                        }
+                        else -> {
+                            // Reached via "Change PIN" from Saved Sessions.
+                            navController.popBackStack()
+                        }
                     }
                 },
                 onCancel = {
                     diceSessionViewModel.clearPendingSave()
+                    pendingAdvancedModeSave = null
                     navController.popBackStack()
                 },
             )
@@ -351,6 +407,11 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     savedSessionSecuritySettings.setAllowSeedCopy(allow)
                     allowSeedCopy = savedSessionSecuritySettings.allowSeedCopy()
                 },
+                allowPrivateKeyExport = allowPrivateKeyExport,
+                onAllowPrivateKeyExportChanged = { allow ->
+                    savedSessionSecuritySettings.setAllowPrivateKeyExport(allow)
+                    allowPrivateKeyExport = savedSessionSecuritySettings.allowPrivateKeyExport()
+                },
                 advancedModeEnabled = advancedModeEnabled,
                 onAdvancedModeChanged = { enabled ->
                     savedSessionSecuritySettings.setAdvancedModeEnabled(enabled)
@@ -365,12 +426,10 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     navController.popBackStack()
                 },
                 onCancel = {
-                    savedSessionBip85ParentWords = null
                     navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
                 },
                 randomizeKeypad = randomizePinKeypad,
                 onDuressWipe = {
-                    savedSessionBip85ParentWords = null
                     appLockViewModel.lock()
                     navController.popBackStack(MegaDestinations.WELCOME, inclusive = false)
                 },
@@ -401,83 +460,13 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 sessionId = sessionId,
                 allowScreenshots = allowScreenshots,
                 allowSeedCopy = allowSeedCopy,
-                advancedModeEnabled = advancedModeEnabled,
+                diceRollsLockedDefault = diceRollsLockedDefault,
+                onDiceRollsLockedDefaultChanged = { locked ->
+                    savedSessionSecuritySettings.setDiceRollsLockedByDefault(locked)
+                    diceRollsLockedDefault = savedSessionSecuritySettings.diceRollsLockedByDefault()
+                },
                 onBack = { navController.popBackStack() },
-                onBip85 = { parentWords, parentPassphrase ->
-                    savedSessionBip85ParentWords = parentWords
-                    savedSessionBip85ParentPassphrase = parentPassphrase
-                    navController.navigate(MegaDestinations.SAVED_SESSION_BIP85)
-                },
-                onWalletKeys = { parentWords, parentPassphrase ->
-                    savedSessionWalletParentWords = parentWords
-                    savedSessionWalletParentPassphrase = parentPassphrase
-                    navController.navigate(MegaDestinations.SAVED_SESSION_WALLET)
-                },
             )
-        }
-        composable(MegaDestinations.SAVED_SESSION_BIP85) {
-            LockGuard(appLockViewModel, navController)
-            val parentWords = savedSessionBip85ParentWords
-            // Clearing savedSessionBip85ParentWords belongs in onDispose, not
-            // in the back-press handler itself: NavHost keeps this composable
-            // alive during its exit transition, so clearing the state
-            // synchronously on back-press used to recompose THIS same
-            // composable with parentWords == null while it was still on
-            // screen, which hit the "else" branch below and fired a SECOND,
-            // unintended popBackStack() — the actual cause of "Back from
-            // BIP85 lands on the home screen" instead of the saved session.
-            // onDispose only runs once this screen has truly left the
-            // composition, after the pop already completed, so it can't
-            // race with the back-press's own single pop.
-            DisposableEffect(Unit) {
-                onDispose {
-                    savedSessionBip85ParentWords = null
-                    savedSessionBip85ParentPassphrase = ""
-                }
-            }
-            if (parentWords != null) {
-                BackHandler { navController.popBackStack() }
-                Bip85Screen(
-                    parentWords = parentWords,
-                    initialParentPassphrase = savedSessionBip85ParentPassphrase,
-                    allowScreenshots = allowScreenshots,
-                    allowSeedCopy = allowSeedCopy,
-                    onBack = { navController.popBackStack() },
-                )
-            } else {
-                LaunchedEffect(Unit) {
-                    navController.popBackStack()
-                }
-            }
-        }
-        composable(MegaDestinations.SAVED_SESSION_WALLET) {
-            LockGuard(appLockViewModel, navController)
-            val parentWords = savedSessionWalletParentWords
-            // Same onDispose-not-back-handler cleanup pattern as
-            // SAVED_SESSION_BIP85 above, and for the same reason: clearing
-            // this state synchronously on back-press would recompose this
-            // still-visible screen into its "no words" branch mid exit-
-            // transition and fire an extra, unintended pop.
-            DisposableEffect(Unit) {
-                onDispose {
-                    savedSessionWalletParentWords = null
-                    savedSessionWalletParentPassphrase = ""
-                }
-            }
-            if (parentWords != null) {
-                BackHandler { navController.popBackStack() }
-                AdvancedModeWalletScreen(
-                    mnemonicWords = parentWords,
-                    passphrase = savedSessionWalletParentPassphrase,
-                    allowScreenshots = allowScreenshots,
-                    allowSeedCopy = allowSeedCopy,
-                    onBack = { navController.popBackStack() },
-                )
-            } else {
-                LaunchedEffect(Unit) {
-                    navController.popBackStack()
-                }
-            }
         }
 
         composable(MegaDestinations.ADVANCED_MODE_ENTRY) {
@@ -485,15 +474,18 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             fun leaveAdvancedMode() {
                 advancedModeWords = null
                 advancedModePassphrase = ""
+                advancedModeSourceSessionLabel = null
+                advancedModeSavedConfirmation = null
                 navController.popBackStack()
             }
             BackHandler { leaveAdvancedMode() }
             AdvancedModeMnemonicEntryScreen(
                 allowScreenshots = allowScreenshots,
                 onBack = { leaveAdvancedMode() },
-                onValidated = { words, passphrase ->
+                onValidated = { words ->
                     advancedModeWords = words
-                    advancedModePassphrase = passphrase
+                    advancedModePassphrase = ""
+                    advancedModeSourceSessionLabel = null
                     navController.navigate(MegaDestinations.ADVANCED_MODE_HUB)
                 },
                 onImportFromSavedSession = {
@@ -504,12 +496,26 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         composable(MegaDestinations.ADVANCED_MODE_HUB) {
             val words = advancedModeWords
             if (words != null) {
+                val coroutineScope = rememberCoroutineScope()
                 AdvancedModeHubScreen(
-                    wordCount = words.size,
+                    mnemonicWords = words,
                     allowScreenshots = allowScreenshots,
+                    allowSeedCopy = allowSeedCopy,
+                    isExistingSavedSession = advancedModeSourceSessionLabel != null,
                     onBack = { navController.popBackStack() },
-                    onBip85 = { navController.navigate(MegaDestinations.ADVANCED_MODE_BIP85) },
-                    onWalletKeys = { navController.navigate(MegaDestinations.ADVANCED_MODE_WALLET) },
+                    onBip85 = { passphrase ->
+                        advancedModePassphrase = passphrase
+                        navController.navigate(MegaDestinations.ADVANCED_MODE_BIP85)
+                    },
+                    onWalletKeys = { passphrase ->
+                        advancedModeWalletPassphrase = passphrase
+                        navController.navigate(MegaDestinations.ADVANCED_MODE_WALLET)
+                    },
+                    onSaveAsSession = { label ->
+                        coroutineScope.launch { saveAdvancedModeSession(words, label) }
+                    },
+                    savedConfirmationLabel = advancedModeSavedConfirmation,
+                    onSavedConfirmationDismissed = { advancedModeSavedConfirmation = null },
                 )
             } else {
                 LaunchedEffect(Unit) {
@@ -520,12 +526,19 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         composable(MegaDestinations.ADVANCED_MODE_BIP85) {
             val words = advancedModeWords
             if (words != null) {
+                val coroutineScope = rememberCoroutineScope()
                 Bip85Screen(
                     parentWords = words,
-                    initialParentPassphrase = advancedModePassphrase,
+                    parentPassphrase = advancedModePassphrase,
+                    parentLabel = advancedModeSourceSessionLabel,
                     allowScreenshots = allowScreenshots,
                     allowSeedCopy = allowSeedCopy,
                     onBack = { navController.popBackStack() },
+                    onSaveChildAsSession = { childWords, label, childSeedInfo ->
+                        coroutineScope.launch { saveAdvancedModeSession(childWords, label, childSeedInfo) }
+                    },
+                    savedConfirmationLabel = advancedModeSavedConfirmation,
+                    onSavedConfirmationDismissed = { advancedModeSavedConfirmation = null },
                 )
             } else {
                 LaunchedEffect(Unit) {
@@ -535,12 +548,19 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         }
         composable(MegaDestinations.ADVANCED_MODE_WALLET) {
             val words = advancedModeWords
+            DisposableEffect(Unit) {
+                onDispose {
+                    advancedModeWalletPassphrase = ""
+                }
+            }
             if (words != null) {
+                BackHandler { navController.popBackStack() }
                 AdvancedModeWalletScreen(
                     mnemonicWords = words,
-                    passphrase = advancedModePassphrase,
+                    passphrase = advancedModeWalletPassphrase,
                     allowScreenshots = allowScreenshots,
                     allowSeedCopy = allowSeedCopy,
+                    allowPrivateKeyExport = allowPrivateKeyExport,
                     onBack = { navController.popBackStack() },
                 )
             } else {
@@ -554,9 +574,10 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             AdvancedModeImportPickerScreen(
                 allowScreenshots = allowScreenshots,
                 onBack = { navController.popBackStack() },
-                onImported = { words ->
+                onImported = { words, sourceLabel ->
                     advancedModeWords = words
                     advancedModePassphrase = ""
+                    advancedModeSourceSessionLabel = sourceLabel
                     navController.navigate(MegaDestinations.ADVANCED_MODE_HUB)
                 },
             )
@@ -661,34 +682,6 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
                     allowScreenshots = allowScreenshots,
                     allowSeedCopy = allowSeedCopy,
                     onDone = { navController.navigate(MegaDestinations.SAVE_SESSION) },
-                    onAddPassphrase = { navController.navigate(MegaDestinations.PASSPHRASE) },
-                    onBip85 = { navController.navigate(MegaDestinations.BIP85) },
-                )
-            }
-        }
-        composable(MegaDestinations.BIP85) {
-            val state by sharedViewModel.uiState.collectAsState()
-            val success = state.mnemonicResult as? MnemonicResult.Success
-            if (success != null) {
-                Bip85Screen(
-                    parentWords = success.words,
-                    initialParentPassphrase = state.passphrase.orEmpty(),
-                    allowScreenshots = allowScreenshots,
-                    allowSeedCopy = allowSeedCopy,
-                    onBack = { navController.popBackStack() },
-                )
-            }
-        }
-        composable(MegaDestinations.PASSPHRASE) {
-            val state by sharedViewModel.uiState.collectAsState()
-            val success = state.mnemonicResult as? MnemonicResult.Success
-            if (success != null) {
-                PassphraseScreen(
-                    words = success.words,
-                    onContinue = { passphrase ->
-                        sharedViewModel.setPassphrase(passphrase)
-                        navController.navigate(MegaDestinations.SAVE_SESSION)
-                    },
                 )
             }
         }
@@ -708,24 +701,18 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
             // doesn't, defer the save (via sharedViewModel.requestPendingSave)
             // and force the user through PIN_SETUP first; PIN_SETUP performs
             // the deferred save itself once a PIN is set (see above).
-            fun saveOrRequirePin(withMnemonic: Boolean, withPassphraseCheck: Boolean) {
+            fun saveOrRequirePin(withMnemonic: Boolean, label: String) {
                 coroutineScope.launch {
                     if (pinManager.isPinEnabled()) {
                         val mnemonicWords = if (withMnemonic) success?.words else null
-                        val passphrase = state.passphrase
-                        val passphraseCheck = if (withPassphraseCheck && success != null && passphrase != null) {
-                            buildPassphraseCheck(success.words, passphrase)
-                        } else {
-                            null
-                        }
                         repository.saveSession(
                             diceRolls = state.allRolls,
                             mnemonicWords = mnemonicWords,
-                            passphraseCheck = passphraseCheck,
+                            label = label,
                         )
                         finishAndReturnToWelcome()
                     } else {
-                        sharedViewModel.requestPendingSave(withMnemonic, withPassphraseCheck)
+                        sharedViewModel.requestPendingSave(withMnemonic, label)
                         navController.navigate(MegaDestinations.PIN_SETUP)
                     }
                 }
@@ -734,14 +721,9 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
             SaveSessionScreen(
                 rollCount = state.mnemonicLength.rollCount,
                 wordCount = state.mnemonicLength.wordCount,
-                hasPendingPassphrase = state.passphrase != null,
                 onDontSave = { finishAndReturnToWelcome() },
-                onSaveDiceOnly = { savePassphraseCheck ->
-                    saveOrRequirePin(withMnemonic = false, withPassphraseCheck = savePassphraseCheck)
-                },
-                onSaveDiceAndMnemonic = { savePassphraseCheck ->
-                    saveOrRequirePin(withMnemonic = true, withPassphraseCheck = savePassphraseCheck)
-                },
+                onSaveDiceOnly = { label -> saveOrRequirePin(withMnemonic = false, label = label) },
+                onSaveDiceAndMnemonic = { label -> saveOrRequirePin(withMnemonic = true, label = label) },
             )
         }
     }
