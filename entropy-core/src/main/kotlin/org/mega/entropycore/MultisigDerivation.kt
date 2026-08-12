@@ -143,11 +143,15 @@ fun buildMultisigWallet(
     val sortedPubkeys = sortPublicKeysBip67(pubkeys)
     val witnessScript = buildMultisigWitnessScript(threshold, sortedPubkeys)
     val firstReceiveAddress = encodeP2wshAddress(witnessScript, network.bip32Network)
-    val descriptor = "wsh(sortedmulti($threshold," +
+    val descriptorBody = "wsh(sortedmulti($threshold," +
         cosigners.joinToString(",") {
             "[${it.masterFingerprint}/${stripLeadingPathRoot(it.derivationPath)}]${it.extendedPublicKey}/<0;1>/*"
         } +
         "))"
+    // A checksum makes this descriptor round-trip cleanly through other
+    // BIP-380 tools (Sparrow, Bitcoin Core, hardware wallet coordinators),
+    // which display and often expect one — see DescriptorChecksum.kt.
+    val descriptor = appendDescriptorChecksum(descriptorBody)
 
     return MultisigWallet(threshold, cosigners, network, descriptor, firstReceiveAddress)
 }
@@ -384,16 +388,24 @@ private val DESCRIPTOR_COSIGNER_REGEX = Regex("""\[([0-9a-fA-F]{8}/[0-9'hH]+(?:/
  * into its threshold and individual cosigner fragments, delegating each fragment to
  * parseCosignerDescriptorFragment so it goes through the exact same validation
  * (SLIP-132 rejection, BIP48 path shape) as a single pasted fragment would.
+ *
+ * Accepts an optional trailing BIP-380 `#CHECKSUM` — Sparrow (and most other
+ * descriptor-aware wallets) include one by default when exporting, so
+ * rejecting it here would make every such export unparseable. A present
+ * checksum is verified, not just stripped — see
+ * [verifyAndStripDescriptorChecksum] — so a genuine transcription typo in a
+ * pasted/scanned descriptor is still caught rather than silently accepted.
  */
 fun parseMultisigDescriptor(text: String): ParsedMultisigDescriptor {
     require(text.length <= MAX_DESCRIPTOR_INPUT_LENGTH) {
         "Descriptor is too long (${text.length} characters, max $MAX_DESCRIPTOR_INPUT_LENGTH) — this does not look like a valid multisig descriptor."
     }
-    if (!text.startsWith("wsh(sortedmulti(") || !text.endsWith("))")) {
+    val withoutChecksum = verifyAndStripDescriptorChecksum(text)
+    if (!withoutChecksum.startsWith("wsh(sortedmulti(") || !withoutChecksum.endsWith("))")) {
         throw IllegalArgumentException("Multisig descriptor must be wrapped in wsh(sortedmulti(...))")
     }
 
-    val inner = text.removePrefix("wsh(sortedmulti(").removeSuffix("))")
+    val inner = withoutChecksum.removePrefix("wsh(sortedmulti(").removeSuffix("))")
     val firstCommaIndex = inner.indexOf(',')
     if (firstCommaIndex == -1) {
         throw IllegalArgumentException("Malformed multisig descriptor: missing threshold or cosigner list")

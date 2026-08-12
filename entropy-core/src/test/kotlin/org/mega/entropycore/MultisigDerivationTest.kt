@@ -67,7 +67,7 @@ class MultisigDerivationTest {
                 "[751e76e8/48'/0'/0'/2']xpub661MyMwAqRbcEYS8w7XLSVeEsBXy79zSzH1J8vCdxAZningWLdN3zgtU6QzvJsNBNF5QPBBBg1yVF2LKrcfGdJq86PeLWDMUCYatZPzQu8R/<0;1>/*," +
                 "[06afd46b/48'/0'/0'/2']xpub661MyMwAqRbcEYS8w7XLSVeEsBXy79zSzH1J8vCdxAZningWLdN3zgtU6RaWczAs6MVywiybuhjHuUQKNNTPv4jYsDwwKwKyhjPrr2oGiVK/<0;1>/*," +
                 "[7dd65592/48'/0'/0'/2']xpub661MyMwAqRbcEYS8w7XLSVeEsBXy79zSzH1J8vCdxAZningWLdN3zgtU6Ry3jzyxjRpjQ6N8aa1M55DxuLjf24UZ8ufawmLVf8NWMG88kcq/<0;1>/*" +
-                "))",
+                "))#vwjrk4hz",
             wallet.descriptor,
         )
         assertEquals("bc1qfhs9w0u2qscn0t2p47cafpq8f8dvln9ahmh95ppd5j3k0en9rnwsrdk3ms", wallet.firstReceiveAddress)
@@ -139,7 +139,8 @@ class MultisigDerivationTest {
         assertEquals(2, wallet.threshold)
         assertEquals(2, wallet.cosigners.size)
         assertTrue(wallet.descriptor.startsWith("wsh(sortedmulti(2,"))
-        assertTrue(wallet.descriptor.endsWith("))"))
+        assertEquals(verifyAndStripDescriptorChecksum(wallet.descriptor), wallet.descriptor.substringBefore("#"))
+        assertTrue(wallet.descriptor.substringBefore("#").endsWith("))"))
         assertTrue(wallet.firstReceiveAddress.startsWith("bc1q"))
     }
 

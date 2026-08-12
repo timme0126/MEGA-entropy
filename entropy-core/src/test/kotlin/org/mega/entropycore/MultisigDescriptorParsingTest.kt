@@ -139,4 +139,44 @@ class MultisigDescriptorParsingTest {
         assertEquals(cosignerA.extendedPublicKey, parsed.extendedPublicKey)
     }
 
+    // Sparrow (and most other descriptor-aware wallets) include a trailing
+    // BIP-380 "#CHECKSUM" by default when exporting a descriptor — the exact
+    // shape a real-world scan/paste from Sparrow takes, distinct from
+    // buildMultisigWallet's own output (which now also appends one, see
+    // MultisigDerivationTest, but that's a separate code path).
+
+    @Test
+    fun `parseMultisigDescriptor accepts a descriptor with a valid trailing checksum`() {
+        val bodyOnly = buildMultisigWallet(2, listOf(cosignerA, cosignerB, cosignerC), WalletNetwork.MAINNET)
+            .descriptor.substringBefore("#")
+        val sparrowStyle = appendDescriptorChecksum(bodyOnly)
+
+        val parsed = parseMultisigDescriptor(sparrowStyle)
+
+        assertEquals(2, parsed.threshold)
+        assertEquals(3, parsed.cosigners.size)
+    }
+
+    @Test
+    fun `parseMultisigDescriptor rejects a descriptor with a mistyped checksum`() {
+        val bodyOnly = buildMultisigWallet(2, listOf(cosignerA, cosignerB), WalletNetwork.MAINNET)
+            .descriptor.substringBefore("#")
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            parseMultisigDescriptor("$bodyOnly#00000000")
+        }
+        assertTrue(exception.message.orEmpty().contains("checksum"))
+    }
+
+    @Test
+    fun `parseMultisigDescriptor still accepts a descriptor with no checksum at all`() {
+        val bodyOnly = buildMultisigWallet(2, listOf(cosignerA, cosignerB), WalletNetwork.MAINNET)
+            .descriptor.substringBefore("#")
+
+        val parsed = parseMultisigDescriptor(bodyOnly)
+
+        assertEquals(2, parsed.threshold)
+        assertEquals(2, parsed.cosigners.size)
+    }
+
 }
