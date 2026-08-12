@@ -79,6 +79,8 @@ fun AdvancedModeMultisigVaultScreen(
     onCancelSaveVault: () -> Unit,
     onConfirmSaveVault: (label: String) -> Unit,
     onDismissSavedVaultConfirmation: () -> Unit,
+    onConfirmDescriptorImport: () -> Unit,
+    onCancelDescriptorImport: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
 
@@ -122,6 +124,15 @@ fun AdvancedModeMultisigVaultScreen(
                     error = uiState.bareXpubError,
                     onComplete = onCompleteBareXpubCosigner,
                     onCancel = onCancelBareXpubHelper,
+                )
+            }
+
+            val pendingDescriptorImport = uiState.pendingDescriptorImport
+            if (pendingDescriptorImport != null) {
+                DescriptorImportConfirmationDialog(
+                    pending = pendingDescriptorImport,
+                    onConfirm = onConfirmDescriptorImport,
+                    onCancel = onCancelDescriptorImport,
                 )
             }
         }

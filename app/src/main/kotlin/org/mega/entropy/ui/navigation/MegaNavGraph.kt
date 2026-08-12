@@ -743,6 +743,8 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     }
                 },
                 onDismissSavedVaultConfirmation = multisigVaultViewModel::dismissSavedVaultConfirmation,
+                onConfirmDescriptorImport = multisigVaultViewModel::confirmDescriptorImport,
+                onCancelDescriptorImport = multisigVaultViewModel::cancelDescriptorImport,
             )
         }
         composable(MegaDestinations.ADVANCED_MODE_MULTISIG_COSIGNER_PICKER) {

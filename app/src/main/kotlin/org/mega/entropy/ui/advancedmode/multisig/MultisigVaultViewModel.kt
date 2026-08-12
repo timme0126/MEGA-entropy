@@ -73,10 +73,29 @@ data class MultisigVaultUiState(
     // Transient "Saved as ..." confirmation, mirroring
     // MegaNavGraph's advancedModeSavedConfirmation pattern.
     val savedVaultLabel: String? = null,
+    // Set by fillManySlotsFromDescriptor instead of applying immediately,
+    // whenever the import would overwrite one or more already-filled
+    // cosigner slots — see that function's doc comment. Drives a
+    // confirmation dialog in AdvancedModeMultisigVaultScreen; the import
+    // itself is only applied by confirmDescriptorImport.
+    val pendingDescriptorImport: PendingDescriptorImport? = null,
 ) {
     val allSlotsFilled: Boolean
         get() = slots.isNotEmpty() && slots.all { it.status is SlotStatus.Filled }
 }
+
+/** A full descriptor import staged for explicit confirmation because
+ * applying it would replace one or more cosigner slots the user already
+ * filled. Carries everything [MultisigVaultViewModel.confirmDescriptorImport]
+ * needs to apply it later, and everything the confirmation dialog needs to
+ * describe what's about to change (M-of-N, network, and — implicitly, since
+ * every slot is replaced — script/key policy for every cosigner). */
+data class PendingDescriptorImport(
+    val threshold: Int,
+    val cosignerCount: Int,
+    val network: WalletNetwork,
+    val slots: List<MultisigSlot>,
+)
 
 /** Builds the list MultisigVaultRepository.saveVault needs from the
  * current Result-step state — a pure function (no I/O) so the actual save
@@ -345,7 +364,20 @@ class MultisigVaultViewModel : ViewModel() {
      * through parseCosignerDescriptorFragment's full validation (inside
      * parseMultisigDescriptor) and the same duplicate-xpub check pasting a
      * single fragment gets, so this adopts the descriptor's policy without
-     * weakening any of that. */
+     * weakening any of that.
+     *
+     * A descriptor is trusted to correctly describe its OWN vault (per the
+     * validation above), but it is NOT trusted to silently discard cosigner
+     * slots the user already filled and may have carefully verified — a
+     * mistaken scan, or a maliciously crafted QR, could otherwise replace a
+     * real cosigner set with a different one (potentially including an
+     * attacker-controlled key) with no chance to notice before Build Vault.
+     * So when any slot is already Filled, this stages the import into
+     * [MultisigVaultUiState.pendingDescriptorImport] instead of applying it
+     * — [confirmDescriptorImport] / [cancelDescriptorImport] resolve it.
+     * When every slot is still empty (the common "importing a vault someone
+     * else built" case this adoption behavior exists for), it applies
+     * immediately with no added friction. */
     fun fillManySlotsFromDescriptor(text: String) {
         _uiState.update { state ->
             val parsed = try {
@@ -375,6 +407,19 @@ class MultisigVaultViewModel : ViewModel() {
                 val label = "${origin.masterFingerprint} · ${origin.derivationPath}"
                 MultisigSlot(status = SlotStatus.Filled(label), origin = origin)
             }
+
+            if (state.slots.any { it.status is SlotStatus.Filled }) {
+                return@update state.copy(
+                    pendingDescriptorImport = PendingDescriptorImport(
+                        threshold = parsed.threshold,
+                        cosignerCount = parsed.cosigners.size,
+                        network = network,
+                        slots = slots,
+                    ),
+                    walletError = null,
+                )
+            }
+
             state.copy(
                 m = parsed.threshold,
                 n = parsed.cosigners.size,
@@ -384,6 +429,30 @@ class MultisigVaultViewModel : ViewModel() {
                 walletError = null,
             )
         }
+    }
+
+    /** Applies a descriptor import staged by [fillManySlotsFromDescriptor]
+     * after the user explicitly confirmed replacing their already-filled
+     * cosigner slots. No-op if nothing is pending. */
+    fun confirmDescriptorImport() {
+        _uiState.update { state ->
+            val pending = state.pendingDescriptorImport ?: return@update state
+            state.copy(
+                m = pending.threshold,
+                n = pending.cosignerCount,
+                network = pending.network,
+                slots = pending.slots,
+                pendingDescriptorImport = null,
+                walletResult = null,
+                walletError = null,
+            )
+        }
+    }
+
+    /** Discards a staged descriptor import — every already-filled slot is
+     * left exactly as it was, since the import was never applied. */
+    fun cancelDescriptorImport() {
+        _uiState.update { it.copy(pendingDescriptorImport = null) }
     }
 
     /** Entry point for the dedicated "Scan Full Descriptor QR" action on the

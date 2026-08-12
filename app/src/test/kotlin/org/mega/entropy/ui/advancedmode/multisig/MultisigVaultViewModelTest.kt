@@ -425,4 +425,100 @@ class MultisigVaultViewModelTest {
         assertEquals("label", saved[1].label)
         assertEquals(origin.masterFingerprint, saved[1].masterFingerprint)
     }
+
+    @Test
+    fun `full descriptor import is staged, not applied, when a slot is already filled`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.fillSlotFromPastedText(0, cosignerA)
+
+        viewModel.fillManySlotsFromDescriptor("wsh(sortedmulti(2,$cosignerB,$cosignerC))")
+
+        val state = viewModel.uiState.value
+        // Nothing about the existing state changed yet.
+        assertEquals(1, state.m)
+        assertEquals(2, state.n)
+        assertTrue(state.slots[0].status is SlotStatus.Filled)
+        assertEquals("751e76e8", state.slots[0].origin?.masterFingerprint)
+        assertTrue(state.slots[1].status is SlotStatus.Empty)
+        assertEquals(null, state.walletError)
+        // The import is staged for confirmation instead.
+        val pending = state.pendingDescriptorImport
+        assertNotNull(pending)
+        assertEquals(2, pending!!.threshold)
+        assertEquals(2, pending.cosignerCount)
+        assertEquals(WalletNetwork.MAINNET, pending.network)
+    }
+
+    @Test
+    fun `confirmDescriptorImport applies the staged import, replacing policy and every slot`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.fillSlotFromPastedText(0, cosignerA)
+        viewModel.fillManySlotsFromDescriptor("wsh(sortedmulti(2,$cosignerB,$cosignerC))")
+
+        viewModel.confirmDescriptorImport()
+
+        val state = viewModel.uiState.value
+        assertEquals(2, state.m)
+        assertEquals(2, state.n)
+        assertEquals(2, state.slots.size)
+        assertTrue(state.slots.all { it.status is SlotStatus.Filled })
+        assertEquals(null, state.pendingDescriptorImport)
+        assertEquals(null, state.walletError)
+    }
+
+    @Test
+    fun `cancelDescriptorImport discards the staged import and leaves existing slots untouched`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.fillSlotFromPastedText(0, cosignerA)
+        viewModel.fillManySlotsFromDescriptor("wsh(sortedmulti(2,$cosignerB,$cosignerC))")
+
+        viewModel.cancelDescriptorImport()
+
+        val state = viewModel.uiState.value
+        // Original policy and slot 0's original cosigner survive untouched.
+        assertEquals(1, state.m)
+        assertEquals(2, state.n)
+        assertTrue(state.slots[0].status is SlotStatus.Filled)
+        assertTrue(state.slots[1].status is SlotStatus.Empty)
+        assertEquals(null, state.pendingDescriptorImport)
+    }
+
+    @Test
+    fun `fillManySlotsFromDescriptor applies immediately when no slot is filled yet`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+
+        viewModel.fillManySlotsFromDescriptor("wsh(sortedmulti(2,$cosignerB,$cosignerC))")
+
+        val state = viewModel.uiState.value
+        assertEquals(null, state.pendingDescriptorImport)
+        assertTrue(state.slots.all { it.status is SlotStatus.Filled })
+        assertEquals(2, state.m)
+    }
+
+    @Test
+    fun `fillManySlotsFromScannedText also stages an import when a slot is already filled`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.fillSlotFromPastedText(0, cosignerA)
+
+        viewModel.fillManySlotsFromScannedText("wsh(sortedmulti(2,$cosignerB,$cosignerC))")
+
+        val state = viewModel.uiState.value
+        assertTrue(state.slots[0].status is SlotStatus.Filled)
+        assertNotNull(state.pendingDescriptorImport)
+    }
 }
