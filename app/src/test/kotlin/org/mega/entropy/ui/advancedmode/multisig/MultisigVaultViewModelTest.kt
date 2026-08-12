@@ -152,7 +152,7 @@ class MultisigVaultViewModelTest {
     }
 
     @Test
-    fun `completing bare xpub with valid fingerprint and account fills the pending slot`() {
+    fun `completing bare xpub with a valid fingerprint fills the pending slot at the standard account-0 path`() {
         val viewModel = MultisigVaultViewModel()
         viewModel.setN(2)
         viewModel.setM(1)
@@ -160,7 +160,7 @@ class MultisigVaultViewModelTest {
         viewModel.beginFillSlot(0)
         viewModel.fillPendingSlotFromScannedText(bareMainnetXpub())
 
-        viewModel.completeBareXpubCosigner("751e76e8", 0, null)
+        viewModel.completeBareXpubCosigner("751e76e8")
 
         val state = viewModel.uiState.value
         assertTrue(state.slots[0].status is SlotStatus.Filled)
@@ -180,44 +180,11 @@ class MultisigVaultViewModelTest {
         viewModel.beginFillSlot(0)
         viewModel.fillPendingSlotFromScannedText(bareMainnetXpub())
 
-        viewModel.completeBareXpubCosigner("zzzzzzzz", 0, null)
+        viewModel.completeBareXpubCosigner("zzzzzzzz")
 
         val state = viewModel.uiState.value
         assertTrue(state.slots[0].status is SlotStatus.Empty)
         assertNotNull(state.pendingBareXpub)
-        assertNotNull(state.bareXpubError)
-    }
-
-    @Test
-    fun `completing bare xpub with an out-of-range account index is rejected`() {
-        val viewModel = MultisigVaultViewModel()
-        viewModel.setN(2)
-        viewModel.setM(1)
-        viewModel.confirmPolicy()
-        viewModel.beginFillSlot(0)
-        viewModel.fillPendingSlotFromScannedText(bareMainnetXpub())
-
-        viewModel.completeBareXpubCosigner("751e76e8", -1, null)
-
-        val state = viewModel.uiState.value
-        assertTrue(state.slots[0].status is SlotStatus.Empty)
-        assertNotNull(state.pendingBareXpub)
-        assertNotNull(state.bareXpubError)
-    }
-
-    @Test
-    fun `completing bare xpub with an unparseable account index is rejected, not silently defaulted to 0`() {
-        val viewModel = MultisigVaultViewModel()
-        viewModel.setN(2)
-        viewModel.setM(1)
-        viewModel.confirmPolicy()
-        viewModel.beginFillSlot(0)
-        viewModel.fillPendingSlotFromScannedText(bareMainnetXpub())
-
-        viewModel.completeBareXpubCosigner("751e76e8", null, null)
-
-        val state = viewModel.uiState.value
-        assertTrue(state.slots[0].status is SlotStatus.Empty)
         assertNotNull(state.bareXpubError)
     }
 
@@ -231,7 +198,7 @@ class MultisigVaultViewModelTest {
         viewModel.beginFillSlot(0)
 
         viewModel.fillPendingSlotFromScannedText(bareTestnetTpub())
-        viewModel.completeBareXpubCosigner("751e76e8", 0, null)
+        viewModel.completeBareXpubCosigner("751e76e8")
 
         val state = viewModel.uiState.value
         assertTrue(state.slots[0].status is SlotStatus.Empty)
@@ -255,7 +222,7 @@ class MultisigVaultViewModelTest {
         assertFalse(afterScan.pendingBareXpub!!.isPlainXpub)
         assertEquals("zpub", afterScan.pendingBareXpub.displayPrefix)
 
-        viewModel.completeBareXpubCosigner("751e76e8", 0, null)
+        viewModel.completeBareXpubCosigner("751e76e8")
 
         val state = viewModel.uiState.value
         assertTrue(state.slots[0].status is SlotStatus.Empty)
@@ -275,16 +242,58 @@ class MultisigVaultViewModelTest {
 
         viewModel.beginFillSlot(0)
         viewModel.fillPendingSlotFromScannedText(bareXpub)
-        viewModel.completeBareXpubCosigner("751e76e8", 0, null)
+        viewModel.completeBareXpubCosigner("751e76e8")
 
         viewModel.beginFillSlot(1)
         viewModel.fillPendingSlotFromScannedText(bareXpub)
-        viewModel.completeBareXpubCosigner("06afd46b", 1, null)
+        viewModel.completeBareXpubCosigner("06afd46b")
 
         val state = viewModel.uiState.value
         assertTrue(state.slots[0].status is SlotStatus.Filled)
         assertTrue(state.slots[1].status is SlotStatus.Invalid)
         assertTrue((state.slots[1].status as SlotStatus.Invalid).message.contains("already used"))
+    }
+
+    @Test
+    fun `editSlotDerivationPath corrects an already-filled slot's derivation path`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.fillSlotFromPastedText(0, "[00000000/48'/0'/0'/2']${bareMainnetXpub()}")
+
+        viewModel.editSlotDerivationPath(0, "48'/0'/3'/2'")
+
+        val state = viewModel.uiState.value
+        assertEquals("m/48'/0'/3'/2'", state.slots[0].origin?.derivationPath)
+        // Fingerprint and xpub are untouched — only the path changes.
+        assertEquals("00000000", state.slots[0].origin?.masterFingerprint)
+        assertTrue(state.slots[0].status is SlotStatus.Filled)
+    }
+
+    @Test
+    fun `editSlotDerivationPath rejects a path that isn't shaped like BIP48 and leaves the slot unchanged`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.fillSlotFromPastedText(0, "[00000000/48'/0'/0'/2']${bareMainnetXpub()}")
+
+        viewModel.editSlotDerivationPath(0, "not a path")
+
+        assertEquals("m/48'/0'/0'/2'", viewModel.uiState.value.slots[0].origin?.derivationPath)
+    }
+
+    @Test
+    fun `editSlotDerivationPath on an empty slot is a no-op`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+
+        viewModel.editSlotDerivationPath(0, "48'/0'/0'/2'")
+
+        assertTrue(viewModel.uiState.value.slots[0].status is SlotStatus.Empty)
     }
 
     @Test
@@ -535,7 +544,7 @@ class MultisigVaultViewModelTest {
         viewModel.beginFillSlot(0)
         viewModel.fillPendingSlotFromScannedText(bareMainnetXpub())
 
-        viewModel.completeBareXpubCosigner("00000000", 0, null)
+        viewModel.completeBareXpubCosigner("00000000")
 
         val state = viewModel.uiState.value
         assertTrue(state.slots[0].status is SlotStatus.Filled)

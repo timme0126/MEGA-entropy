@@ -730,6 +730,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onPasteFullDescriptor = multisigVaultViewModel::fillManySlotsFromDescriptor,
                 onClearSlot = multisigVaultViewModel::clearSlot,
                 onEditFingerprint = multisigVaultViewModel::editSlotFingerprint,
+                onEditDerivationPath = multisigVaultViewModel::editSlotDerivationPath,
                 onCompleteBareXpubCosigner = multisigVaultViewModel::completeBareXpubCosigner,
                 onCancelBareXpubHelper = multisigVaultViewModel::cancelBareXpubHelper,
                 onBuildVault = multisigVaultViewModel::buildVault,

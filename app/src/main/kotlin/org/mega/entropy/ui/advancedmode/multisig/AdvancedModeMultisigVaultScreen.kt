@@ -52,7 +52,7 @@ import org.mega.entropycore.BareCosignerExtendedKey
 import org.mega.entropycore.MultisigScriptType
 import org.mega.entropycore.WalletNetwork
 import org.mega.entropycore.cosignerAccountIndex
-import org.mega.entropycore.defaultCosignerDerivationPath
+import org.mega.entropycore.parseCosignerDescriptorFragment
 
 @Composable
 fun AdvancedModeMultisigVaultScreen(
@@ -73,7 +73,8 @@ fun AdvancedModeMultisigVaultScreen(
     onPasteFullDescriptor: (text: String) -> Unit,
     onClearSlot: (index: Int) -> Unit,
     onEditFingerprint: (index: Int, fingerprint: String) -> Unit,
-    onCompleteBareXpubCosigner: (fingerprint: String, accountIndex: Int?, customPath: String?) -> Unit,
+    onEditDerivationPath: (index: Int, path: String) -> Unit,
+    onCompleteBareXpubCosigner: (fingerprint: String) -> Unit,
     onCancelBareXpubHelper: () -> Unit,
     onBuildVault: () -> Unit,
     onBackToSlots: () -> Unit,
@@ -115,6 +116,7 @@ fun AdvancedModeMultisigVaultScreen(
                 onPasteFullDescriptor = onPasteFullDescriptor,
                 onClearSlot = onClearSlot,
                 onEditFingerprint = onEditFingerprint,
+                onEditDerivationPath = onEditDerivationPath,
                 onBuildVault = onBuildVault,
                 allowSeedCopy = allowSeedCopy,
             )
@@ -124,7 +126,6 @@ fun AdvancedModeMultisigVaultScreen(
                 CompleteCosignerInfoDialog(
                     pending = pendingBareXpub,
                     vaultNetwork = uiState.network,
-                    scriptType = uiState.scriptType,
                     error = uiState.bareXpubError,
                     onComplete = onCompleteBareXpubCosigner,
                     onCancel = onCancelBareXpubHelper,
@@ -268,6 +269,7 @@ private fun SlotsStepContent(
     onPasteFullDescriptor: (String) -> Unit,
     onClearSlot: (Int) -> Unit,
     onEditFingerprint: (Int, String) -> Unit,
+    onEditDerivationPath: (Int, String) -> Unit,
     onBuildVault: () -> Unit,
     allowSeedCopy: Boolean,
 ) {
@@ -287,6 +289,7 @@ private fun SlotsStepContent(
             onPasteIntoSlot = { text -> onPasteIntoSlot(index, text) },
             onClearSlot = { onClearSlot(index) },
             onEditFingerprint = { fingerprint -> onEditFingerprint(index, fingerprint) },
+            onEditDerivationPath = { path -> onEditDerivationPath(index, path) },
         )
     }
 
@@ -393,10 +396,12 @@ private fun MultisigSlotCard(
     onPasteIntoSlot: (text: String) -> Unit,
     onClearSlot: () -> Unit,
     onEditFingerprint: (fingerprint: String) -> Unit,
+    onEditDerivationPath: (path: String) -> Unit,
 ) {
     var showPasteDialog by remember { mutableStateOf(false) }
     var pasteText by remember { mutableStateOf("") }
     var showEditFingerprintDialog by remember { mutableStateOf(false) }
+    var showEditDerivationPathDialog by remember { mutableStateOf(false) }
 
     if (showPasteDialog) {
         AlertDialog(
@@ -458,7 +463,32 @@ private fun MultisigSlotCard(
                             onCancel = { showEditFingerprintDialog = false },
                         )
                     }
-                    MegaMonoText("Path: ${origin.derivationPath}")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MegaMonoText("Path: ${origin.derivationPath}")
+                        IconButton(
+                            onClick = { showEditDerivationPathDialog = true },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Edit,
+                                contentDescription = "Edit derivation path",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                    if (showEditDerivationPathDialog) {
+                        EditDerivationPathDialog(
+                            currentValue = origin.derivationPath,
+                            masterFingerprint = origin.masterFingerprint,
+                            extendedPublicKey = origin.extendedPublicKey,
+                            onConfirm = { newPath ->
+                                onEditDerivationPath(newPath)
+                                showEditDerivationPathDialog = false
+                            },
+                            onCancel = { showEditDerivationPathDialog = false },
+                        )
+                    }
                     // Short glance preview only — never the authoritative display of
                     // this key, which the Result step's full descriptor still shows
                     // in full; this is just so N slot cards don't each carry a full
@@ -519,31 +549,46 @@ private fun MultisigSlotCard(
  * Shown when scanned/pasted text turns out to be a bare extended public key
  * (no [fingerprint/path] origin) — the common shape a wallet like Sparrow
  * exports when a user copies "just the xpub". Rather than a raw parser
- * failure, this asks the user to supply the missing fingerprint (never
- * invented — see completeBareCosignerExtendedKey) and either an account
- * index (filled into the vault's own 48'/coin'/account'/2' policy path) or
- * a fully custom path, then runs the completed fragment through the exact
- * same parseCosignerDescriptorFragment validation as any pasted fragment.
- * A SLIP-132 key or a network mismatch is caught immediately, before
- * asking for any of that — both are already known from the key alone, so
- * there's no point making the user fill in a fingerprint first.
+ * failure, this asks the user to supply the missing master fingerprint
+ * (never invented — see completeBareCosignerExtendedKey), then completes
+ * the cosigner at the vault's standard account-0 BIP48 path and runs it
+ * through the exact same parseCosignerDescriptorFragment validation as any
+ * pasted fragment. A SLIP-132 key or a network mismatch is caught
+ * immediately, before asking for a fingerprint — both are already known
+ * from the key alone.
+ *
+ * Deliberately does NOT ask for an account index or custom path here — the
+ * exporting wallet already fixed the actual derivation when it produced
+ * this xpub, so account index is metadata MEGA can't verify against the
+ * key anyway, and re-typing it here is friction for the overwhelmingly
+ * common account-0 case. A non-default path is set afterward via the
+ * pencil icon on the cosigner's own card (MultisigSlotCard's Path row,
+ * MultisigVaultViewModel.editSlotDerivationPath) instead.
  */
 @Composable
 private fun CompleteCosignerInfoDialog(
     pending: BareCosignerExtendedKey,
     vaultNetwork: WalletNetwork,
-    scriptType: MultisigScriptType,
     error: String?,
-    onComplete: (fingerprint: String, accountIndex: Int?, customPath: String?) -> Unit,
+    onComplete: (fingerprint: String) -> Unit,
     onCancel: () -> Unit,
 ) {
     fun networkLabel(network: WalletNetwork) = if (network == WalletNetwork.MAINNET) "mainnet" else "testnet"
+
+    // Hoisted out of the scrollable `text` slot so confirmButton (below,
+    // Material3's own fixed non-scrolling row) can read it too — needed to
+    // move "Add Cosigner"/"Cancel" there instead of inside the scrollable
+    // content, which is what let a long detected-key-type line push them
+    // below the fold on a small screen (see confirmButton/dismissButton
+    // below).
+    var fingerprint by remember { mutableStateOf("00000000") }
+    val canAddCosigner = pending.isPlainXpub && pending.network == vaultNetwork
 
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Complete Cosigner Info") },
         text = {
-            Column(modifier = Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+            Column(modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
                 Text(
                     "Detected key type: ${pending.displayPrefix} (${networkLabel(pending.network)})",
                     style = MaterialTheme.typography.titleMedium,
@@ -552,8 +597,8 @@ private fun CompleteCosignerInfoDialog(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     "This QR contains only an extended public key. Multisig wallets also need the " +
-                        "cosigner fingerprint and derivation path. Check these values against the " +
-                        "exporting wallet before adding this cosigner.",
+                        "cosigner's master fingerprint. Check it against the exporting wallet before " +
+                        "adding this cosigner.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -585,10 +630,6 @@ private fun CompleteCosignerInfoDialog(
                     // fingerprint later. The field stays fully editable, and
                     // MultisigSlotCard's pencil icon lets it be corrected
                     // after the cosigner is already added.
-                    var fingerprint by remember { mutableStateOf("00000000") }
-                    var accountText by remember { mutableStateOf("0") }
-                    var customPath by remember { mutableStateOf("") }
-
                     OutlinedTextField(
                         value = fingerprint,
                         onValueChange = { value ->
@@ -602,57 +643,32 @@ private fun CompleteCosignerInfoDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = accountText,
-                        onValueChange = { value ->
-                            accountText = value.filter { it.isDigit() }.trimStart('0').ifEmpty { "0" }
-                        },
-                        label = { Text("Account index") },
-                        supportingText = { Text("Usually 0 unless you're intentionally using a separate account") },
-                        singleLine = true,
-                        enabled = customPath.isBlank(),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    val previewPath = accountText.toIntOrNull()
-                        ?.let { runCatching { defaultCosignerDerivationPath(vaultNetwork, scriptType, it) }.getOrNull() }
-                    if (customPath.isBlank() && previewPath != null) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        MegaMonoText("Path: $previewPath")
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = customPath,
-                        onValueChange = { customPath = it },
-                        label = { Text("Custom derivation path (advanced, optional)") },
-                        placeholder = { Text("48'/0'/0'/2'") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
 
                     if (error != null) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(error, style = MaterialTheme.typography.bodyMedium, color = MegaError)
                     }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    MegaPrimaryButton(
-                        text = "Add Cosigner",
-                        enabled = fingerprint.length == 8,
-                        onClick = {
-                            onComplete(fingerprint, accountText.toIntOrNull(), customPath.takeIf { it.isNotBlank() })
-                        },
-                    )
                 }
-
-                Spacer(modifier = Modifier.height(4.dp))
-                MegaSecondaryButton(text = "Cancel", onClick = onCancel)
             }
         },
-        confirmButton = {},
+        confirmButton = {
+            // Plain TextButton, not the full-width MegaPrimaryButton used
+            // elsewhere in this screen — AlertDialog's confirmButton/
+            // dismissButton render side by side in a Row with no weight
+            // scope available to shrink them, so two fillMaxWidth()
+            // buttons there would fight over the same space. TextButton is
+            // the same pattern the Paste Descriptor Fragment/Paste Full
+            // Descriptor dialogs already use in this file.
+            if (canAddCosigner) {
+                TextButton(
+                    enabled = fingerprint.length == 8,
+                    onClick = { onComplete(fingerprint) },
+                ) { Text("Add Cosigner") }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text("Cancel") }
+        },
     )
 }
 
@@ -700,6 +716,65 @@ private fun EditFingerprintDialog(
             TextButton(
                 onClick = { onConfirm(fingerprint) },
                 enabled = fingerprint.length == 8,
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text("Cancel") }
+        },
+    )
+}
+
+/**
+ * Lets a filled slot's derivation path be set or corrected after the
+ * fact — the counterpart to CompleteCosignerInfoDialog no longer asking
+ * for an account index/custom path up front (see that dialog's own doc
+ * comment on why). Validates by re-parsing the FULL [fingerprint/path]xpub
+ * fragment through parseCosignerDescriptorFragment — the same BIP48-shape
+ * check a pasted/scanned fragment gets, not a separate path-only
+ * validator that could drift from it — which is why this needs the
+ * cosigner's fingerprint and xpub too, not just the path being edited.
+ */
+@Composable
+private fun EditDerivationPathDialog(
+    currentValue: String,
+    masterFingerprint: String,
+    extendedPublicKey: String,
+    onConfirm: (path: String) -> Unit,
+    onCancel: () -> Unit,
+) {
+    var path by remember { mutableStateOf(currentValue.removePrefix("m/")) }
+    val isValidPath = remember(path, masterFingerprint, extendedPublicKey) {
+        runCatching { parseCosignerDescriptorFragment("[$masterFingerprint/$path]$extendedPublicKey") }.isSuccess
+    }
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Edit Derivation Path") },
+        text = {
+            Column {
+                Text(
+                    "The derivation path this cosigner's key was derived at — the exporting wallet or " +
+                        "hardware device already fixed this when it produced the key; check it against " +
+                        "that device before changing it. Must be shaped 48'/0 or 1'/account'/2' (BIP48 " +
+                        "native SegWit).",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = path,
+                    onValueChange = { path = it },
+                    label = { Text("Derivation path") },
+                    placeholder = { Text("48'/0'/0'/2'") },
+                    isError = path.isNotEmpty() && !isValidPath,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(path) },
+                enabled = isValidPath,
             ) { Text("Save") }
         },
         dismissButton = {

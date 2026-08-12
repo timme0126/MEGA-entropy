@@ -261,15 +261,21 @@ class MultisigVaultViewModel : ViewModel() {
     }
 
     /** Completes a bare extended public key detected by [fillSlotFromPastedText]
-     * / [fillPendingSlotFromScannedText] into the slot [pendingSlotIndex] names,
-     * using a user-supplied master fingerprint (never invented — see
-     * completeBareCosignerExtendedKey) and either an account index (the common
-     * case — filled into the vault's own 48'/coin'/account'/2' policy path) or
-     * a fully custom path. Re-checks SLIP-132/network defensively even though
-     * the helper UI already hides the form in those cases, the same
+     * / [fillPendingSlotFromScannedText] into the slot [pendingSlotIndex]
+     * names, using a user-supplied master fingerprint (never invented — see
+     * completeBareCosignerExtendedKey) and the vault's own standard
+     * account-0 BIP48 path. Account index and a custom path used to be
+     * user-entered here too, but the exporting wallet already fixed the
+     * actual derivation when it produced this xpub — asking the user to
+     * re-specify it here just added friction for the overwhelmingly common
+     * account-0 case, and account index in particular has no way to be
+     * verified against the key itself anyway. A non-default path is set
+     * afterward via [editSlotDerivationPath] instead, once the cosigner is
+     * already in the slot. Re-checks SLIP-132/network defensively even
+     * though the helper UI already hides the form in those cases, the same
      * defense-in-depth this file already applies elsewhere (see
      * withSlotFilled's duplicate check, also re-verified at buildVault time). */
-    fun completeBareXpubCosigner(masterFingerprint: String, accountIndex: Int?, customPath: String?) {
+    fun completeBareXpubCosigner(masterFingerprint: String) {
         _uiState.update { state ->
             val pending = state.pendingBareXpub ?: return@update state
             val index = state.pendingSlotIndex ?: return@update state.copy(pendingBareXpub = null, bareXpubError = null)
@@ -289,22 +295,7 @@ class MultisigVaultViewModel : ViewModel() {
                 )
             }
 
-            val path = customPath?.trim()?.takeIf { it.isNotEmpty() }
-                ?: run {
-                    // Only reachable with a null accountIndex when the caller passed
-                    // one explicitly (an overflowed UI text field, or direct misuse) —
-                    // the account field always falls back to "0" rather than going
-                    // truly empty, so silently defaulting this to account 0 would
-                    // hide exactly the input the user needs to be told is invalid.
-                    val account = accountIndex
-                        ?: return@update state.copy(bareXpubError = "Enter a valid account index (0–${Int.MAX_VALUE}).")
-                    try {
-                        defaultCosignerDerivationPath(state.network, state.scriptType, account)
-                    } catch (e: IllegalArgumentException) {
-                        return@update state.copy(bareXpubError = e.message ?: "Enter a valid account index.")
-                    }
-                }
-
+            val path = defaultCosignerDerivationPath(state.network, state.scriptType, 0)
             val origin = try {
                 completeBareCosignerExtendedKey(masterFingerprint, path, pending.extendedPublicKey)
             } catch (e: IllegalArgumentException) {
@@ -499,6 +490,34 @@ class MultisigVaultViewModel : ViewModel() {
             }
             val slots = state.slots.toMutableList()
             slots[index] = slot.copy(origin = origin.copy(masterFingerprint = normalized))
+            state.copy(slots = slots, walletResult = null, walletError = null)
+        }
+    }
+
+    /** Corrects an already-filled slot's derivation path in place — the
+     * counterpart to [editSlotFingerprint] for the other piece of origin
+     * info "Complete Cosigner Info" no longer asks for up front (see
+     * [completeBareXpubCosigner]'s doc comment): every bare-xpub cosigner
+     * starts at the vault's standard account-0 BIP48 path, and this is how
+     * a non-default account/path gets set afterward. Re-parses the FULL
+     * fragment through [parseCosignerDescriptorFragment] rather than just
+     * substring-replacing the path, so a bad path is rejected with the
+     * exact same BIP48-shape validation a pasted/scanned fragment gets —
+     * no separate, potentially-drifting path-only validator. Silently
+     * no-ops on an invalid path or an empty/unfilled slot — see
+     * [editSlotFingerprint]'s doc comment on why that's fine here too. */
+    fun editSlotDerivationPath(index: Int, newPath: String) {
+        _uiState.update { state ->
+            val slot = state.slots.getOrNull(index) ?: return@update state
+            val origin = slot.origin ?: return@update state
+            val fragment = "[${origin.masterFingerprint}/${newPath.trim().removePrefix("m/")}]${origin.extendedPublicKey}"
+            val updatedOrigin = try {
+                parseCosignerDescriptorFragment(fragment)
+            } catch (e: IllegalArgumentException) {
+                return@update state
+            }
+            val slots = state.slots.toMutableList()
+            slots[index] = slot.copy(origin = updatedOrigin)
             state.copy(slots = slots, walletResult = null, walletError = null)
         }
     }
