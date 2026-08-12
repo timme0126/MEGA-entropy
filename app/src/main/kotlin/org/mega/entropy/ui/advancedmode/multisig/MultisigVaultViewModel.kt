@@ -263,19 +263,30 @@ class MultisigVaultViewModel : ViewModel() {
     /** Completes a bare extended public key detected by [fillSlotFromPastedText]
      * / [fillPendingSlotFromScannedText] into the slot [pendingSlotIndex]
      * names, using a user-supplied master fingerprint (never invented — see
-     * completeBareCosignerExtendedKey) and the vault's own standard
-     * account-0 BIP48 path. Account index and a custom path used to be
-     * user-entered here too, but the exporting wallet already fixed the
-     * actual derivation when it produced this xpub — asking the user to
-     * re-specify it here just added friction for the overwhelmingly common
-     * account-0 case, and account index in particular has no way to be
-     * verified against the key itself anyway. A non-default path is set
-     * afterward via [editSlotDerivationPath] instead, once the cosigner is
-     * already in the slot. Re-checks SLIP-132/network defensively even
-     * though the helper UI already hides the form in those cases, the same
-     * defense-in-depth this file already applies elsewhere (see
-     * withSlotFilled's duplicate check, also re-verified at buildVault time). */
-    fun completeBareXpubCosigner(masterFingerprint: String) {
+     * completeBareCosignerExtendedKey), a user-supplied [label], and the
+     * vault's own standard account-0 BIP48 path. Account index and a custom
+     * path used to be user-entered here too, but the exporting wallet
+     * already fixed the actual derivation when it produced this xpub —
+     * asking the user to re-specify it here just added friction for the
+     * overwhelmingly common account-0 case, and account index in particular
+     * has no way to be verified against the key itself anyway. A
+     * non-default path is set afterward via [editSlotDerivationPath]
+     * instead, once the cosigner is already in the slot.
+     *
+     * [label] is required (the calling dialog only enables its confirm
+     * action once it's non-blank) rather than derived from fingerprint/path
+     * the way it used to be: a derived "fingerprint · path" label went
+     * stale the moment either was corrected afterward via their own pencil
+     * icons, since a slot's status label is never regenerated after fill
+     * time. A label the user actually typed has no such staleness problem,
+     * and matches how a saved-session-derived cosigner is already labeled
+     * (that session's own name) rather than by its raw key material.
+     *
+     * Re-checks SLIP-132/network defensively even though the helper UI
+     * already hides the form in those cases, the same defense-in-depth
+     * this file already applies elsewhere (see withSlotFilled's duplicate
+     * check, also re-verified at buildVault time). */
+    fun completeBareXpubCosigner(masterFingerprint: String, label: String) {
         _uiState.update { state ->
             val pending = state.pendingBareXpub ?: return@update state
             val index = state.pendingSlotIndex ?: return@update state.copy(pendingBareXpub = null, bareXpubError = null)
@@ -294,6 +305,10 @@ class MultisigVaultViewModel : ViewModel() {
                         "in the Policy step.",
                 )
             }
+            val trimmedLabel = label.trim()
+            if (trimmedLabel.isEmpty()) {
+                return@update state.copy(bareXpubError = "Enter a label for this cosigner.")
+            }
 
             val path = defaultCosignerDerivationPath(state.network, state.scriptType, 0)
             val origin = try {
@@ -302,9 +317,8 @@ class MultisigVaultViewModel : ViewModel() {
                 return@update state.copy(bareXpubError = e.message ?: "Could not complete this cosigner.")
             }
 
-            val label = "${origin.masterFingerprint} · ${origin.derivationPath}"
             state.copy(
-                slots = state.slots.withSlotFilled(index, origin, label),
+                slots = state.slots.withSlotFilled(index, origin, trimmedLabel),
                 pendingSlotIndex = null,
                 pendingBareXpub = null,
                 bareXpubError = null,

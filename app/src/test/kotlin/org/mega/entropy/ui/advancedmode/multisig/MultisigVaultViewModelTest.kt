@@ -160,10 +160,11 @@ class MultisigVaultViewModelTest {
         viewModel.beginFillSlot(0)
         viewModel.fillPendingSlotFromScannedText(bareMainnetXpub())
 
-        viewModel.completeBareXpubCosigner("751e76e8")
+        viewModel.completeBareXpubCosigner("751e76e8", "Alice's Coldcard")
 
         val state = viewModel.uiState.value
         assertTrue(state.slots[0].status is SlotStatus.Filled)
+        assertEquals("Alice's Coldcard", (state.slots[0].status as SlotStatus.Filled).label)
         assertNull(state.pendingBareXpub)
         assertNull(state.pendingSlotIndex)
         assertNull(state.bareXpubError)
@@ -180,7 +181,24 @@ class MultisigVaultViewModelTest {
         viewModel.beginFillSlot(0)
         viewModel.fillPendingSlotFromScannedText(bareMainnetXpub())
 
-        viewModel.completeBareXpubCosigner("zzzzzzzz")
+        viewModel.completeBareXpubCosigner("zzzzzzzz", "Alice's Coldcard")
+
+        val state = viewModel.uiState.value
+        assertTrue(state.slots[0].status is SlotStatus.Empty)
+        assertNotNull(state.pendingBareXpub)
+        assertNotNull(state.bareXpubError)
+    }
+
+    @Test
+    fun `completing bare xpub with a blank label is rejected`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.beginFillSlot(0)
+        viewModel.fillPendingSlotFromScannedText(bareMainnetXpub())
+
+        viewModel.completeBareXpubCosigner("751e76e8", "   ")
 
         val state = viewModel.uiState.value
         assertTrue(state.slots[0].status is SlotStatus.Empty)
@@ -198,7 +216,7 @@ class MultisigVaultViewModelTest {
         viewModel.beginFillSlot(0)
 
         viewModel.fillPendingSlotFromScannedText(bareTestnetTpub())
-        viewModel.completeBareXpubCosigner("751e76e8")
+        viewModel.completeBareXpubCosigner("751e76e8", "Alice's Coldcard")
 
         val state = viewModel.uiState.value
         assertTrue(state.slots[0].status is SlotStatus.Empty)
@@ -222,7 +240,7 @@ class MultisigVaultViewModelTest {
         assertFalse(afterScan.pendingBareXpub!!.isPlainXpub)
         assertEquals("zpub", afterScan.pendingBareXpub.displayPrefix)
 
-        viewModel.completeBareXpubCosigner("751e76e8")
+        viewModel.completeBareXpubCosigner("751e76e8", "Alice's Coldcard")
 
         val state = viewModel.uiState.value
         assertTrue(state.slots[0].status is SlotStatus.Empty)
@@ -242,11 +260,11 @@ class MultisigVaultViewModelTest {
 
         viewModel.beginFillSlot(0)
         viewModel.fillPendingSlotFromScannedText(bareXpub)
-        viewModel.completeBareXpubCosigner("751e76e8")
+        viewModel.completeBareXpubCosigner("751e76e8", "Alice's Coldcard")
 
         viewModel.beginFillSlot(1)
         viewModel.fillPendingSlotFromScannedText(bareXpub)
-        viewModel.completeBareXpubCosigner("06afd46b")
+        viewModel.completeBareXpubCosigner("06afd46b", "Bob's Coldcard")
 
         val state = viewModel.uiState.value
         assertTrue(state.slots[0].status is SlotStatus.Filled)
@@ -544,7 +562,7 @@ class MultisigVaultViewModelTest {
         viewModel.beginFillSlot(0)
         viewModel.fillPendingSlotFromScannedText(bareMainnetXpub())
 
-        viewModel.completeBareXpubCosigner("00000000")
+        viewModel.completeBareXpubCosigner("00000000", "Alice's Coldcard")
 
         val state = viewModel.uiState.value
         assertTrue(state.slots[0].status is SlotStatus.Filled)

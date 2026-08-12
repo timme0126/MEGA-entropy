@@ -74,7 +74,7 @@ fun AdvancedModeMultisigVaultScreen(
     onClearSlot: (index: Int) -> Unit,
     onEditFingerprint: (index: Int, fingerprint: String) -> Unit,
     onEditDerivationPath: (index: Int, path: String) -> Unit,
-    onCompleteBareXpubCosigner: (fingerprint: String) -> Unit,
+    onCompleteBareXpubCosigner: (fingerprint: String, label: String) -> Unit,
     onCancelBareXpubHelper: () -> Unit,
     onBuildVault: () -> Unit,
     onBackToSlots: () -> Unit,
@@ -564,13 +564,24 @@ private fun MultisigSlotCard(
  * common account-0 case. A non-default path is set afterward via the
  * pencil icon on the cosigner's own card (MultisigSlotCard's Path row,
  * MultisigVaultViewModel.editSlotDerivationPath) instead.
+ *
+ * DOES require a label, unlike fingerprint/path: the saved-session cosigner
+ * path (AdvancedModeMultisigDeriveCosignerScreen) always has a real name to
+ * show — the saved session's own label — but a scanned bare xpub has no
+ * such source. Without a required label here, the slot's tile fell back to
+ * a "fingerprint · path" string baked in once at completion time and never
+ * updated afterward even if the fingerprint/path were later corrected via
+ * their own pencil icons — a stale, meaningless heading. A label the user
+ * actually typed doesn't have that problem: it's independent of
+ * fingerprint/path from the start, so there's nothing for the pencil-icon
+ * edits to leave stale.
  */
 @Composable
 private fun CompleteCosignerInfoDialog(
     pending: BareCosignerExtendedKey,
     vaultNetwork: WalletNetwork,
     error: String?,
-    onComplete: (fingerprint: String) -> Unit,
+    onComplete: (fingerprint: String, label: String) -> Unit,
     onCancel: () -> Unit,
 ) {
     fun networkLabel(network: WalletNetwork) = if (network == WalletNetwork.MAINNET) "mainnet" else "testnet"
@@ -582,6 +593,7 @@ private fun CompleteCosignerInfoDialog(
     // below the fold on a small screen (see confirmButton/dismissButton
     // below).
     var fingerprint by remember { mutableStateOf("00000000") }
+    var label by remember { mutableStateOf("") }
     val canAddCosigner = pending.isPlainXpub && pending.network == vaultNetwork
 
     AlertDialog(
@@ -643,6 +655,19 @@ private fun CompleteCosignerInfoDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = label,
+                        onValueChange = { label = it },
+                        label = { Text("Cosigner label") },
+                        placeholder = { Text("e.g. Alice's Coldcard") },
+                        supportingText = {
+                            Text("Required — this is what identifies this cosigner on its card, since a scanned key has no name of its own to use.")
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
 
                     if (error != null) {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -661,8 +686,8 @@ private fun CompleteCosignerInfoDialog(
             // Descriptor dialogs already use in this file.
             if (canAddCosigner) {
                 TextButton(
-                    enabled = fingerprint.length == 8,
-                    onClick = { onComplete(fingerprint) },
+                    enabled = fingerprint.length == 8 && label.isNotBlank(),
+                    onClick = { onComplete(fingerprint, label.trim()) },
                 ) { Text("Add Cosigner") }
             }
         },
