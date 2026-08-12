@@ -195,6 +195,7 @@ fun AdvancedModeWalletScreen(
             }
 
             if (allowPrivateKeyExport) {
+                val currentPrivateKeyResult = privateKeyResult
                 MegaCard {
                     Text(
                         "Danger Zone",
@@ -209,6 +210,12 @@ fun AdvancedModeWalletScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (currentPrivateKeyResult == null) {
+                        MegaPrimaryButton(
+                            text = "Generate Private Key (WIF)",
+                            onClick = { confirmingPrivateKeyExport = true },
+                        )
+                    }
                 }
 
                 val currentPrivateKeyError = privateKeyError
@@ -216,13 +223,7 @@ fun AdvancedModeWalletScreen(
                     Text(currentPrivateKeyError, style = MaterialTheme.typography.bodyMedium, color = MegaError)
                 }
 
-                val currentPrivateKeyResult = privateKeyResult
-                if (currentPrivateKeyResult == null) {
-                    MegaPrimaryButton(
-                        text = "Generate Private Key (WIF)",
-                        onClick = { confirmingPrivateKeyExport = true },
-                    )
-                } else {
+                if (currentPrivateKeyResult != null) {
                     MegaCard(
                         title = "Private key (WIF)",
                         trailingAction = if (allowSeedCopy) {

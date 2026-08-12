@@ -86,6 +86,14 @@ class SavedSessionSecuritySettings(context: Context) {
         prefs.edit().putBoolean(KEY_ALLOW_PRIVATE_KEY_EXPORT, allow).apply()
     }
 
+    /** Clears every stored preference here back to its default, so a
+     * duress wipe (see PinVerifyScreen) leaves no trace of prior settings
+     * choices alongside the deleted sessions — reading back any getter
+     * after this returns the same DEFAULT_* value a fresh install would. */
+    fun resetToDefaults() {
+        prefs.edit().clear().apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "mega_saved_session_security"
         private const val KEY_LOCK_TIMEOUT_MILLIS = "lock_timeout_millis"

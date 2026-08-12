@@ -21,12 +21,30 @@ This project uses pinned, exact versions to ensure consistency and security. Do 
 - Gradle does not need to be installed separately; use the committed wrapper (`gradlew`/`gradlew.bat`).
 
 ## Step-by-Step Build Instructions
+
+**For local development** (debug build — debuggable, debug-signed, never
+distribute this one; see `docs/RELEASE-SIGNING.md` for why):
 1. Open a terminal in the repository root.
 2. Run the full local verification command:
    ```bash
    ./gradlew clean test lint assembleDebug
    ```
 3. The debug APK will be generated in `app/build/outputs/apk/debug/`. The expected filename is `app-debug.apk`, but if the build system ever produces a differently-named file, that's what actually exists — check the `app/build/outputs/apk/debug/` directory rather than assuming the filename.
+
+**For the distributed beta APK** (release build — non-debuggable, signed
+with the local beta-release key): see `docs/RELEASE-SIGNING.md` for
+one-time keystore setup, then:
+```bash
+./gradlew clean test lint assembleRelease verifyReleaseArtifact securityAudit
+```
+The signed release APK is generated in `app/build/outputs/apk/release/app-release.apk`.
+`verifyReleaseArtifact` fails the build if that APK is debuggable, isn't
+signed by the expected key, or declares a forbidden permission — this is
+the artifact that gets renamed to `mega-beta-vX.Y.Z.apk` and published as
+the primary beta APK. A separately named `*-debug-compat.apk` may be
+attached to a GitHub release only as a temporary migration aid for testers
+who already installed an older debug-signed build and need to update
+without uninstalling.
 
 ## Step-by-Step ADB Install Instructions
 1. Connect your Android device (Android 10+) via USB and enable USB debugging.
@@ -35,11 +53,11 @@ This project uses pinned, exact versions to ensure consistency and security. Do 
    adb devices
    ```
 3. If a device is listed with a status of `device`, proceed. If no device is listed or it shows `unauthorized`, see the troubleshooting section below.
-4. Install the APK:
+4. Install the APK (debug build shown; substitute the release path for a beta build):
    ```bash
    adb install -r app/build/outputs/apk/debug/app-debug.apk
    ```
-5. No signing or keystore setup is required for a debug build; Android's default debug signing configuration is used automatically.
+5. No signing or keystore setup is required to install a debug build locally; Android's default debug signing configuration is used automatically for `assembleDebug`. The release build requires the local keystore described in `docs/RELEASE-SIGNING.md` to build (not to install) — installing a signed release APK via `adb install` needs no keystore on the installing side either.
 
 ## Publishing Note
 This project has NO Google Play Store publishing configuration and none is planned for v1. Sideloading via ADB (or a file manager) onto a personal device is the only supported install method.

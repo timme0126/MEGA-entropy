@@ -1,7 +1,10 @@
-# Reproducible Build Notes
+# Build Verification Notes
 
 ## Version Pinning
-This repository pins exact tool and dependency versions rather than using floating ranges. This is done specifically so a given commit can be rebuilt reproducibly across different machines and environments.
+This repository pins exact tool and dependency versions rather than using
+floating ranges. That keeps local review builds consistent and makes changes
+easier to audit, but it is not yet a guarantee that two machines, or even two
+clean builds on the same machine, will produce byte-for-byte identical APKs.
 
 | Component | Pinned Version |
 |-----------|----------------|
@@ -12,14 +15,47 @@ This repository pins exact tool and dependency versions rather than using floati
 | Jetpack Compose BOM | 2026.06.01 |
 | compileSdk / targetSdk / minSdk | 36 / 36 / 29 |
 
-## Debug Build Reproducibility
-While source and tool versions are pinned, debug-build APK bytes can still differ between machines or environments even with identical source and pinned tool versions. Factors that introduce variance include:
-- Different debug signing keys (Android's default debug keystore is generated per-user/machine)
-- Build timestamps embedded by the toolchain
-- Absolute path differences in build artifacts
-- Minor variations in underlying OS or JDK implementations
+## What to Verify for the Beta APK
 
-Because of these factors, an APK hash alone isn't a rebuild-verification tool for debug builds the way it would be for a reproducible *release* build with a fixed signing key.
+For v0.1.8 beta testing, verify the distributed APK itself:
+
+1. Its SHA-256 hash matches the value published in `README.md`.
+2. It is not debuggable.
+3. Its signer certificate SHA-256 matches the pinned beta-release fingerprint
+   in `docs/RELEASE-SIGNING.md`.
+4. It declares no forbidden network or storage permissions.
+
+The release gate for those artifact-level checks is:
+
+```bash
+./gradlew assembleRelease verifyReleaseArtifact
+```
+
+`verifyReleaseArtifact` checks the built release APK for debuggability, signer
+fingerprint, and forbidden permissions. It does not prove that the APK is
+byte-for-byte reproducible from source.
+
+## Rebuild Reproducibility Status
+
+Bit-for-bit reproducible Android APK builds are not yet guaranteed for this
+project. Recent release builds have been observed to produce different APK
+hashes from identical source across clean rebuilds, while still passing the
+important artifact security checks: non-debuggable, expected signer, and no
+forbidden permissions.
+
+Sources of variance can include:
+
+- signing metadata and APK packaging details,
+- timestamps or version-control metadata embedded by the Android toolchain,
+- absolute path or environment differences,
+- minor variations in OS, JDK, Android SDK, Gradle, or AGP behavior.
+
+Because of this, a locally rebuilt APK hash should not currently be expected
+to match the published beta APK hash. Use source review plus the artifact
+verification checks above for now.
 
 ## Future Work
-This project does not yet have a reproducible release-build setup (v1 only produces debug builds). Establishing a reproducible release-build pipeline is a specific area for future work and independent verification, as outlined in SECURITY.md's "next security steps".
+Establishing a reproducible release-build pipeline is a specific area for
+future work and independent verification. A future release should document the
+exact environment and build flags required, then include a CI or reviewer
+procedure that proves repeated clean builds produce the same APK bytes.

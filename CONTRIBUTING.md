@@ -7,7 +7,7 @@ Ensure you have the exact toolchain specified in [docs/BUILD-AND-INSTALL.md](doc
 ```bash
 ./gradlew clean test lint assembleDebug securityAudit
 ```
-The test suite includes 59 automated JUnit tests in `entropy-core` (dice mapping, batch accumulator math, rejection sampling boundaries, BIP39 test vectors, and word list integrity). Run them specifically with:
+The test suite includes 191 automated JUnit tests in `entropy-core` (dice mapping, batch accumulator math, rejection sampling boundaries, BIP39 test vectors, word list integrity, BIP32/44/49/84/48/85 derivation, WIF/address encoding, and multisig descriptor assembly). Run them specifically with:
 ```bash
 ./gradlew :entropy-core:test
 ```

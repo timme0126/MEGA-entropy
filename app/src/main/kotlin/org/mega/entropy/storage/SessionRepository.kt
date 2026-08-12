@@ -13,7 +13,7 @@ import org.mega.entropycore.MnemonicResult
 import org.mega.entropycore.deriveMnemonic
 
 class SessionRepository(private val context: Context) {
-    private val fileStore = SessionFileStore(context)
+    private val fileStore = SessionFileStore(context.filesDir)
 
     /**
      * Saves a new session to disk with dedicated cryptographic key and encrypted payload.
@@ -227,17 +227,20 @@ class SessionRepository(private val context: Context) {
      */
     suspend fun deleteSession(sessionId: String) {
         withContext(Dispatchers.IO) {
-            val metadata = fileStore.readMetaFile(sessionId)
-            val alias = metadata?.keystoreAlias ?: aliasForSession(sessionId)
-
-            deleteKey(alias)
-            fileStore.deleteSessionFiles(sessionId)
+            fileStore.deleteSessionBestEffort(sessionId) { alias -> deleteKey(alias) }
         }
     }
 
     suspend fun deleteAllSessions() {
         withContext(Dispatchers.IO) {
-            listSessions().forEach { deleteSession(it.id) }
+            // By filename (see listAllSessionIds' doc comment), not listSessions()/
+            // listAllMetadata() — a wipe must not silently skip a session just
+            // because its metadata happens to be corrupt or missing. Best-effort
+            // per ID (see bestEffortDeleteAll below) so one session's unexpected
+            // failure — corrupt metadata is handled above, but e.g. a Keystore
+            // error for one specific alias could still happen — can't abort the
+            // rest of a "delete everything" pass partway through.
+            bestEffortDeleteAll(fileStore.listAllSessionIds()) { deleteSession(it) }
         }
     }
 
@@ -262,4 +265,67 @@ class SessionRepository(private val context: Context) {
         return (result as? MnemonicResult.Success)?.words
             ?: throw IllegalStateException("Saved dice rolls for session no longer produce an accepted mnemonic")
     }
+}
+
+/**
+ * Best-effort deletes each session ID in [sessionIds] via [deleteOne],
+ * catching and ignoring any exception thrown for an individual ID — one
+ * corrupt/broken session must never prevent the rest of a "delete
+ * everything" pass from completing. A top-level function taking
+ * [deleteOne] as a parameter, rather than embedded directly inside
+ * deleteAllSessions(), specifically so it can be unit-tested with a fake
+ * deleteOne — the real one (SessionRepository.deleteSession) touches the
+ * Android Keystore, unavailable in a plain JVM test.
+ */
+internal suspend fun bestEffortDeleteAll(sessionIds: Set<String>, deleteOne: suspend (String) -> Unit) {
+    sessionIds.forEach { sessionId ->
+        try {
+            deleteOne(sessionId)
+        } catch (e: Exception) {
+            // Best-effort — see doc comment above.
+        }
+    }
+}
+
+/**
+ * Deletes one session's Keystore key and files, best-effort at every
+ * step — neither step's failure can prevent the files from being
+ * removed, which is the actual goal of "delete this session":
+ *
+ * - Reading metadata to find the exact stored alias can throw ANY
+ *   exception (not just the documented IllegalStateException a corrupt
+ *   .meta file throws — caught broadly here rather than pinned to one
+ *   exception type, since a metadata-parsing failure of any shape must
+ *   never block cleanup). On failure, fall back to the deterministic
+ *   [aliasForSession] alias, the same one every session was created
+ *   under, so key deletion can still target the right entry.
+ * - [deleteKeyForAlias] (the real one touches the Android Keystore) can
+ *   itself fail unexpectedly. That must not skip file deletion below —
+ *   an orphaned Keystore key with no ciphertext left to decrypt is a far
+ *   smaller residual risk than ciphertext left behind because a key
+ *   deletion happened to fail.
+ *
+ * [deleteKeyForAlias] is injected (rather than calling deleteKey directly)
+ * so this — including the corrupt-metadata and failed-key-deletion
+ * tolerance — can be unit-tested with a real SessionFileStore (temp
+ * directory, real corrupt/orphaned files) and only the Keystore call
+ * faked, instead of needing a live Android Keystore.
+ */
+internal suspend fun SessionFileStore.deleteSessionBestEffort(
+    sessionId: String,
+    deleteKeyForAlias: suspend (String) -> Unit,
+) {
+    val metadata = try {
+        readMetaFile(sessionId)
+    } catch (e: Exception) {
+        null
+    }
+    val alias = metadata?.keystoreAlias ?: aliasForSession(sessionId)
+
+    try {
+        deleteKeyForAlias(alias)
+    } catch (e: Exception) {
+        // Best-effort — see doc comment above. Files below still get deleted.
+    }
+    deleteSessionFiles(sessionId)
 }

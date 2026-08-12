@@ -27,7 +27,7 @@ fun PinSetupScreen(
     onSavePin: (suspend (String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val pinManager = remember { PinManager(context) }
+    val pinManager = remember { PinManager(context.filesDir) }
     val coroutineScope = rememberCoroutineScope()
 
     var step by remember { mutableStateOf(SetupStep.ENTER) }

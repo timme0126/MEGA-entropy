@@ -12,3 +12,17 @@ build/
 *.apk
 *.aab
 /tools/*.raw.json
+/keystore.properties
+/keystore/
+
+# Kotlin compiler daemon session/build cache at the repo root (distinct
+# from the already-ignored top-level /build and app/build/ etc. output
+# dirs) — local machine state, not source.
+/.kotlin/
+
+# Parked/deferred feature code, pulled out of the active build (see
+# shelved/seedqr/README.md for what and why) — not part of what ships,
+# so it stays out of release commits the same way build output does.
+# This is a .gitignore-only decision, not a deletion: nothing here is
+# removed, and `git add -f shelved/` still works if that should change.
+/shelved/

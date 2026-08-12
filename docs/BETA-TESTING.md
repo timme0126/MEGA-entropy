@@ -56,6 +56,13 @@ Run through:
 8. PIN creation, unlock, failed attempts, and lockout.
 9. Screenshot and Recent Apps blocking on sensitive screens.
 10. Uninstall or user-profile deletion to confirm app data disappears.
+11. Advanced Mode: manual mnemonic entry, wallet public key/address
+    derivation, BIP85 child mnemonics, and "Setup Multi-Signature Vault"
+    (choose an M-of-N policy, fill each cosigner slot from a saved session,
+    a pasted descriptor fragment, and a pasted full `wsh(sortedmulti(...))`
+    descriptor, and a QR-scanned descriptor fragment/full descriptor — then
+    cross-check the resulting descriptor/address against
+    another descriptor-aware wallet, e.g. Sparrow).
 
 Use [`GRAPHENEOS-CHECKLIST.md`](GRAPHENEOS-CHECKLIST.md) for the full manual QA checklist.
 
@@ -63,7 +70,6 @@ Use [`GRAPHENEOS-CHECKLIST.md`](GRAPHENEOS-CHECKLIST.md) for the full manual QA 
 
 The repository includes paper references in [`docs/references/`](references/):
 
-- `dplusplus-hex.pdf`
 - `dplusplus-hex.pdf`
 - `bip39-24-word-dice-worksheet.pdf`
 - the vendored BIP39 English word list at `entropy-core/src/main/resources/bip39/english.txt`

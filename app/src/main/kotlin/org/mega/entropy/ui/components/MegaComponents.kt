@@ -1,5 +1,11 @@
 package org.mega.entropy.ui.components
 
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
+import android.content.Context
+import android.os.Build
+import android.os.PersistableBundle
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -44,10 +50,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -227,15 +232,27 @@ fun MegaCard(
  * child words) — used instead of a full-width "Copy ..." button so the
  * action reads as low-key and deliberate rather than prominent. Feedback on
  * a successful copy is the icon itself swapping to a checkmark for a couple
- * of seconds, not a toast or snackbar that could linger in a screenshot. */
+ * of seconds, not a toast or snackbar that could linger in a screenshot.
+ *
+ * Uses the real android.content.ClipboardManager (via getSystemService),
+ * not Compose's androidx.compose.ui.platform.ClipboardManager wrapper
+ * returned by LocalClipboardManager — the Compose type only exposes a bare
+ * setText(AnnotatedString) with no way to attach ClipDescription extras,
+ * and EXTRA_IS_SENSITIVE below needs exactly that. */
 @Composable
 fun MegaCopyIconButton(
     contentDescription: String,
     modifier: Modifier = Modifier,
     getTextToCopy: () -> String,
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    val systemClipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
     var copied by remember { mutableStateOf(false) }
+    // What we last put on the clipboard, so the auto-clear effect below can
+    // confirm the clipboard still holds exactly that before wiping it —
+    // never clobber something else the user copied in the meantime.
+    var lastCopiedText by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(copied) {
         if (copied) {
@@ -244,9 +261,42 @@ fun MegaCopyIconButton(
         }
     }
 
+    // Best-effort auto-clear ~60s after a copy, keyed on the copied value so
+    // a second copy restarts the timer against the NEW value rather than
+    // firing early against a stale one. Never crashes the app: a clipboard
+    // read/write can fail for reasons outside MEGA's control (e.g. some
+    // OEMs restrict background clipboard access), and this is a courtesy
+    // cleanup, not a security boundary the rest of the app depends on.
+    LaunchedEffect(lastCopiedText) {
+        val textToClear = lastCopiedText ?: return@LaunchedEffect
+        delay(60_000)
+        try {
+            val currentClipText = systemClipboard.primaryClip?.getItemAt(0)?.text?.toString()
+            if (currentClipText == textToClear) {
+                systemClipboard.setPrimaryClip(ClipData.newPlainText("", ""))
+            }
+        } catch (e: Exception) {
+            // Best-effort only — never crash the app over a clipboard clear.
+        }
+    }
+
     IconButton(
         onClick = {
-            clipboardManager.setText(AnnotatedString(getTextToCopy()))
+            val textToCopy = getTextToCopy()
+            val clipData = ClipData.newPlainText("MEGA", textToCopy)
+            // API 33+: mark the clip sensitive so the platform can suppress
+            // clipboard-content previews/suggestions elsewhere on the device
+            // — every value this button ever copies (xpubs, descriptors,
+            // WIF keys, and, when allowSeedCopy is explicitly enabled, seed
+            // words) is exactly the kind of material that shouldn't linger
+            // visibly in clipboard history/suggestion UIs.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                clipData.description.extras = PersistableBundle().apply {
+                    putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+                }
+            }
+            systemClipboard.setPrimaryClip(clipData)
+            lastCopiedText = textToCopy
             copied = true
         },
         modifier = modifier,
@@ -345,12 +395,14 @@ fun MegaLabelSessionDialog(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
     initialLabel: String = "",
+    title: String = "Label This Session",
+    helperText: String = "A label is required so this session can be told apart from others later.",
 ) {
     var label by remember { mutableStateOf(initialLabel) }
     val trimmed = label.trim()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Label This Session") },
+        title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 OutlinedTextField(
@@ -361,7 +413,7 @@ fun MegaLabelSessionDialog(
                     isError = label.isNotEmpty() && trimmed.isEmpty(),
                 )
                 Text(
-                    "A label is required so this session can be told apart from others later.",
+                    helperText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

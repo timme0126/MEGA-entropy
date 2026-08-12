@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the "pdfs" subdirectory of the app's private cache dir is exposed
+     via FileProvider — nothing else in app storage is reachable through
+     content:// URIs this provider issues. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="pdfs" path="pdfs/" />
+</paths>

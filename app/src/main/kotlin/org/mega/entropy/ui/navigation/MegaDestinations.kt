@@ -49,6 +49,10 @@ object MegaDestinations {
      * for an existing (not dice-generated) seed phrase. Reachable from
      * Welcome only when the Advanced Mode setting is on. */
     const val ADVANCED_MODE_ENTRY = "advanced_mode_entry"
+    /** The manual-typing sub-screen, one of two ways in from
+     * ADVANCED_MODE_ENTRY's landing page (the other: import from a
+     * saved session). */
+    const val ADVANCED_MODE_MANUAL_ENTRY = "advanced_mode_manual_entry"
     const val ADVANCED_MODE_HUB = "advanced_mode_hub"
     const val ADVANCED_MODE_BIP85 = "advanced_mode_bip85"
     const val ADVANCED_MODE_WALLET = "advanced_mode_wallet"
@@ -56,4 +60,33 @@ object MegaDestinations {
      * existing saved session's words into Advanced Mode instead of typing
      * them by hand. */
     const val ADVANCED_MODE_IMPORT_PICKER = "advanced_mode_import_picker"
+
+    /** "Setup Multi-Signature Vault" — reachable directly from
+     * ADVANCED_MODE_ENTRY, not from the Hub: unlike every other Advanced
+     * Mode destination, this one never needs a single seed loaded up
+     * front, since each cosigner slot gets filled independently (saved
+     * session, pasted fragment, or eventually a scan) from within the
+     * flow itself. See MultisigVaultViewModel for the flow's state. */
+    const val ADVANCED_MODE_MULTISIG_VAULT = "advanced_mode_multisig_vault"
+    /** PIN-gated picker (same gate as SAVED_SESSIONS/ADVANCED_MODE_IMPORT_PICKER)
+     * for choosing which saved session to derive one vault slot's
+     * cosigner key from — reuses AdvancedModeImportPickerScreen itself
+     * unchanged, just with a different onImported destination. */
+    const val ADVANCED_MODE_MULTISIG_COSIGNER_PICKER = "advanced_mode_multisig_cosigner_picker"
+    /** Passphrase + account index entry for deriving one slot's cosigner
+     * key from the words ADVANCED_MODE_MULTISIG_COSIGNER_PICKER just
+     * supplied. */
+    const val ADVANCED_MODE_MULTISIG_DERIVE_COSIGNER = "advanced_mode_multisig_derive_cosigner"
+    /** Camera QR scanner for adding a pasted-equivalent cosigner descriptor
+     * fragment or full `wsh(sortedmulti(...))` descriptor to the multisig flow. */
+    const val ADVANCED_MODE_MULTISIG_SCANNER = "advanced_mode_multisig_scanner"
+
+    /** "Multi-Signature Vaults" button's actual landing page: the saved
+     * vaults list (not ADVANCED_MODE_MULTISIG_VAULT directly) whenever at
+     * least one vault is already saved. Not PIN-gated — see
+     * SavedMultisigVaultsViewModel's doc comment for why. */
+    const val ADVANCED_MODE_SAVED_MULTISIG_VAULTS = "advanced_mode_saved_multisig_vaults"
+    const val SAVED_MULTISIG_VAULT_DETAIL_ARG = "vaultId"
+    const val SAVED_MULTISIG_VAULT_DETAIL = "saved_multisig_vault_detail/{$SAVED_MULTISIG_VAULT_DETAIL_ARG}"
+    fun savedMultisigVaultDetailRoute(vaultId: String) = "saved_multisig_vault_detail/$vaultId"
 }

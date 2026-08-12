@@ -28,7 +28,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import org.mega.entropy.ui.components.MegaCard
@@ -43,13 +42,10 @@ import org.mega.entropycore.validateManualMnemonic
 private const val MAX_SUGGESTIONS = 6
 
 /**
- * Entry point for Advanced Mode (spec "Advanced Mode workflow"): manually
- * typing in an existing BIP39 mnemonic to derive BIP85 children or wallet
- * account keys from it, rather than one MEGA generated from dice. Only
- * reachable when Advanced Mode is on, itself gated behind the confirmation
- * dialog in Saved Session Settings — the warning here is a quieter, always-
- * visible reminder of the same risk, not the first (or only) time the user
- * sees it.
+ * One of three ways into Advanced Mode (see AdvancedModeEntryScreen):
+ * manually typing in an existing BIP39 mnemonic to derive BIP85 children
+ * or wallet account keys from it, rather than one MEGA generated from
+ * dice.
  *
  * Word entry has a Samourai-Wallet-style autocomplete preview (see
  * MnemonicSeedEditText in samourai-wallet-android, which pops a dropdown
@@ -64,16 +60,15 @@ private const val MAX_SUGGESTIONS = 6
  * suggestion.
  *
  * The passphrase is asked for on the next screen (AdvancedModeHubScreen),
- * not here — that's the one place both this manual-entry path and
- * "Import from Saved Session" converge, so there's exactly one spot to
- * answer "do you want a passphrase" no matter how the words got loaded.
+ * not here — that's the one place this manual-entry path and "Import
+ * from Saved Session" converge, so there's exactly one spot to answer
+ * "do you want a passphrase" no matter how the words got loaded.
  */
 @Composable
 fun AdvancedModeMnemonicEntryScreen(
     allowScreenshots: Boolean,
     onBack: () -> Unit,
     onValidated: (words: List<String>) -> Unit,
-    onImportFromSavedSession: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
     val focusManager = LocalFocusManager.current
@@ -125,19 +120,6 @@ fun AdvancedModeMnemonicEntryScreen(
     }
 
     MegaInfoScaffold(title = "Advanced Mode", onBack = onBack) {
-        MegaPrimaryButton(text = "Import from Saved Session", onClick = onImportFromSavedSession)
-
-        MegaCard {
-            Text(
-                "Entering an existing seed phrase on any connected Android device can " +
-                    "expose the funds it controls if the device is compromised. Prefer an " +
-                    "offline GrapheneOS phone for sensitive seed workflows.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MegaError,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-
         MegaCard(title = "Word count") {
             WordCountOption(
                 label = "12 words",

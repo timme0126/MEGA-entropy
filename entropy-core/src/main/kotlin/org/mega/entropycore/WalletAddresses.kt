@@ -41,3 +41,12 @@ internal fun encodeP2wpkhAddress(compressedPublicKey: ByteArray, network: Bip32N
     val witnessProgram = hash160(compressedPublicKey)
     return encodeSegwitV0Address(segwitHrp(network), witnessProgram)
 }
+
+/** Native SegWit P2WSH (multisig) address: bech32(SHA256(witness script)).
+ * SHA256, not HASH160 — unlike every P2WPKH-based function above, P2WSH's
+ * program is a direct single SHA256 of the whole witness script, since the
+ * script itself (not a pubkey) is what the spender must reveal and match. */
+internal fun encodeP2wshAddress(witnessScript: ByteArray, network: Bip32Network): String {
+    val witnessProgram = sha256(witnessScript)
+    return encodeSegwitV0Address(segwitHrp(network), witnessProgram)
+}

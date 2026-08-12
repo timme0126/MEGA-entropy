@@ -93,4 +93,30 @@ internal object Secp256k1 {
         require(scalar.signum() > 0 && scalar < N) { "Private key out of secp256k1 range" }
         return compressPoint(scalarMultiply(scalar, G))
     }
+
+    /** Recovers a curve point from its 33-byte SEC1 compressed form: byte 0
+     * is the parity prefix (0x02 = even y, 0x03 = odd y), bytes 1-32 are
+     * the big-endian X coordinate. secp256k1's p ≡ 3 (mod 4), so a square
+     * root of (x^3 + 7) mod p can be computed directly via modular
+     * exponentiation — no need for the general Tonelli-Shanks algorithm.
+     * Also verifies the recovered point actually lies on the curve, so a
+     * malformed or maliciously-crafted input (no valid y for that x) fails
+     * loudly here rather than silently producing a point that isn't real —
+     * needed once public keys start arriving from outside this app (a
+     * pasted or scanned cosigner extended public key), unlike every other
+     * point this module has handled so far, which it derived itself. */
+    fun decompressPoint(compressed: ByteArray): Point {
+        require(compressed.size == 33) { "Compressed public key must be 33 bytes, got ${compressed.size}" }
+        val prefix = compressed[0]
+        require(prefix == 0x02.toByte() || prefix == 0x03.toByte()) {
+            "Compressed public key prefix must be 0x02 or 0x03, got 0x${"%02x".format(prefix)}"
+        }
+        val x = compressed.copyOfRange(1, 33).toPositiveBigInteger()
+        require(x < P) { "Compressed public key X coordinate is out of range" }
+        val rhs = mod(x * x * x + BigInteger.valueOf(7))
+        val candidate = rhs.modPow((P + BigInteger.ONE).shiftRight(2), P)
+        val y = if (candidate.testBit(0) == (prefix == 0x03.toByte())) candidate else P - candidate
+        require(mod(y * y) == rhs) { "Compressed public key is not a valid point on the curve" }
+        return Point(x, y)
+    }
 }

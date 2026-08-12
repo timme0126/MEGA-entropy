@@ -10,18 +10,44 @@ six-sided die rolls, supplied entirely by the user,** into a valid 12- or
 
 ## Download the beta APK
 
-**Current beta:** [`mega-beta-v0.1.6.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.6/mega-beta-v0.1.6.apk)
+**Current beta:** [`mega-beta-v0.1.8.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.8/mega-beta-v0.1.8.apk)
 
-Release page: [`MEGA Beta v0.1.6`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.6)
+Release page: [`MEGA Beta v0.1.8`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.8)
 
-Verify the download before installing:
+Verify the primary release APK before installing:
 
 ```bash
-sha256sum mega-beta-v0.1.6.apk
-# f5db5a1ebf968a88cc891be0e570e3ac5290be63d7e62339246fb6540dd529b9
+sha256sum mega-beta-v0.1.8.apk
+# 39f2339e466298a056dd978f3304bbbb9180f059eee0fd620c417b24b5538d16
+```
+
+This primary build is a **release-type, non-debuggable APK signed with the
+local mega-beta-release key** (see [`docs/RELEASE-SIGNING.md`](docs/RELEASE-SIGNING.md))
+— not a debug build. Its signer certificate SHA-256 fingerprint is:
+
+```
+42:C9:DA:07:22:58:5A:04:C3:38:8E:99:89:B8:EB:CB:4B:62:73:16:29:92:4A:AE:3C:96:EE:C7:D5:36:48:9C
 ```
 
 This is an experimental beta build for disposable test roll sequences only.
+
+### Debug-compatible APK for existing testers
+
+If Android refuses to update an older MEGA test install with `App not
+installed`, you likely have a debug-signed build already installed. Use the
+compatibility APK below only to update that older test install without wiping
+local test data:
+
+[`mega-beta-v0.1.8-debug-compat.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.8/mega-beta-v0.1.8-debug-compat.apk)
+
+```bash
+sha256sum mega-beta-v0.1.8-debug-compat.apk
+# e302302a73175af9ec724b10d460d8d2363514b3825e8c3b23c0aa2e523e823c
+```
+
+For a fresh install, prefer the primary non-debuggable APK above. The
+debug-compatible APK exists only because Android will not install an APK
+signed by a different key over an existing debug-signed package.
 
 ## The core guarantee
 
@@ -42,6 +68,7 @@ reviewing this project.
 ## Badges
 
 - **OFFLINE** — no `INTERNET` permission, no networking code
+- **LOCAL QR SCAN ONLY** — optional `CAMERA` permission is used only inside Advanced Mode multisig scanning
 - **100 DICE ROLLS** — one d6, rolled by you, entered as 20 batches of 5
 - **ZERO DEVICE ENTROPY IN SEED** — see above
 
@@ -95,6 +122,13 @@ is available at [`docs/index.html`](docs/index.html).
 8. Private-key WIF export is separately disabled by default. Enabling it only
    exposes a per-use confirmation inside Advanced Mode; treat it as test-only
    beta functionality.
+9. Advanced Mode's "Setup Multi-Signature Vault" builds a BIP48 native
+   SegWit (P2WSH) multisig wallet: choose an M-of-N policy, then fill each
+   cosigner slot from a saved session (derived on-device, never displaying
+   its seed words), a pasted descriptor key fragment or full
+   `wsh(sortedmulti(...))` descriptor, or a locally scanned QR code. The result is a shareable
+   `sortedmulti()` output descriptor and first receive address — public
+   keys only, no signing or private-key material anywhere in that flow.
 
 ## Building and installing
 
@@ -139,7 +173,7 @@ table.
 | [`docs/STORAGE-DESIGN.md`](docs/STORAGE-DESIGN.md) | How saved sessions are encrypted and stored, and what deletion actually does |
 | [`docs/BUILD-AND-INSTALL.md`](docs/BUILD-AND-INSTALL.md) | Exact tool versions, build commands, ADB install, GrapheneOS notes |
 | [`docs/TEST-VECTORS.md`](docs/TEST-VECTORS.md) | Worked example vectors you can independently re-derive |
-| [`docs/REPRODUCIBLE-BUILD.md`](docs/REPRODUCIBLE-BUILD.md) | Pinned tool/dependency versions and how to reproduce this APK |
+| [`docs/REPRODUCIBLE-BUILD.md`](docs/REPRODUCIBLE-BUILD.md) | Build verification notes and current reproducibility limits |
 | [`SECURITY.md`](SECURITY.md) | Vulnerability reporting and current audit status |
 | [`PRIVACY.md`](PRIVACY.md) | What MEGA collects (nothing) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute |

@@ -1,8 +1,8 @@
 package org.mega.entropy.security.pin
 
-import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.lang.System.currentTimeMillis
 
 /**
@@ -15,9 +15,12 @@ import java.lang.System.currentTimeMillis
  * strictly as a friction barrier against casual unauthorized access.
  *
  * All I/O is dispatched to Dispatchers.IO to comply with coroutine requirements.
+ *
+ * Takes the base directory directly (callers pass context.filesDir) rather
+ * than a Context — see PinStore's doc comment for why.
  */
-class PinManager(private val context: Context) {
-    private val store = PinStore(context)
+class PinManager(private val baseDir: File) {
+    private val store = PinStore(baseDir)
 
     suspend fun isPinEnabled(): Boolean = withContext(Dispatchers.IO) {
         store.readPinRecord() != null
@@ -85,12 +88,25 @@ class PinManager(private val context: Context) {
             }
         }
 
-        // If currently locked out, return Locked immediately WITHOUT hashing the input
-        // or incrementing the failure counter. This prevents active lockouts from
-        // being extended by repeated calls. Duress PIN is checked first so it
-        // can still wipe data during an active lockout.
+        // If currently locked out, a guess still must not be free: without this,
+        // an attacker (or someone fishing for the duress PIN specifically —
+        // there is no way to tell the two apart from here, every input that
+        // reaches this branch already failed the duress check above) could
+        // submit unlimited guesses during a lockout window at zero cost, since
+        // none of them were ever tracked. Extend the SAME escalating lockout a
+        // normal failure would apply, via maxOf so a fast successive guess can
+        // only extend or hold the lockout, never shorten it — and still never
+        // hash the input against the real PIN while locked, preserving the
+        // original "no timing signal while locked" property. Duress PIN keeps
+        // its priority above this check (see above) so it still wipes even
+        // during an active lockout.
         if (now < state.lockedUntilEpochMillis) {
-            return@withContext PinVerifyResult.Locked(state.lockedUntilEpochMillis)
+            val newFailedCount = state.failedAttempts + 1
+            val lockoutMillis = lockoutMillisFor(newFailedCount)
+            val newLockedUntil = if (lockoutMillis > 0) now + lockoutMillis else state.lockedUntilEpochMillis
+            val effectiveLockedUntil = maxOf(newLockedUntil, state.lockedUntilEpochMillis)
+            store.writeAttemptState(PinAttemptState(newFailedCount, effectiveLockedUntil))
+            return@withContext PinVerifyResult.Locked(effectiveLockedUntil)
         }
 
         // Compute hash and verify using constant-time comparison to prevent timing side-channels.
@@ -103,12 +119,7 @@ class PinManager(private val context: Context) {
 
         // Failed attempt: increment counter and determine new lockout window.
         val newFailedCount = state.failedAttempts + 1
-        val lockoutMillis = when {
-            newFailedCount in 5..9 -> 30_000L
-            newFailedCount in 10..14 -> 300_000L
-            newFailedCount >= 15 -> 1_800_000L
-            else -> 0L
-        }
+        val lockoutMillis = lockoutMillisFor(newFailedCount)
 
         val newLockedUntil = if (lockoutMillis > 0) now + lockoutMillis else 0L
         store.writeAttemptState(PinAttemptState(newFailedCount, newLockedUntil))
@@ -124,5 +135,16 @@ class PinManager(private val context: Context) {
 
     suspend fun lockoutStatus(): PinAttemptState = withContext(Dispatchers.IO) {
         store.readAttemptState()
+    }
+
+    /** Lockout duration for a given failed-attempt count (0 below the first
+     * tier). The single source of truth for the escalation tiers, shared by
+     * the normal post-hash-failure path above and the during-lockout path,
+     * so the two can never drift into disagreeing about the schedule. */
+    private fun lockoutMillisFor(failedAttemptCount: Int): Long = when {
+        failedAttemptCount in 5..9 -> 30_000L
+        failedAttemptCount in 10..14 -> 300_000L
+        failedAttemptCount >= 15 -> 1_800_000L
+        else -> 0L
     }
 }

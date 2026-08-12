@@ -1,11 +1,11 @@
 package org.mega.entropycore
 
 /**
- * Bech32 (BIP173) encoding for native SegWit (P2WPKH, witness version 0)
- * addresses. MEGA only ever encodes witness v0 20-byte programs (BIP84
- * receive addresses), so this implements exactly that case, not the
- * general "any witness version" segwit address spec (which for v1+/Taproot
- * actually needs the related-but-different bech32m checksum constant).
+ * Bech32 (BIP173) encoding for native SegWit, witness version 0, addresses
+ * only — P2WPKH (BIP84 receive addresses, 20-byte program) and P2WSH
+ * (multisig, 32-byte program). Not the general "any witness version"
+ * segwit address spec (which for v1+/Taproot actually needs the
+ * related-but-different bech32m checksum constant).
  */
 private const val BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 private const val BECH32_CONST = 1
@@ -66,12 +66,14 @@ private fun convertBits(data: ByteArray, fromBits: Int, toBits: Int, pad: Boolea
 }
 
 /**
- * Encodes a native SegWit (BIP84) receive address: witness version 0 over
- * a 20-byte HASH160(compressed pubkey) program. [hrp] is "bc" for mainnet
- * or "tb" for testnet.
+ * Encodes a witness version 0 SegWit address: 20 bytes for P2WPKH
+ * (HASH160 of a compressed pubkey, BIP84) or 32 bytes for P2WSH (SHA256
+ * of a witness script). [hrp] is "bc" for mainnet or "tb" for testnet.
  */
 internal fun encodeSegwitV0Address(hrp: String, program: ByteArray): String {
-    require(program.size == 20) { "P2WPKH witness program must be 20 bytes, got ${program.size}" }
+    require(program.size == 20 || program.size == 32) {
+        "Witness v0 program must be 20 (P2WPKH) or 32 (P2WSH) bytes, got ${program.size}"
+    }
 
     val witnessVersionGroup = intArrayOf(0)
     val programGroups = convertBits(program, fromBits = 8, toBits = 5, pad = true)

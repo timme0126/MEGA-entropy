@@ -1,6 +1,5 @@
 package org.mega.entropy.security.pin
 
-import android.content.Context
 import java.io.File
 import java.nio.charset.StandardCharsets
 
@@ -12,10 +11,15 @@ import java.nio.charset.StandardCharsets
  * File parsing fails closed: any malformed existing file throws
  * IllegalStateException rather than returning null or guessing, ensuring
  * we never silently accept corrupted security state.
+ *
+ * Takes the base directory directly (the caller passes context.filesDir)
+ * rather than a Context, so this class — and PinManager above it — can be
+ * unit-tested with plain JVM File I/O (a temp directory), with no
+ * Android framework dependency, mock, or Robolectric needed.
  */
-class PinStore(private val context: Context) {
+class PinStore(private val baseDir: File) {
     private fun securityDir(): File {
-        val dir = File(context.filesDir, "mega_security")
+        val dir = File(baseDir, "mega_security")
         if (!dir.exists()) {
             dir.mkdirs()
         }

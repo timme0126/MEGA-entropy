@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    MEGA requests NO dangerous permissions and, critically, NO
-    android.permission.INTERNET. This is verified by the
+    MEGA requests no network/storage permissions and, critically, NO
+    android.permission.INTERNET. The only dangerous permission is CAMERA,
+    used solely by Advanced Mode multisig QR scanning. This is verified by the
     `securityAudit` Gradle task (app/build.gradle.kts) and by
     docs/NO-RNG-PROOF.md. Backup is disabled through both the legacy
     android:allowBackup="false" flag AND the modern
@@ -9,6 +10,14 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission
+        android:name="android.permission.ACCESS_NETWORK_STATE"
+        tools:node="remove" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
 
     <application
         android:name=".MegaApplication"
@@ -43,6 +52,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Exposes a generated multisig vault PDF (written only to the
+             app's own private cache dir — no storage permission touched
+             anywhere) to the system share sheet via a content:// URI, so
+             the user can save/print/email it through whatever app they
+             choose. android:exported="false" + grantUriPermissions="true"
+             is the standard FileProvider pattern: nothing can read this
+             provider's URIs without an explicit grant the share Intent
+             itself creates. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

@@ -27,7 +27,7 @@ data class SavedSessionsUiState(
  */
 class SavedSessionsViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SessionRepository(application)
-    private val pinManager = PinManager(application)
+    private val pinManager = PinManager(application.filesDir)
 
     private val _uiState = MutableStateFlow(SavedSessionsUiState())
     val uiState: StateFlow<SavedSessionsUiState> = _uiState.asStateFlow()

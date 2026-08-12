@@ -1,9 +1,11 @@
 package org.mega.entropy.storage
 
-import android.content.Context
 import java.io.File
 
-class SessionFileStore(private val context: Context) {
+/** Takes the base directory directly (the caller passes context.filesDir)
+ * rather than a Context, so this class can be unit-tested with plain JVM
+ * File I/O — a temp directory — with no Android framework dependency. */
+class SessionFileStore(private val baseDir: File) {
     /**
      * Resolves the app-private internal storage directory for MEGA sessions.
      *
@@ -12,7 +14,7 @@ class SessionFileStore(private val context: Context) {
      * protecting against unauthorized access by other apps.
      */
     private fun sessionsDir(): File {
-        val dir = File(context.filesDir, "mega_sessions")
+        val dir = File(baseDir, "mega_sessions")
         if (!dir.exists()) {
             dir.mkdirs()
         }
@@ -68,6 +70,28 @@ class SessionFileStore(private val context: Context) {
     fun deleteSessionFiles(sessionId: String) {
         File(sessionsDir(), "$sessionId.meta").delete()
         File(sessionsDir(), "$sessionId.enc").delete()
+    }
+
+    /**
+     * Enumerates every session ID present in storage BY FILENAME ALONE — a
+     * .meta file that fails to parse, or an orphaned .enc file with no
+     * .meta at all (e.g. from an interrupted save), still counts.
+     *
+     * WHY: Unlike listAllMetadata() above, which deliberately drops a
+     * corrupt/unparseable session so one bad file can't break the whole
+     * Saved Sessions list, this is used by the "delete everything" path
+     * (duress-PIN wipe, Secure Delete All) — silently skipping a session
+     * there because its metadata happens to be corrupt would leave that
+     * session's ciphertext and Keystore key behind after the user asked to
+     * wipe everything, which defeats the entire point of a wipe.
+     */
+    fun listAllSessionIds(): Set<String> {
+        val dir = sessionsDir()
+        val fromMeta = dir.listFiles { _, name -> name.endsWith(".meta") }
+            ?.map { it.name.removeSuffix(".meta") }.orEmpty()
+        val fromEnc = dir.listFiles { _, name -> name.endsWith(".enc") }
+            ?.map { it.name.removeSuffix(".enc") }.orEmpty()
+        return (fromMeta + fromEnc).toSet()
     }
 
     companion object {
