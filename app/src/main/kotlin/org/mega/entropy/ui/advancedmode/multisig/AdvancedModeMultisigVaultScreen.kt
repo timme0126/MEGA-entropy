@@ -155,12 +155,16 @@ fun AdvancedModeMultisigVaultScreen(
                         cosigners = uiState.slots.mapNotNull { it.toCosignerDisplayInfo() },
                     )
                 }
-                // Once a vault is built (and especially once saved), the
-                // natural next step is leaving the flow entirely rather than
-                // stepping back through Slots/Policy one screen at a time —
-                // this jumps straight back to Advanced Mode.
-                IconButton(onClick = onGoHome) {
-                    Icon(imageVector = Icons.Filled.Home, contentDescription = "Back to Advanced Mode")
+                // Only once the vault is actually saved (labeled) is there
+                // somewhere meaningful to "go home" TO — before that, the
+                // vault only exists in this screen's in-memory state, and
+                // leaving would discard it with no confirmation, no
+                // different from Back. Gating on savedVaultLabel keeps this
+                // from appearing until saving has actually happened.
+                if (uiState.savedVaultLabel != null) {
+                    IconButton(onClick = onGoHome) {
+                        Icon(imageVector = Icons.Filled.Home, contentDescription = "Back to Advanced Mode")
+                    }
                 }
             },
         ) {
