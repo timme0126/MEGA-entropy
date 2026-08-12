@@ -315,6 +315,64 @@ class MultisigVaultViewModelTest {
     }
 
     @Test
+    fun `editSlotLabel renames an already-filled slot's label`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.fillSlotFromPastedText(0, cosignerA)
+
+        viewModel.editSlotLabel(0, "Alice's Coldcard")
+
+        val status = viewModel.uiState.value.slots[0].status
+        assertTrue(status is SlotStatus.Filled)
+        assertEquals("Alice's Coldcard", (status as SlotStatus.Filled).label)
+        // Origin (fingerprint/path/xpub) is untouched — only the label changes.
+        assertEquals("751e76e8", viewModel.uiState.value.slots[0].origin?.masterFingerprint)
+    }
+
+    @Test
+    fun `editSlotLabel trims whitespace`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.fillSlotFromPastedText(0, cosignerA)
+
+        viewModel.editSlotLabel(0, "  Alice's Coldcard  ")
+
+        val status = viewModel.uiState.value.slots[0].status as SlotStatus.Filled
+        assertEquals("Alice's Coldcard", status.label)
+    }
+
+    @Test
+    fun `editSlotLabel rejects a blank label and leaves the existing label untouched`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.fillSlotFromPastedText(0, cosignerA)
+        val originalLabel = (viewModel.uiState.value.slots[0].status as SlotStatus.Filled).label
+
+        viewModel.editSlotLabel(0, "   ")
+
+        val status = viewModel.uiState.value.slots[0].status as SlotStatus.Filled
+        assertEquals(originalLabel, status.label)
+    }
+
+    @Test
+    fun `editSlotLabel on an empty slot is a no-op`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+
+        viewModel.editSlotLabel(0, "Alice's Coldcard")
+
+        assertTrue(viewModel.uiState.value.slots[0].status is SlotStatus.Empty)
+    }
+
+    @Test
     fun `cancelling the Complete Cosigner Info helper leaves the slot untouched`() {
         val viewModel = MultisigVaultViewModel()
         viewModel.setN(2)

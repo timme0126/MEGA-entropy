@@ -74,6 +74,7 @@ fun AdvancedModeMultisigVaultScreen(
     onClearSlot: (index: Int) -> Unit,
     onEditFingerprint: (index: Int, fingerprint: String) -> Unit,
     onEditDerivationPath: (index: Int, path: String) -> Unit,
+    onEditLabel: (index: Int, label: String) -> Unit,
     onCompleteBareXpubCosigner: (fingerprint: String, label: String) -> Unit,
     onCancelBareXpubHelper: () -> Unit,
     onBuildVault: () -> Unit,
@@ -117,6 +118,7 @@ fun AdvancedModeMultisigVaultScreen(
                 onClearSlot = onClearSlot,
                 onEditFingerprint = onEditFingerprint,
                 onEditDerivationPath = onEditDerivationPath,
+                onEditLabel = onEditLabel,
                 onBuildVault = onBuildVault,
                 allowSeedCopy = allowSeedCopy,
             )
@@ -270,6 +272,7 @@ private fun SlotsStepContent(
     onClearSlot: (Int) -> Unit,
     onEditFingerprint: (Int, String) -> Unit,
     onEditDerivationPath: (Int, String) -> Unit,
+    onEditLabel: (Int, String) -> Unit,
     onBuildVault: () -> Unit,
     allowSeedCopy: Boolean,
 ) {
@@ -290,6 +293,7 @@ private fun SlotsStepContent(
             onClearSlot = { onClearSlot(index) },
             onEditFingerprint = { fingerprint -> onEditFingerprint(index, fingerprint) },
             onEditDerivationPath = { path -> onEditDerivationPath(index, path) },
+            onEditLabel = { label -> onEditLabel(index, label) },
         )
     }
 
@@ -397,11 +401,13 @@ private fun MultisigSlotCard(
     onClearSlot: () -> Unit,
     onEditFingerprint: (fingerprint: String) -> Unit,
     onEditDerivationPath: (path: String) -> Unit,
+    onEditLabel: (label: String) -> Unit,
 ) {
     var showPasteDialog by remember { mutableStateOf(false) }
     var pasteText by remember { mutableStateOf("") }
     var showEditFingerprintDialog by remember { mutableStateOf(false) }
     var showEditDerivationPathDialog by remember { mutableStateOf(false) }
+    var showEditLabelDialog by remember { mutableStateOf(false) }
 
     if (showPasteDialog) {
         AlertDialog(
@@ -436,7 +442,30 @@ private fun MultisigSlotCard(
                 SlotActionIcons(onBeginFillSlot, onScanSlot, { showPasteDialog = true })
             }
             is SlotStatus.Filled -> {
-                Text(status.label, style = MaterialTheme.typography.bodyMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(status.label, style = MaterialTheme.typography.bodyMedium)
+                    IconButton(
+                        onClick = { showEditLabelDialog = true },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = "Edit label",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+                if (showEditLabelDialog) {
+                    EditLabelDialog(
+                        currentValue = status.label,
+                        onConfirm = { newLabel ->
+                            onEditLabel(newLabel)
+                            showEditLabelDialog = false
+                        },
+                        onCancel = { showEditLabelDialog = false },
+                    )
+                }
                 val origin = slot.origin
                 if (origin != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -706,6 +735,49 @@ private fun CompleteCosignerInfoDialog(
  * genuinely can't be derived from the key itself (see
  * completeBareCosignerExtendedKey's doc comment).
  */
+/**
+ * Lets a filled slot's label be corrected after the fact — same "pencil
+ * icon on the card, not locked in forever" treatment as
+ * [EditFingerprintDialog]/[EditDerivationPathDialog], for the label
+ * itself. Applies regardless of how the slot was filled: a bare-xpub scan
+ * requires a label up front (CompleteCosignerInfoDialog), but a saved
+ * session or pasted fragment's own auto-generated label can be renamed
+ * here too, the same as any of the others. Blank is rejected — a slot
+ * should never end up with nothing to tell it apart from the others — by
+ * simply disabling Save, the same pattern the fingerprint/path dialogs use.
+ */
+@Composable
+private fun EditLabelDialog(
+    currentValue: String,
+    onConfirm: (label: String) -> Unit,
+    onCancel: () -> Unit,
+) {
+    var label by remember { mutableStateOf(currentValue) }
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Edit Label") },
+        text = {
+            OutlinedTextField(
+                value = label,
+                onValueChange = { label = it },
+                label = { Text("Cosigner label") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(label.trim()) },
+                enabled = label.isNotBlank(),
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text("Cancel") }
+        },
+    )
+}
+
 @Composable
 private fun EditFingerprintDialog(
     currentValue: String,

@@ -536,6 +536,31 @@ class MultisigVaultViewModel : ViewModel() {
         }
     }
 
+    /** Corrects an already-filled slot's label in place — same "pencil
+     * icon on the card, not locked in forever" treatment as
+     * [editSlotFingerprint] and [editSlotDerivationPath], for the label
+     * itself. Applies to a slot filled from any source (bare-xpub scan,
+     * saved session, paste, full descriptor), not just the bare-xpub
+     * "Complete Cosigner Info" path that first made a label mandatory
+     * input — the label is just a display string regardless of where the
+     * slot came from, so there's no reason to restrict which ones can be
+     * relabeled. Rejects a blank label the same way completeBareXpubCosigner
+     * does (a slot should never end up with no way to tell it apart from
+     * the others), leaving the slot's existing label untouched; unlike
+     * [editSlotFingerprint]/[editSlotDerivationPath] this doesn't touch
+     * origin at all, only the status label. */
+    fun editSlotLabel(index: Int, newLabel: String) {
+        _uiState.update { state ->
+            val slot = state.slots.getOrNull(index) ?: return@update state
+            if (slot.status !is SlotStatus.Filled) return@update state
+            val trimmed = newLabel.trim()
+            if (trimmed.isEmpty()) return@update state
+            val slots = state.slots.toMutableList()
+            slots[index] = slot.copy(status = SlotStatus.Filled(trimmed))
+            state.copy(slots = slots)
+        }
+    }
+
     fun clearSlot(index: Int) {
         _uiState.update { state ->
             val slots = state.slots.toMutableList()
