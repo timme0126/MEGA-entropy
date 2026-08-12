@@ -14,6 +14,22 @@ enum class MultisigScriptType(internal val bip48ScriptTypeIndex: Long, val displ
  * apart into checking two different lists. */
 private val PLAIN_XPUB_VERSION_HEXES = setOf("0488b21e", "043587cf")
 
+/** Upper bound on scanned/pasted descriptor-shaped text, checked before any
+ * regex runs against it. A real descriptor is self-bounding in practice: a
+ * QR code physically tops out around ~4300 alphanumeric characters
+ * (version 40, low error correction), and the largest legitimate MEGA
+ * multisig descriptor — 15 cosigners, the maximum buildMultisigWallet
+ * allows — is only a few thousand characters. Pasted text has no such
+ * physical ceiling, though, so this guard exists for that path: it
+ * rejects pathological input before it ever reaches
+ * DESCRIPTOR_COSIGNER_REGEX.findAll or parseCosignerDescriptorFragment's
+ * own regex, both of which are near-linear on well-formed input but not
+ * provably so on adversarial non-matching input. 8000 characters is
+ * roughly 3x the largest legitimate 15-cosigner descriptor, comfortably
+ * inside any real QR's capacity, and small enough that even a worst-case
+ * parse attempt completes in well under a second. */
+private const val MAX_DESCRIPTOR_INPUT_LENGTH = 8000
+
 data class MultisigCosignerAccountKeys(
     val derivationPath: String,
     val masterFingerprint: String,
@@ -163,6 +179,9 @@ private fun normalizeHardenedMarkers(text: String): String =
     text.replace(Regex("""(\d)[hH]"""), "$1'")
 
 fun parseCosignerDescriptorFragment(text: String): MultisigCosignerOrigin {
+    require(text.length <= MAX_DESCRIPTOR_INPUT_LENGTH) {
+        "Cosigner fragment is too long (${text.length} characters, max $MAX_DESCRIPTOR_INPUT_LENGTH) — this does not look like a valid descriptor key fragment."
+    }
     // The path capture group alone allows h/H alongside '; normalization is applied
     // only to that captured path substring below, never to the raw xpub — a base58
     // xpub can coincidentally contain a digit immediately followed by h/H (base58
@@ -367,6 +386,9 @@ private val DESCRIPTOR_COSIGNER_REGEX = Regex("""\[([0-9a-fA-F]{8}/[0-9'hH]+(?:/
  * (SLIP-132 rejection, BIP48 path shape) as a single pasted fragment would.
  */
 fun parseMultisigDescriptor(text: String): ParsedMultisigDescriptor {
+    require(text.length <= MAX_DESCRIPTOR_INPUT_LENGTH) {
+        "Descriptor is too long (${text.length} characters, max $MAX_DESCRIPTOR_INPUT_LENGTH) — this does not look like a valid multisig descriptor."
+    }
     if (!text.startsWith("wsh(sortedmulti(") || !text.endsWith("))")) {
         throw IllegalArgumentException("Multisig descriptor must be wrapped in wsh(sortedmulti(...))")
     }

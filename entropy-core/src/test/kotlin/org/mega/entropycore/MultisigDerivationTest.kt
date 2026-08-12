@@ -407,4 +407,55 @@ class MultisigDerivationTest {
         }
         assertTrue(exception.message.orEmpty().contains("SLIP-132"))
     }
+
+    @Test
+    fun `parseCosignerDescriptorFragment rejects pathologically long input before parsing it`() {
+        val hostile = "[751e76e8/48'/0'/0'/2']" + "x".repeat(20_000)
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            parseCosignerDescriptorFragment(hostile)
+        }
+        assertTrue(exception.message.orEmpty().contains("too long"))
+    }
+
+    @Test
+    fun `parseCosignerDescriptorFragment accepts input right at the length boundary`() {
+        // A real fragment is nowhere near this long — this just proves the
+        // guard's boundary is `<=`, not an off-by-one `<`, by pairing with
+        // the "one character further" rejection test below.
+        val realFragment = "[751e76e8/48'/0'/0'/2']" + cosignerA.extendedPublicKey
+        assertTrue(realFragment.length <= 8000)
+        // Should parse normally, not be rejected by the length guard.
+        parseCosignerDescriptorFragment(realFragment)
+    }
+
+    @Test
+    fun `parseMultisigDescriptor rejects pathologically long input before parsing it`() {
+        val hostile = "wsh(sortedmulti(2," + "x".repeat(20_000) + "))"
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            parseMultisigDescriptor(hostile)
+        }
+        assertTrue(exception.message.orEmpty().contains("too long"))
+    }
+
+    @Test
+    fun `parseMultisigDescriptor still accepts a real maximum-size 15-cosigner descriptor`() {
+        // parseMultisigDescriptor itself does not check for duplicate xpubs
+        // (that happens later, in buildMultisigWallet / the ViewModel), so
+        // reusing the same test xpub across distinct fingerprints here is
+        // fine — this test is only proving the length guard doesn't reject
+        // a real maximum-size (15-cosigner) descriptor.
+        val fragments = (0 until 15).map { i ->
+            val fingerprint = "%08x".format(i)
+            "[$fingerprint/48'/0'/0'/2']${cosignerA.extendedPublicKey}/<0;1>/*"
+        }
+        val descriptor = "wsh(sortedmulti(8,${fragments.joinToString(",")}))"
+        assertTrue(descriptor.length <= 8000)
+
+        val parsed = parseMultisigDescriptor(descriptor)
+
+        assertEquals(15, parsed.cosigners.size)
+        assertEquals(8, parsed.threshold)
+    }
 }
