@@ -26,6 +26,8 @@ import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import org.mega.entropy.security.settings.SavedSessionSecuritySettings
 import org.mega.entropy.security.pin.PinManager
+import org.mega.entropy.security.pin.hasSavedSessionGraceWindowExpired
+import org.mega.entropy.security.pin.isSavedSessionUnlockStillValid
 import org.mega.entropy.storage.MultisigVaultRepository
 import org.mega.entropy.storage.SavedMultisigVault
 import org.mega.entropy.storage.SessionRepository
@@ -178,18 +180,18 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     }
 
     suspend fun savedSessionUnlockStillValid(): Boolean {
-        if (appLockViewModel.isLocked.value) return false
-        if (!pinManager.isPinEnabled()) return true
-        if (savedSessionLockTimeoutMillis == 0L) {
-            lockSavedSessionAccess()
-            return false
-        }
-        val unlockedAt = savedSessionUnlockedAtElapsedRealtime ?: run {
-            lockSavedSessionAccess()
-            return false
-        }
-        val stillValid = SystemClock.elapsedRealtime() - unlockedAt < savedSessionLockTimeoutMillis
-        if (!stillValid) lockSavedSessionAccess()
+        val millisSinceUnlock = savedSessionUnlockedAtElapsedRealtime?.let { SystemClock.elapsedRealtime() - it }
+        val stillValid = isSavedSessionUnlockStillValid(
+            isLocked = appLockViewModel.isLocked.value,
+            pinEnabled = pinManager.isPinEnabled(),
+            timeoutMillis = savedSessionLockTimeoutMillis,
+            millisSinceUnlock = millisSinceUnlock,
+        )
+        // isSavedSessionUnlockStillValid is a pure decision — it never
+        // mutates state itself, so every "not valid" outcome that isn't
+        // already reflected by the lock bit needs the actual re-lock side
+        // effect applied here (matches the original inline logic exactly).
+        if (!stillValid && !appLockViewModel.isLocked.value) lockSavedSessionAccess()
         return stillValid
     }
 
@@ -203,11 +205,8 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     }
     suspend fun consumeSavedSessionLockElapsed() {
         val stoppedAt = stoppedAtElapsedRealtime
-        if (
-            stoppedAt != null &&
-            pinManager.isPinEnabled() &&
-            SystemClock.elapsedRealtime() - stoppedAt >= savedSessionLockTimeoutMillis
-        ) {
+        val millisSinceLeft = stoppedAt?.let { SystemClock.elapsedRealtime() - it }
+        if (pinManager.isPinEnabled() && hasSavedSessionGraceWindowExpired(savedSessionLockTimeoutMillis, millisSinceLeft)) {
             lockSavedSessionAccess()
         }
         stoppedAtElapsedRealtime = null
@@ -344,7 +343,16 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
 
             PinSetupScreen(
                 onPinSet = {
-                    appLockViewModel.unlock()
+                    // unlockSavedSessionAccess(), not a direct
+                    // appLockViewModel.unlock() — this route is how BOTH
+                    // first-time PIN creation and "Change PIN" complete (the
+                    // latter via PIN_CHANGE_VERIFY -> PIN_SETUP). A direct
+                    // unlock() leaves savedSessionUnlockedAtElapsedRealtime
+                    // null, so the very next enterSavedSessionsGate call
+                    // finds no unlock timestamp and re-locks immediately —
+                    // forcing a spurious re-prompt moments after the user
+                    // just set or changed their PIN.
+                    unlockSavedSessionAccess()
                     when {
                         pendingSaveWithMnemonic != null -> {
                             // Reached via a forced "you must set a PIN before
