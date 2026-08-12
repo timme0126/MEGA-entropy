@@ -3,7 +3,6 @@ package org.mega.entropy.ui.advancedmode.multisig
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,7 +38,6 @@ fun SavedMultisigVaultDetailScreen(
     onBack: () -> Unit,
     onRename: (String) -> Unit,
     onDelete: () -> Unit,
-    onExportPdf: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
 
@@ -53,9 +51,7 @@ fun SavedMultisigVaultDetailScreen(
             IconButton(onClick = { renaming = true }) {
                 Icon(imageVector = Icons.Filled.Edit, contentDescription = "Rename vault")
             }
-            IconButton(onClick = onExportPdf) {
-                Icon(imageVector = Icons.Filled.PictureAsPdf, contentDescription = "Create PDF")
-            }
+            MultisigVaultPdfMenuButton(vaultLabel = label, wallet = wallet, cosigners = cosigners)
             IconButton(onClick = { confirmingDelete = true }) {
                 Icon(imageVector = Icons.Filled.Delete, contentDescription = "Delete vault")
             }

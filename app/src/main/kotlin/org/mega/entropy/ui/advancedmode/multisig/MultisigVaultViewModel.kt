@@ -334,26 +334,24 @@ class MultisigVaultViewModel : ViewModel() {
         }
     }
 
-    /** Parses a full multisig descriptor and replaces the current slot set
-     * only when it exactly matches the policy the user already chose. A
-     * descriptor's threshold is security-relevant; silently extracting its
-     * cosigners while keeping a different UI-selected M value would create a
-     * different vault than the pasted descriptor describes. */
+    /** Parses a full multisig descriptor and ADOPTS its own policy —
+     * threshold, cosigner count, and network (read off the cosigners' own
+     * key version bytes) — replacing whatever M/N/network was chosen on
+     * the Policy step, rather than requiring them to already match. A
+     * `wsh(sortedmulti(...))` string is self-describing; the ordinary
+     * reason to paste or scan one is importing a vault someone else
+     * already set up, where there is no reason the importer would already
+     * know its exact M-of-N or network up front. Every cosigner still goes
+     * through parseCosignerDescriptorFragment's full validation (inside
+     * parseMultisigDescriptor) and the same duplicate-xpub check pasting a
+     * single fragment gets, so this adopts the descriptor's policy without
+     * weakening any of that. */
     fun fillManySlotsFromDescriptor(text: String) {
         _uiState.update { state ->
             val parsed = try {
                 parseMultisigDescriptor(text.trim())
             } catch (e: IllegalArgumentException) {
                 return@update state.copy(walletError = e.message ?: "Could not parse this descriptor.")
-            }
-            val expectedM = state.m
-                ?: return@update state.copy(walletError = "Choose a signature threshold before pasting a descriptor.")
-            val expectedN = state.n
-                ?: return@update state.copy(walletError = "Choose the number of cosigners before pasting a descriptor.")
-            if (parsed.threshold != expectedM || parsed.cosigners.size != expectedN) {
-                return@update state.copy(
-                    walletError = "Descriptor policy is ${parsed.threshold}-of-${parsed.cosigners.size}, but this vault is $expectedM-of-$expectedN.",
-                )
             }
 
             val duplicateXpub = parsed.cosigners
@@ -364,11 +362,48 @@ class MultisigVaultViewModel : ViewModel() {
                 return@update state.copy(walletError = "Descriptor contains a duplicate extended public key.")
             }
 
+            // parseMultisigDescriptor already guarantees at least one cosigner,
+            // and every cosigner in it already passed parseCosignerDescriptorFragment's
+            // own plain-xpub/tpub check — so this can only fail to resolve a
+            // network if something upstream changes; kept as a guard rather
+            // than a silent fallback so that case surfaces as an error instead
+            // of an incorrect network.
+            val network = parseBareCosignerExtendedKey(parsed.cosigners.first().extendedPublicKey)?.network
+                ?: return@update state.copy(walletError = "Could not determine the network for this descriptor's cosigners.")
+
             val slots = parsed.cosigners.map { origin ->
                 val label = "${origin.masterFingerprint} · ${origin.derivationPath}"
                 MultisigSlot(status = SlotStatus.Filled(label), origin = origin)
             }
-            state.copy(slots = slots, walletResult = null, walletError = null)
+            state.copy(
+                m = parsed.threshold,
+                n = parsed.cosigners.size,
+                network = network,
+                slots = slots,
+                walletResult = null,
+                walletError = null,
+            )
+        }
+    }
+
+    /** Entry point for the dedicated "Scan Full Descriptor QR" action on the
+     * Cosigners step — unlike [fillPendingSlotFromScannedText] (which a
+     * per-slot camera icon uses, and which falls back to filling a single
+     * slot for non-descriptor text), this only ever accepts a full
+     * `wsh(sortedmulti(...))` descriptor; anything else is a clear,
+     * specific error rather than being silently routed at whatever slot
+     * [pendingSlotIndex] last happened to name. */
+    fun fillManySlotsFromScannedText(text: String) {
+        val trimmed = text.trim()
+        if (looksLikeFullDescriptor(trimmed)) {
+            fillManySlotsFromDescriptor(trimmed)
+        } else {
+            _uiState.update {
+                it.copy(
+                    walletError = "Expected a full multisig descriptor QR code (wsh(sortedmulti(...))). " +
+                        "Use a cosigner slot's own camera icon to scan a single key instead.",
+                )
+            }
         }
     }
 

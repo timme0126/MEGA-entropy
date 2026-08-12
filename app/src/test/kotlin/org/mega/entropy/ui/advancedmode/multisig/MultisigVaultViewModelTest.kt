@@ -52,7 +52,7 @@ class MultisigVaultViewModelTest {
     }
 
     @Test
-    fun `full descriptor threshold must match chosen policy`() {
+    fun `full descriptor with a different threshold than chosen adopts the descriptor's own policy`() {
         val viewModel = MultisigVaultViewModel()
         viewModel.setN(3)
         viewModel.setM(2)
@@ -61,9 +61,41 @@ class MultisigVaultViewModelTest {
         viewModel.fillManySlotsFromDescriptor("wsh(sortedmulti(3,$cosignerA,$cosignerB,$cosignerC))")
 
         val state = viewModel.uiState.value
+        assertEquals(3, state.m)
+        assertEquals(3, state.n)
+        assertEquals(3, state.slots.size)
+        assertTrue(state.slots.all { it.status is SlotStatus.Filled })
+        assertEquals(null, state.walletError)
+    }
+
+    @Test
+    fun `fillManySlotsFromScannedText rejects non-descriptor text with a specific error`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+
+        viewModel.fillManySlotsFromScannedText(cosignerA)
+
+        val state = viewModel.uiState.value
         assertTrue(state.slots.all { it.status is SlotStatus.Empty })
         assertNotNull(state.walletError)
-        assertTrue(state.walletError.orEmpty().contains("3-of-3"))
+        assertTrue(state.walletError.orEmpty().contains("full multisig descriptor"))
+    }
+
+    @Test
+    fun `fillManySlotsFromScannedText fills slots from a full descriptor regardless of pendingSlotIndex`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(3)
+        viewModel.setM(2)
+        viewModel.confirmPolicy()
+        viewModel.beginFillSlot(1) // stale/irrelevant — must not affect the outcome
+
+        viewModel.fillManySlotsFromScannedText("wsh(sortedmulti(2,$cosignerA,$cosignerB,$cosignerC))")
+
+        val state = viewModel.uiState.value
+        assertTrue(state.slots.all { it.status is SlotStatus.Filled })
+        assertEquals(null, state.walletError)
     }
 
     @Test

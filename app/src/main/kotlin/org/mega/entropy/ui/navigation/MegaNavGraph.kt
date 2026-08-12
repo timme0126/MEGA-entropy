@@ -24,8 +24,6 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
-import org.mega.entropy.pdf.exportMultisigVaultPdf
-import org.mega.entropy.pdf.shareMultisigVaultPdf
 import org.mega.entropy.security.settings.SavedSessionSecuritySettings
 import org.mega.entropy.security.pin.PinManager
 import org.mega.entropy.storage.MultisigVaultRepository
@@ -138,6 +136,15 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     // loaded into the Hub" flow this multisig vault setup doesn't use.
     var multisigCosignerSourceWords by remember { mutableStateOf<List<String>?>(null) }
     var multisigCosignerSourceLabel by remember { mutableStateOf("") }
+    // Set right before navigating to ADVANCED_MODE_MULTISIG_SCANNER from the
+    // Cosigners step's own top-bar camera icon (as opposed to a per-slot
+    // camera icon) — read once by that route's own onScanned callback to
+    // decide whether the scanned text should only ever be treated as a full
+    // descriptor (see MultisigVaultViewModel.fillManySlotsFromScannedText)
+    // or fall back to filling a single slot. Two separate composable()
+    // blocks on the same NavHost can't share a locally remembered var, so
+    // this lives here instead.
+    var scanningFullDescriptor by remember { mutableStateOf(false) }
     // Set when AdvancedModeHubScreen's or Bip85Screen's save icon is used
     // but no MEGA PIN exists yet — the same "must have a PIN before
     // saving" redirect the dice flow's SAVE_SESSION uses, just carrying
@@ -704,6 +711,11 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 },
                 onScanSlot = { index ->
                     multisigVaultViewModel.beginFillSlot(index)
+                    scanningFullDescriptor = false
+                    navController.navigate(MegaDestinations.ADVANCED_MODE_MULTISIG_SCANNER)
+                },
+                onScanFullDescriptor = {
+                    scanningFullDescriptor = true
                     navController.navigate(MegaDestinations.ADVANCED_MODE_MULTISIG_SCANNER)
                 },
                 onPasteIntoSlot = multisigVaultViewModel::fillSlotFromPastedText,
@@ -731,15 +743,6 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     }
                 },
                 onDismissSavedVaultConfirmation = multisigVaultViewModel::dismissSavedVaultConfirmation,
-                onExportPdf = {
-                    val wallet = uiState.walletResult
-                    if (wallet != null) {
-                        val cosigners = uiState.slots.mapNotNull { it.toCosignerDisplayInfo() }
-                        val label = uiState.savedVaultLabel ?: "Multisig Vault"
-                        val uri = exportMultisigVaultPdf(context, label, wallet, cosigners)
-                        shareMultisigVaultPdf(context, uri)
-                    }
-                },
             )
         }
         composable(MegaDestinations.ADVANCED_MODE_MULTISIG_COSIGNER_PICKER) {
@@ -794,10 +797,16 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 allowScreenshots = allowScreenshots,
                 onBack = {
                     multisigVaultViewModel.cancelFillSlot()
+                    scanningFullDescriptor = false
                     navController.popBackStack()
                 },
                 onScanned = { scannedText ->
-                    multisigVaultViewModel.fillPendingSlotFromScannedText(scannedText)
+                    if (scanningFullDescriptor) {
+                        multisigVaultViewModel.fillManySlotsFromScannedText(scannedText)
+                    } else {
+                        multisigVaultViewModel.fillPendingSlotFromScannedText(scannedText)
+                    }
+                    scanningFullDescriptor = false
                     navController.popBackStack(MegaDestinations.ADVANCED_MODE_MULTISIG_VAULT, inclusive = false)
                 },
             )
@@ -870,15 +879,6 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                                 multisigVaultRepository.deleteVault(vaultId)
                                 navController.popBackStack()
                             }
-                        },
-                        onExportPdf = {
-                            val uri = exportMultisigVaultPdf(
-                                context = context,
-                                vaultLabel = currentVault.label,
-                                wallet = wallet,
-                                cosigners = currentVault.cosigners.map { it.toCosignerDisplayInfo() },
-                            )
-                            shareMultisigVaultPdf(context, uri)
                         },
                     )
                 } else {

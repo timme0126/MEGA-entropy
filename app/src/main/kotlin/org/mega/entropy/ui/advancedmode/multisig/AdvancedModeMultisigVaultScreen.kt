@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -68,6 +67,7 @@ fun AdvancedModeMultisigVaultScreen(
     onBackToPolicy: () -> Unit,
     onBeginFillSlot: (index: Int) -> Unit,
     onScanSlot: (index: Int) -> Unit,
+    onScanFullDescriptor: () -> Unit,
     onPasteIntoSlot: (index: Int, text: String) -> Unit,
     onPasteFullDescriptor: (text: String) -> Unit,
     onClearSlot: (index: Int) -> Unit,
@@ -79,7 +79,6 @@ fun AdvancedModeMultisigVaultScreen(
     onCancelSaveVault: () -> Unit,
     onConfirmSaveVault: (label: String) -> Unit,
     onDismissSavedVaultConfirmation: () -> Unit,
-    onExportPdf: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
 
@@ -94,7 +93,15 @@ fun AdvancedModeMultisigVaultScreen(
                 onConfirmPolicy = onConfirmPolicy,
             )
         }
-        MultisigSetupStep.SLOTS -> MegaInfoScaffold(title = "Cosigners", onBack = onBackToPolicy) {
+        MultisigSetupStep.SLOTS -> MegaInfoScaffold(
+            title = "Cosigners",
+            onBack = onBackToPolicy,
+            actions = {
+                IconButton(onClick = onScanFullDescriptor) {
+                    Icon(imageVector = Icons.Filled.CameraAlt, contentDescription = "Scan Full Descriptor QR")
+                }
+            },
+        ) {
             SlotsStepContent(
                 uiState = uiState,
                 onBeginFillSlot = onBeginFillSlot,
@@ -125,8 +132,13 @@ fun AdvancedModeMultisigVaultScreen(
                 IconButton(onClick = onBeginSaveVault) {
                     Icon(imageVector = Icons.Filled.Save, contentDescription = "Save Vault")
                 }
-                IconButton(onClick = onExportPdf) {
-                    Icon(imageVector = Icons.Filled.PictureAsPdf, contentDescription = "Create PDF")
+                val wallet = uiState.walletResult
+                if (wallet != null) {
+                    MultisigVaultPdfMenuButton(
+                        vaultLabel = uiState.savedVaultLabel ?: "Multisig Vault",
+                        wallet = wallet,
+                        cosigners = uiState.slots.mapNotNull { it.toCosignerDisplayInfo() },
+                    )
                 }
             },
         ) {

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
@@ -78,6 +79,35 @@ fun shareMultisigVaultPdf(context: Context, uri: Uri) {
     }
     context.startActivity(Intent.createChooser(intent, "Share multisig vault PDF"))
 }
+
+/**
+ * Copies an already-generated PDF (from [exportMultisigVaultPdf]'s
+ * FileProvider URI) into a destination the user picked via
+ * ActivityResultContracts.CreateDocument — this is the "Save to Device"
+ * path, covering internal storage, an SD card, or a mounted USB drive,
+ * whichever the system's own document picker offers on this device. Never
+ * touches a storage permission: CreateDocument is a Storage Access
+ * Framework picker the system handles entirely, handing back a
+ * content:// URI already scoped for this app to write to, the same way
+ * FileProvider scopes the source URI for reading.
+ */
+fun copyPdfToDestination(context: Context, sourcePdfUri: Uri, destinationUri: Uri): Boolean {
+    return try {
+        context.contentResolver.openInputStream(sourcePdfUri)?.use { input ->
+            context.contentResolver.openOutputStream(destinationUri)?.use { output ->
+                input.copyTo(output)
+            }
+        } != null
+    } catch (e: Exception) {
+        Log.w("MultisigVaultPdfExporter", "Failed to save PDF to the chosen destination", e)
+        false
+    }
+}
+
+/** Suggested filename for the "Save to Device" picker — same sanitization
+ * exportMultisigVaultPdf's own cache filename uses, so what the user sees
+ * offered as a default name matches what was actually generated. */
+fun pdfSuggestedFileName(vaultLabel: String): String = "${sanitizePdfFileName(vaultLabel)}.pdf"
 
 private fun CosignerDisplayInfo.toCosignerLine(): CosignerLine = CosignerLine(
     label = label,
