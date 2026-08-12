@@ -521,4 +521,66 @@ class MultisigVaultViewModelTest {
         assertTrue(state.slots[0].status is SlotStatus.Filled)
         assertNotNull(state.pendingDescriptorImport)
     }
+
+    @Test
+    fun `completing bare xpub with the default unknown-origin placeholder fingerprint succeeds`() {
+        // "00000000" is what CompleteCosignerInfoDialog now pre-fills instead
+        // of an empty field — this locks in that the ViewModel/entropy-core
+        // path it calls actually accepts that value end to end, not just
+        // that the dialog no longer blocks on an empty string.
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.beginFillSlot(0)
+        viewModel.fillPendingSlotFromScannedText(bareMainnetXpub())
+
+        viewModel.completeBareXpubCosigner("00000000", 0, null)
+
+        val state = viewModel.uiState.value
+        assertTrue(state.slots[0].status is SlotStatus.Filled)
+        assertEquals("00000000", state.slots[0].origin?.masterFingerprint)
+    }
+
+    @Test
+    fun `editSlotFingerprint corrects an already-filled slot's fingerprint`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.fillSlotFromPastedText(0, "[00000000/48'/0'/0'/2']${bareMainnetXpub()}")
+
+        viewModel.editSlotFingerprint(0, "73C5da0A")
+
+        val state = viewModel.uiState.value
+        assertEquals("73c5da0a", state.slots[0].origin?.masterFingerprint)
+        // Path and xpub are untouched — only the fingerprint changes.
+        assertEquals("m/48'/0'/0'/2'", state.slots[0].origin?.derivationPath)
+        assertTrue(state.slots[0].status is SlotStatus.Filled)
+    }
+
+    @Test
+    fun `editSlotFingerprint rejects invalid input and leaves the slot unchanged`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+        viewModel.fillSlotFromPastedText(0, "[00000000/48'/0'/0'/2']${bareMainnetXpub()}")
+
+        viewModel.editSlotFingerprint(0, "not-hex")
+
+        assertEquals("00000000", viewModel.uiState.value.slots[0].origin?.masterFingerprint)
+    }
+
+    @Test
+    fun `editSlotFingerprint on an empty slot is a no-op`() {
+        val viewModel = MultisigVaultViewModel()
+        viewModel.setN(2)
+        viewModel.setM(1)
+        viewModel.confirmPolicy()
+
+        viewModel.editSlotFingerprint(0, "73c5da0a")
+
+        assertTrue(viewModel.uiState.value.slots[0].status is SlotStatus.Empty)
+    }
 }

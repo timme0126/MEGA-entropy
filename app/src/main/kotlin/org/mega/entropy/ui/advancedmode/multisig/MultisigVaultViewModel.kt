@@ -14,6 +14,7 @@ import org.mega.entropycore.WalletNetwork
 import org.mega.entropycore.buildMultisigWallet
 import org.mega.entropycore.completeBareCosignerExtendedKey
 import org.mega.entropycore.defaultCosignerDerivationPath
+import org.mega.entropycore.normalizeMasterFingerprint
 import org.mega.entropycore.parseBareCosignerExtendedKey
 import org.mega.entropycore.parseCosignerDescriptorFragment
 import org.mega.entropycore.parseMultisigDescriptor
@@ -473,6 +474,32 @@ class MultisigVaultViewModel : ViewModel() {
                         "Use a cosigner slot's own camera icon to scan a single key instead.",
                 )
             }
+        }
+    }
+
+    /** Corrects an already-filled slot's master fingerprint in place —
+     * the xpub and derivation path are untouched, so this can't turn a
+     * validated cosigner into an invalid one, only relabel which device it
+     * claims to be. Exists because entry paths that can't know the real
+     * fingerprint (the "Complete Cosigner Info" bare-xpub helper) fill it
+     * with the "00000000" unknown-origin placeholder by default; this is
+     * how a user fills in the real one once they have it, without
+     * re-entering the whole cosigner. Silently no-ops on an invalid
+     * fingerprint or an empty/unfilled slot — the calling dialog only
+     * enables its confirm action once the input is exactly 8 hex
+     * characters, so this is defense-in-depth, not the primary check. */
+    fun editSlotFingerprint(index: Int, newFingerprint: String) {
+        _uiState.update { state ->
+            val slot = state.slots.getOrNull(index) ?: return@update state
+            val origin = slot.origin ?: return@update state
+            val normalized = try {
+                normalizeMasterFingerprint(newFingerprint)
+            } catch (e: IllegalArgumentException) {
+                return@update state
+            }
+            val slots = state.slots.toMutableList()
+            slots[index] = slot.copy(origin = origin.copy(masterFingerprint = normalized))
+            state.copy(slots = slots, walletResult = null, walletError = null)
         }
     }
 

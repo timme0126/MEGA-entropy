@@ -399,6 +399,34 @@ class MultisigDerivationTest {
     }
 
     @Test
+    fun `completeBareCosignerExtendedKey accepts the all-zero placeholder fingerprint`() {
+        // 00000000 is the "unknown/unspecified origin" placeholder several
+        // wallets (Sparrow included) use when the true master fingerprint
+        // isn't known — see normalizeMasterFingerprint's own doc comment on
+        // why it's not possible to derive a real one from a bare xpub. It
+        // must remain a valid, buildable fingerprint value, never rejected
+        // as if it were malformed.
+        val bareXpub = deriveMultisigCosignerAccountKeys(
+            testMnemonic, "", MultisigScriptType.NATIVE_SEGWIT, WalletNetwork.MAINNET, 0,
+        ).extendedPublicKey
+        val path = defaultCosignerDerivationPath(WalletNetwork.MAINNET, MultisigScriptType.NATIVE_SEGWIT, 0)
+
+        val origin = completeBareCosignerExtendedKey("00000000", path, bareXpub)
+
+        assertEquals("00000000", origin.masterFingerprint)
+    }
+
+    @Test
+    fun `normalizeMasterFingerprint lowercases and trims`() {
+        assertEquals("73c5da0a", normalizeMasterFingerprint(" 73C5DA0A "))
+    }
+
+    @Test
+    fun `normalizeMasterFingerprint rejects the wrong length`() {
+        assertThrows(IllegalArgumentException::class.java) { normalizeMasterFingerprint("abc") }
+    }
+
+    @Test
     fun `completeBareCosignerExtendedKey rejects a bare zpub via the same SLIP-132 check as a pasted fragment`() {
         val bareZpub = deriveWalletAccountKeys(testMnemonic, "", WalletScriptType.NATIVE_SEGWIT, WalletNetwork.MAINNET, 0).extendedPublicKey
         val path = defaultCosignerDerivationPath(WalletNetwork.MAINNET, MultisigScriptType.NATIVE_SEGWIT, 0)

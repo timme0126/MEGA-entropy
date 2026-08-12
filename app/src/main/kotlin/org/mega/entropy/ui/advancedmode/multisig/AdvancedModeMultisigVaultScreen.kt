@@ -71,6 +71,7 @@ fun AdvancedModeMultisigVaultScreen(
     onPasteIntoSlot: (index: Int, text: String) -> Unit,
     onPasteFullDescriptor: (text: String) -> Unit,
     onClearSlot: (index: Int) -> Unit,
+    onEditFingerprint: (index: Int, fingerprint: String) -> Unit,
     onCompleteBareXpubCosigner: (fingerprint: String, accountIndex: Int?, customPath: String?) -> Unit,
     onCancelBareXpubHelper: () -> Unit,
     onBuildVault: () -> Unit,
@@ -111,6 +112,7 @@ fun AdvancedModeMultisigVaultScreen(
                 onPasteIntoSlot = onPasteIntoSlot,
                 onPasteFullDescriptor = onPasteFullDescriptor,
                 onClearSlot = onClearSlot,
+                onEditFingerprint = onEditFingerprint,
                 onBuildVault = onBuildVault,
                 allowSeedCopy = allowSeedCopy,
             )
@@ -252,6 +254,7 @@ private fun SlotsStepContent(
     onPasteIntoSlot: (Int, String) -> Unit,
     onPasteFullDescriptor: (String) -> Unit,
     onClearSlot: (Int) -> Unit,
+    onEditFingerprint: (Int, String) -> Unit,
     onBuildVault: () -> Unit,
     allowSeedCopy: Boolean,
 ) {
@@ -270,6 +273,7 @@ private fun SlotsStepContent(
             onScanSlot = { onScanSlot(index) },
             onPasteIntoSlot = { text -> onPasteIntoSlot(index, text) },
             onClearSlot = { onClearSlot(index) },
+            onEditFingerprint = { fingerprint -> onEditFingerprint(index, fingerprint) },
         )
     }
 
@@ -375,9 +379,11 @@ private fun MultisigSlotCard(
     onScanSlot: () -> Unit,
     onPasteIntoSlot: (text: String) -> Unit,
     onClearSlot: () -> Unit,
+    onEditFingerprint: (fingerprint: String) -> Unit,
 ) {
     var showPasteDialog by remember { mutableStateOf(false) }
     var pasteText by remember { mutableStateOf("") }
+    var showEditFingerprintDialog by remember { mutableStateOf(false) }
 
     if (showPasteDialog) {
         AlertDialog(
@@ -415,7 +421,30 @@ private fun MultisigSlotCard(
                 Text(status.label, style = MaterialTheme.typography.bodyMedium)
                 val origin = slot.origin
                 if (origin != null) {
-                    MegaMonoText("Fingerprint: ${origin.masterFingerprint}")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MegaMonoText("Fingerprint: ${origin.masterFingerprint}")
+                        IconButton(
+                            onClick = { showEditFingerprintDialog = true },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Edit,
+                                contentDescription = "Edit fingerprint",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                    if (showEditFingerprintDialog) {
+                        EditFingerprintDialog(
+                            currentValue = origin.masterFingerprint,
+                            onConfirm = { newFingerprint ->
+                                onEditFingerprint(newFingerprint)
+                                showEditFingerprintDialog = false
+                            },
+                            onCancel = { showEditFingerprintDialog = false },
+                        )
+                    }
                     MegaMonoText("Path: ${origin.derivationPath}")
                     // Short glance preview only — never the authoritative display of
                     // this key, which the Result step's full descriptor still shows
@@ -532,7 +561,18 @@ private fun CompleteCosignerInfoDialog(
                         color = MegaError,
                     )
                 } else {
-                    var fingerprint by remember { mutableStateOf("") }
+                    // Defaults to the "unknown origin" placeholder rather than
+                    // starting empty — a bare xpub genuinely cannot carry its
+                    // own master fingerprint (see completeBareCosignerExtendedKey's
+                    // doc comment), so requiring the user to type one before
+                    // they can even add the cosigner blocks the common case
+                    // where they don't have it handy yet. Sparrow does the
+                    // same: importing a bare xpub there defaults to
+                    // [00000000/...] and lets the user fill in the real
+                    // fingerprint later. The field stays fully editable, and
+                    // MultisigSlotCard's pencil icon lets it be corrected
+                    // after the cosigner is already added.
+                    var fingerprint by remember { mutableStateOf("00000000") }
                     var accountText by remember { mutableStateOf("0") }
                     var customPath by remember { mutableStateOf("") }
 
@@ -543,6 +583,9 @@ private fun CompleteCosignerInfoDialog(
                         },
                         label = { Text("Master fingerprint") },
                         placeholder = { Text("8 hex characters, e.g. 73c5da0a") },
+                        supportingText = {
+                            Text("Defaults to 00000000 (unknown) if you don't know it yet — edit it here, or later on the cosigner's own card.")
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -597,6 +640,58 @@ private fun CompleteCosignerInfoDialog(
             }
         },
         confirmButton = {},
+    )
+}
+
+/**
+ * Lets a filled slot's master fingerprint be corrected after the fact —
+ * the counterpart to CompleteCosignerInfoDialog defaulting a bare-xpub
+ * import's fingerprint to the "00000000" unknown-origin placeholder
+ * instead of requiring it up front. The xpub and derivation path aren't
+ * editable here; only the fingerprint, since that's the one field that
+ * genuinely can't be derived from the key itself (see
+ * completeBareCosignerExtendedKey's doc comment).
+ */
+@Composable
+private fun EditFingerprintDialog(
+    currentValue: String,
+    onConfirm: (fingerprint: String) -> Unit,
+    onCancel: () -> Unit,
+) {
+    var fingerprint by remember { mutableStateOf(currentValue) }
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Edit Fingerprint") },
+        text = {
+            Column {
+                Text(
+                    "The master fingerprint identifies which signing device this cosigner belongs to. " +
+                        "Check it against the exporting wallet or hardware device before changing it.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = fingerprint,
+                    onValueChange = { value ->
+                        fingerprint = value.filter { it.isDigit() || it.lowercaseChar() in 'a'..'f' }.take(8)
+                    },
+                    label = { Text("Master fingerprint") },
+                    placeholder = { Text("8 hex characters, e.g. 73c5da0a") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(fingerprint) },
+                enabled = fingerprint.length == 8,
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text("Cancel") }
+        },
     )
 }
 

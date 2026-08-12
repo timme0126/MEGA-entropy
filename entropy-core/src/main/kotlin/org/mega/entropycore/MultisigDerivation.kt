@@ -340,6 +340,21 @@ fun defaultCosignerDerivationPath(network: WalletNetwork, scriptType: MultisigSc
 
 private val MASTER_FINGERPRINT_REGEX = Regex("^[0-9a-fA-F]{8}$")
 
+/** Validates and lowercases a master fingerprint — exactly 8 hex
+ * characters, matching BIP32's fixed fingerprint size. Shared by
+ * [completeBareCosignerExtendedKey] (first entry, defaults to "00000000"
+ * — see that function's own doc comment on why an unknown fingerprint
+ * can't be derived) and any later correction of an already-filled slot's
+ * fingerprint, so both paths reject the same malformed input the same
+ * way. */
+fun normalizeMasterFingerprint(masterFingerprint: String): String {
+    val trimmed = masterFingerprint.trim()
+    require(MASTER_FINGERPRINT_REGEX.matches(trimmed)) {
+        "Master fingerprint must be exactly 8 hex characters, got: $trimmed"
+    }
+    return trimmed.lowercase()
+}
+
 /**
  * Completes a bare extended public key (no origin information) into a
  * validated [MultisigCosignerOrigin], given a user-supplied master
@@ -365,11 +380,8 @@ fun completeBareCosignerExtendedKey(
     derivationPath: String,
     extendedPublicKey: String,
 ): MultisigCosignerOrigin {
-    val trimmedFingerprint = masterFingerprint.trim()
-    require(MASTER_FINGERPRINT_REGEX.matches(trimmedFingerprint)) {
-        "Master fingerprint must be exactly 8 hex characters, got: $trimmedFingerprint"
-    }
-    val fragment = "[${trimmedFingerprint.lowercase()}/${stripLeadingPathRoot(derivationPath)}]$extendedPublicKey"
+    val normalizedFingerprint = normalizeMasterFingerprint(masterFingerprint)
+    val fragment = "[$normalizedFingerprint/${stripLeadingPathRoot(derivationPath)}]$extendedPublicKey"
     return parseCosignerDescriptorFragment(fragment)
 }
 
