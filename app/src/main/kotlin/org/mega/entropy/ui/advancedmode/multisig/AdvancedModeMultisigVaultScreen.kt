@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -82,6 +83,7 @@ fun AdvancedModeMultisigVaultScreen(
     onDismissSavedVaultConfirmation: () -> Unit,
     onConfirmDescriptorImport: () -> Unit,
     onCancelDescriptorImport: () -> Unit,
+    onGoHome: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
 
@@ -152,6 +154,13 @@ fun AdvancedModeMultisigVaultScreen(
                         wallet = wallet,
                         cosigners = uiState.slots.mapNotNull { it.toCosignerDisplayInfo() },
                     )
+                }
+                // Once a vault is built (and especially once saved), the
+                // natural next step is leaving the flow entirely rather than
+                // stepping back through Slots/Policy one screen at a time —
+                // this jumps straight back to Advanced Mode.
+                IconButton(onClick = onGoHome) {
+                    Icon(imageVector = Icons.Filled.Home, contentDescription = "Back to Advanced Mode")
                 }
             },
         ) {
