@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
-import android.util.Log
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
@@ -99,7 +98,9 @@ fun copyPdfToDestination(context: Context, sourcePdfUri: Uri, destinationUri: Ur
             }
         } != null
     } catch (e: Exception) {
-        Log.w("MultisigVaultPdfExporter", "Failed to save PDF to the chosen destination", e)
+        // Deliberately NOT logged: the exception can carry the user-chosen
+        // destination path, and this app's policy is no Log calls at all.
+        // The caller surfaces the failure as a toast instead.
         false
     }
 }
