@@ -80,6 +80,26 @@ private fun String.parseBase36(): Int? {
  * back to the raw decoded text if no such field is found.
  */
 fun assembleBbqrParts(parts: List<BbqrPart>): String {
+    val (fileType, decodedBytes) = combineAndDecodeBbqrParts(parts, setOf('U', 'J'))
+    val text = decodedBytes.toString(Charsets.UTF_8)
+    return if (fileType == 'J') extractJsonDescriptorField(text) ?: text else text
+}
+
+/**
+ * Same completeness/consistency checks as [assembleBbqrParts], but for a
+ * binary file type — a PSBT ('P') or raw transaction ('T') — where the
+ * decoded bytes are the answer itself, not UTF-8 text to search for a
+ * JSON field in. This is what a PSBT-import scanner uses.
+ */
+fun assembleBbqrPartsAsBytes(parts: List<BbqrPart>): ByteArray =
+    combineAndDecodeBbqrParts(parts, setOf('P', 'T')).second
+
+/** Validates a complete, self-consistent set of [BbqrPart]s and decodes
+ * their combined payload to raw bytes, per [encoding]. Shared by both
+ * [assembleBbqrParts] (text/JSON) and [assembleBbqrPartsAsBytes]
+ * (PSBT/transaction) — every step through decoding is identical between
+ * them; only what to do with the resulting bytes differs. */
+private fun combineAndDecodeBbqrParts(parts: List<BbqrPart>, supportedFileTypes: Set<Char>): Pair<Char, ByteArray> {
     require(parts.isNotEmpty()) { "No BBQr parts to assemble." }
     val total = parts.first().total
     val encoding = parts.first().encoding
@@ -91,8 +111,8 @@ fun assembleBbqrParts(parts: List<BbqrPart>): String {
     require((0 until total).all { it in byIndex }) {
         "Missing BBQr parts — only ${byIndex.size} of $total have been scanned so far."
     }
-    require(fileType == 'U' || fileType == 'J') {
-        "Unsupported BBQr file type '$fileType' — MEGA can only import a text or JSON descriptor export ('U' or 'J')."
+    require(fileType in supportedFileTypes) {
+        "Unsupported BBQr file type '$fileType' — expected one of $supportedFileTypes."
     }
 
     val combinedPayload = (0 until total).joinToString("") { byIndex.getValue(it).payload }
@@ -102,8 +122,77 @@ fun assembleBbqrParts(parts: List<BbqrPart>): String {
         'Z' -> inflateRawDeflate(decodeBase32(combinedPayload))
         else -> throw IllegalArgumentException("Unsupported BBQr encoding '$encoding'.")
     }
-    val text = decodedBytes.toString(Charsets.UTF_8)
-    return if (fileType == 'J') extractJsonDescriptorField(text) ?: text else text
+    return fileType to decodedBytes
+}
+
+/** Maximum part-count BBQr's 2-character base-36 total/index fields can
+ * address: 36^2 = 1296 (indices 0 until 1296). */
+private const val MAX_BBQR_PARTS = 1296
+
+/** Default payload size per part, in Base32 characters (excluding the
+ * fixed 8-character "B$2<fileType><total><index>" header) — small enough
+ * that each resulting QR stays comfortably scannable by a phone camera at
+ * a normal viewing distance across an animated series, matching the kind
+ * of part size other Bitcoin-signing-device BBQr exporters commonly use. */
+private const val DEFAULT_BBQR_PART_PAYLOAD_SIZE = 150
+
+/**
+ * Splits [data] into a sequence of complete BBQr part strings — each
+ * ready to render directly as one frame of an animated QR export — using
+ * the '2' (plain Base32, no compression) encoding. Plain Base32 was
+ * chosen over 'Z' (deflate+Base32) for simplicity and to keep this
+ * encoder's output trivially verifiable against [decodeBase32], which
+ * this codebase already has tests for; over 'H' (hex) for using 3 payload
+ * bits/char instead of 4, meaning fewer QR frames for the same data.
+ *
+ * [fileType] is a raw BBQr file-type character ('P' for PSBT, 'T' for a
+ * raw transaction, etc — see the BBQr spec) — this function does not
+ * validate it, since new file types may need exporting later and nothing
+ * about splitting/encoding bytes actually depends on which one is used.
+ */
+fun encodeBbqr(fileType: Char, data: ByteArray, partPayloadSize: Int = DEFAULT_BBQR_PART_PAYLOAD_SIZE): List<String> {
+    require(partPayloadSize > 0) { "partPayloadSize must be positive, got $partPayloadSize" }
+    val payload = encodeBase32(data)
+    val total = if (payload.isEmpty()) 1 else (payload.length + partPayloadSize - 1) / partPayloadSize
+    require(total <= MAX_BBQR_PARTS) {
+        "Data too large to encode as BBQr at $partPayloadSize chars/part: would need $total parts (max $MAX_BBQR_PARTS)."
+    }
+    return (0 until total).map { index ->
+        val start = index * partPayloadSize
+        val end = minOf(start + partPayloadSize, payload.length)
+        val chunk = payload.substring(start, end)
+        "B$" + '2' + fileType + total.toBase36Pair() + index.toBase36Pair() + chunk
+    }
+}
+
+private fun Int.toBase36Pair(): String {
+    require(this in 0 until MAX_BBQR_PARTS) { "Value $this does not fit BBQr's 2-character base-36 field." }
+    return "" + BASE36_DIGITS[this / 36] + BASE36_DIGITS[this % 36]
+}
+
+/** Standard 5-bits-per-character Base32 encode, MSB-first, no padding —
+ * the exact mirror of [decodeBase32]. A final partial group of fewer than
+ * 5 leftover bits is left-shifted to fill out one more full character
+ * (matching [decodeBase32]'s "no padding character" contract: decoding
+ * this encoder's own output never has a partial trailing byte to worry
+ * about, since the decoder simply stops accumulating once the input
+ * characters run out). */
+private fun encodeBase32(data: ByteArray): String {
+    val sb = StringBuilder((data.size * 8 + 4) / 5)
+    var bits = 0
+    var bitCount = 0
+    for (byte in data) {
+        bits = (bits shl 8) or (byte.toInt() and 0xFF)
+        bitCount += 8
+        while (bitCount >= 5) {
+            bitCount -= 5
+            sb.append(BASE32_ALPHABET[(bits shr bitCount) and 0x1F])
+        }
+    }
+    if (bitCount > 0) {
+        sb.append(BASE32_ALPHABET[(bits shl (5 - bitCount)) and 0x1F])
+    }
+    return sb.toString()
 }
 
 private fun decodeBbqrHex(text: String): ByteArray {
