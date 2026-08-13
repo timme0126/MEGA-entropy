@@ -37,6 +37,8 @@ import org.mega.entropy.ui.advancedmode.AdvancedModeHubScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeImportPickerScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeMnemonicEntryScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeWalletScreen
+import org.mega.entropy.ui.advancedmode.PsbtScanScreen
+import org.mega.entropy.ui.advancedmode.PsbtSignResultScreen
 import org.mega.entropy.ui.advancedmode.SeedQrScanScreen
 import org.mega.entropy.ui.advancedmode.multisig.AdvancedModeMultisigDeriveCosignerScreen
 import org.mega.entropy.ui.advancedmode.multisig.AdvancedModeMultisigScannerScreen
@@ -132,6 +134,13 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     // words), and just needs a place to carry the passphrase typed on the
     // hub as that screen's own editable field's initial value.
     var advancedModeWalletPassphrase by remember { mutableStateOf("") }
+    // Carries the passphrase typed on the Hub over to ADVANCED_MODE_PSBT_SCAN
+    // / ADVANCED_MODE_PSBT_SIGN_RESULT, same role as advancedModeWalletPassphrase
+    // above. scannedPsbtBytes holds the PSBT the scanner screen just read,
+    // on its way to the sign/result screen — cleared once that screen is
+    // left via its own Done button.
+    var advancedModePsbtPassphrase by remember { mutableStateOf("") }
+    var scannedPsbtBytes by remember { mutableStateOf<ByteArray?>(null) }
     // Words (plus the source session's label) on their way from
     // ADVANCED_MODE_MULTISIG_COSIGNER_PICKER to
     // ADVANCED_MODE_MULTISIG_DERIVE_COSIGNER — a separate, narrowly-scoped
@@ -639,6 +648,10 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                         advancedModeWalletPassphrase = passphrase
                         navController.navigate(MegaDestinations.ADVANCED_MODE_WALLET)
                     },
+                    onSignPsbt = { passphrase ->
+                        advancedModePsbtPassphrase = passphrase
+                        navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_SCAN)
+                    },
                     onSaveAsSession = { label ->
                         coroutineScope.launch { saveAdvancedModeSession(words, label) }
                     },
@@ -690,6 +703,41 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     allowSeedCopy = allowSeedCopy,
                     allowPrivateKeyExport = allowPrivateKeyExport,
                     onBack = { navController.popBackStack() },
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.popBackStack()
+                }
+            }
+        }
+        composable(MegaDestinations.ADVANCED_MODE_PSBT_SCAN) {
+            PsbtScanScreen(
+                allowScreenshots = allowScreenshots,
+                onBack = { navController.popBackStack() },
+                onScanned = { bytes ->
+                    scannedPsbtBytes = bytes
+                    navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_SIGN_RESULT)
+                },
+            )
+        }
+        composable(MegaDestinations.ADVANCED_MODE_PSBT_SIGN_RESULT) {
+            val words = advancedModeWords
+            val psbtBytes = scannedPsbtBytes
+            if (words != null && psbtBytes != null) {
+                fun onDone() {
+                    scannedPsbtBytes = null
+                    advancedModePsbtPassphrase = ""
+                    if (!navController.popBackStack(MegaDestinations.ADVANCED_MODE_HUB, inclusive = false)) {
+                        navController.popBackStack()
+                    }
+                }
+                PsbtSignResultScreen(
+                    psbtBytes = psbtBytes,
+                    mnemonicWords = words,
+                    passphrase = advancedModePsbtPassphrase,
+                    allowScreenshots = allowScreenshots,
+                    allowSeedCopy = allowSeedCopy,
+                    onBack = { onDone() },
                 )
             } else {
                 LaunchedEffect(Unit) {

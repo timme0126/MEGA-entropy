@@ -9,6 +9,14 @@ everything below is unreleased on top of it, not yet in a tagged build.
 Driven by real multisig testing against Sparrow Wallet.
 
 ### Added
+- **Sign PSBT**: Advanced Mode can now sign a PSBT (Partially Signed
+  Bitcoin Transaction) with the loaded seed. Scan a PSBT as a single
+  base64 QR or an animated BBQr series, and MEGA signs every input it
+  holds a key for (BIP174 parsing, RFC6979-deterministic ECDSA, BIP143
+  segwit sighash, PSBT finalization — all in `entropy-core`). A fully
+  signed transaction is shown as hex plus a broadcast-ready animated QR;
+  a still-partially-signed multisig PSBT is re-exported the same way to
+  hand off to the next cosigner.
 - **BBQr animated QR support**: the multisig scanner now decodes BBQr —
   the `B$<encoding><type><total><index>` header Sparrow (and other
   Bitcoin tools) use to spread a larger export, such as a full multisig

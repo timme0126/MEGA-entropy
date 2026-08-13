@@ -64,6 +64,7 @@ fun AdvancedModeHubScreen(
     onBack: () -> Unit,
     onBip85: (passphrase: String) -> Unit,
     onWalletKeys: (passphrase: String) -> Unit,
+    onSignPsbt: (passphrase: String) -> Unit,
     // Only the words are ever saved — never the passphrase typed below,
     // matching every other saved session in the app. label comes from the
     // dialog opened by the top-right save icon.
@@ -182,6 +183,7 @@ fun AdvancedModeHubScreen(
 
         MegaPrimaryButton(text = "Derive Wallet Public Keys", onClick = { onWalletKeys(passphrase) })
         MegaPrimaryButton(text = "Derive BIP85 Child Mnemonic", onClick = { onBip85(passphrase) })
+        MegaPrimaryButton(text = "Sign PSBT", onClick = { onSignPsbt(passphrase) })
 
         val seed = revealedSeed
         if (seed == null) {

@@ -94,4 +94,13 @@ object MegaDestinations {
     const val SAVED_MULTISIG_VAULT_DETAIL_ARG = "vaultId"
     const val SAVED_MULTISIG_VAULT_DETAIL = "saved_multisig_vault_detail/{$SAVED_MULTISIG_VAULT_DETAIL_ARG}"
     fun savedMultisigVaultDetailRoute(vaultId: String) = "saved_multisig_vault_detail/$vaultId"
+
+    /** "Sign PSBT" — reachable from ADVANCED_MODE_HUB, alongside
+     * ADVANCED_MODE_BIP85/ADVANCED_MODE_WALLET: uses the same already-loaded
+     * mnemonic/passphrase. Scans a PSBT (single QR or animated BBQr series),
+     * signs it with this device's key material, and shows either the
+     * broadcast-ready transaction or the still-partially-signed PSBT to
+     * hand to the next cosigner. */
+    const val ADVANCED_MODE_PSBT_SCAN = "advanced_mode_psbt_scan"
+    const val ADVANCED_MODE_PSBT_SIGN_RESULT = "advanced_mode_psbt_sign_result"
 }
