@@ -17,7 +17,7 @@ clean builds on the same machine, will produce byte-for-byte identical APKs.
 
 ## What to Verify for the Beta APK
 
-For v0.1.8 beta testing, verify the distributed APK itself:
+For v0.1.9 beta testing, verify the distributed APK itself:
 
 1. Its SHA-256 hash matches the value published in `README.md`.
 2. It is not debuggable.

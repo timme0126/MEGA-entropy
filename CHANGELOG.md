@@ -1,10 +1,10 @@
 # Changelog
 
 Notable changes to MEGA, most recent first. The current beta build
-remains `v0.1.8` (see [`README.md`](README.md#download-the-beta-apk)) —
-everything below is unreleased on top of it, not yet in a tagged build.
+is `v0.1.9` (see [`README.md`](README.md#download-the-beta-apk)) —
+the changes below are included in this tagged release.
 
-## [Unreleased] — 2026-08-13
+## [0.1.9] — 2026-08-13
 
 Driven by real multisig testing against Sparrow Wallet.
 

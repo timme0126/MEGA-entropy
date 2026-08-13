@@ -57,6 +57,7 @@ Run through:
 9. Screenshot and Recent Apps blocking on sensitive screens.
 10. Uninstall or user-profile deletion to confirm app data disappears.
 11. Advanced Mode: manual mnemonic entry, wallet public key/address
+    12. PSBT signing: import a disposable PSBT into Advanced Mode and an existing saved multisig vault; verify the transaction review shows amounts, fee information, signature state, and unknown values honestly; confirm that Cancel/Back never signs; then use "Confirm and Sign" and verify the partially-signed PSBT or finalized transaction can be imported by Sparrow. Test both single-frame base64 and animated BBQr input/output, including a real 2-of-2 multisig fixture. Never use a wallet containing meaningful funds.
     derivation, BIP85 child mnemonics, "Import via SeedQR" (both Standard
     and Compact SeedQR, e.g. from SeedSigner or Sparrow), and "Setup
     Multi-Signature Vault" (choose an M-of-N policy, fill each cosigner
