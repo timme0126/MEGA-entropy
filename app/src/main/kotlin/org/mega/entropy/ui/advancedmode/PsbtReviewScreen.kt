@@ -17,9 +17,12 @@ import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
+import org.mega.entropycore.MultisigCosignerOrigin
 import org.mega.entropycore.PsbtThresholdInfo
 import org.mega.entropycore.WalletNetwork
 import org.mega.entropycore.computePsbtSummary
+import org.mega.entropycore.parsePsbt
+import org.mega.entropycore.verifyVaultChangeOutput
 
 @Composable
 fun PsbtReviewScreen(
@@ -27,6 +30,12 @@ fun PsbtReviewScreen(
     knownNetwork: WalletNetwork?,
     deviceMasterFingerprint: String?,
     allowScreenshots: Boolean,
+    // When reviewing a spend from a KNOWN saved vault, its threshold and
+    // cosigner origins — enabling cryptographic verification of change
+    // outputs (see verifyVaultChangeOutput) instead of trusting the PSBT's
+    // own claim about which output is change. Null for the single-seed flow.
+    vaultThreshold: Int? = null,
+    vaultCosigners: List<MultisigCosignerOrigin>? = null,
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -34,6 +43,24 @@ fun PsbtReviewScreen(
 
     val summaryResult = remember(psbtBytes, knownNetwork, deviceMasterFingerprint) {
         runCatching { computePsbtSummary(psbtBytes, knownNetwork, deviceMasterFingerprint) }
+    }
+    // Parse once more for vault change verification — only when vault
+    // context was supplied (the saved-vault flow). Errors here are already
+    // covered by summaryResult's own failure display, so default to none.
+    val verifiedChange: Set<Int> = remember(psbtBytes, vaultThreshold, vaultCosigners) {
+        val threshold = vaultThreshold
+        val cosigners = vaultCosigners
+        if (threshold == null || cosigners == null || knownNetwork == null) return@remember emptySet()
+        runCatching {
+            val psbt = parsePsbt(psbtBytes)
+            psbt.unsignedTx.outputs.mapIndexedNotNull { index, txOut ->
+                if (verifyVaultChangeOutput(txOut.scriptPubKey, psbt.outputs[index], threshold, cosigners, knownNetwork)) {
+                    index
+                } else {
+                    null
+                }
+            }.toSet()
+        }.getOrDefault(emptySet())
     }
 
     MegaInfoScaffold(title = "Review Transaction", onBack = onCancel) {
@@ -47,6 +74,26 @@ fun PsbtReviewScreen(
             }
         } else {
             val summary = summaryResult.getOrThrow()
+            // Conditions under which "Confirm and Sign" must not be offered:
+            // the signer would refuse (unsupported sighash) or the
+            // transaction is invalid on its face (outputs exceed inputs).
+            val blockingReasons = mutableListOf<String>()
+            if (summary.hasUnsupportedSighashType) {
+                val badInputs = summary.inputs.mapIndexedNotNull { index, input ->
+                    val sighash = input.sighashType
+                    if (sighash != null && sighash != 1L) {
+                        "input ${index + 1} (0x${sighash.toString(16)})"
+                    } else {
+                        null
+                    }
+                }
+                blockingReasons += "This transaction requests an unsupported sighash type on ${badInputs.joinToString(", ")}. " +
+                    "MEGA only signs SIGHASH_ALL, where the signature commits to every output shown here. " +
+                    "Signing this would authorize something different from what you see."
+            }
+            if (summary.feeIsNegative) {
+                blockingReasons += "This transaction's outputs exceed its inputs (a negative fee) — it is invalid and cannot be broadcast."
+            }
 
             fun formatSats(sats: Long): String = "%,d sats".format(sats)
 
@@ -59,10 +106,38 @@ fun PsbtReviewScreen(
                 )
             }
 
+            blockingReasons.forEach { reason ->
+                MegaCard(title = "Cannot Sign This Transaction") {
+                    Text(
+                        text = reason,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MegaError,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            // Non-blocking cautions — the user can still decide, but they
+            // must not scroll past unnoticed.
+            val feeSats = summary.feeSats
+            val totalIn = summary.totalInputSats
+            if (blockingReasons.isEmpty() && feeSats != null && totalIn != null && totalIn > 0 &&
+                feeSats > totalIn / 10
+            ) {
+                MegaCard(title = "High Fee Warning") {
+                    Text(
+                        text = "The fee (${formatSats(feeSats)}) is more than 10% of the total input amount. " +
+                            "Double-check the outputs and fee before signing.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MegaError
+                    )
+                }
+            }
+
             MegaCard(title = "Summary") {
                 SummaryLine("Network", when (summary.network) {
-                    WalletNetwork.MAINNET -> "Mainnet"
-                    WalletNetwork.TESTNET -> "Testnet"
+                    WalletNetwork.MAINNET -> if (summary.networkWasInferred) "Mainnet (from key paths)" else "Mainnet"
+                    WalletNetwork.TESTNET -> if (summary.networkWasInferred) "Testnet (from key paths)" else "Testnet"
                     null -> null
                 })
                 SummaryLine("Inputs", summary.inputCount.toString())
@@ -114,11 +189,21 @@ fun PsbtReviewScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                     MegaMonoText(text = output.address ?: output.scriptPubKeyHex)
-                    if (output.isLikelyChange) {
+                    if (index in verifiedChange) {
                         Text(
-                            text = "Likely change (pays back to this wallet)",
+                            text = "Change back to this vault (verified against its keys)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else if (output.isLikelyChange) {
+                        Text(
+                            text = if (vaultCosigners != null) {
+                                "References this wallet's fingerprint — could NOT be verified as change"
+                            } else {
+                                "Possible change (unverified)"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MegaError
                         )
                     }
                     if (index < summary.outputs.size - 1) {
@@ -128,7 +213,9 @@ fun PsbtReviewScreen(
             }
 
             MegaSecondaryButton(text = "Cancel", onClick = onCancel)
-            MegaPrimaryButton(text = "Confirm and Sign", onClick = onConfirm)
+            if (blockingReasons.isEmpty()) {
+                MegaPrimaryButton(text = "Confirm and Sign", onClick = onConfirm)
+            }
         }
     }
 }

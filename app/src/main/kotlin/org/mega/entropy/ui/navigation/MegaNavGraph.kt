@@ -1127,6 +1127,11 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     // reused as-is rather than re-derived from the seed a
                     // second time.
                     deviceMasterFingerprint = cosigner.masterFingerprint,
+                    // This vault's own keys — lets the review VERIFY which
+                    // outputs are change back to the vault instead of
+                    // trusting the PSBT's own metadata.
+                    vaultThreshold = vault.threshold,
+                    vaultCosigners = vault.cosigners.map { it.toOrigin() },
                     allowScreenshots = allowScreenshots,
                     onCancel = { exitSavedVaultPsbtFlow() },
                     onConfirm = { navController.navigate(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_SIGN_RESULT) },
