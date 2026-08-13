@@ -14,7 +14,12 @@ class PsbtSigningTest {
         private const val MASTER_FINGERPRINT_HEX = "73c5da0a"
         private const val DIFFERENT_FINGERPRINT_HEX = "00000000"
         private const val WITNESS_SCRIPT_HEX = "522103b1341ccba7683b6af4f1238cd6e97e7167d569fac47f1e48d47541844355bd462103de55d1e1dac805e3f8a58c1fbf9b94c02f3dbaafe127fefca4995f26f82083bd52ae"
-        private const val SCRIPT_PUBKEY_HEX = "a9146345200f68d189e1adc0df1c4d16ea8f14c0dbeb87"
+        // Bare-P2WSH scriptPubKey committing to WITNESS_SCRIPT_HEX: OP_0 <sha256(script)>.
+        // (The BIP174 vector this fixture borrows from wraps it in P2SH instead —
+        // a9146345... — which this app deliberately never signs: no final_scriptSig
+        // support. The sighash never commits to the UTXO's scriptPubKey, so the
+        // expected signature below is unaffected by this correction.)
+        private const val SCRIPT_PUBKEY_HEX = "0020771fd18ad459666dd49f3d564e3dbc42f4c84774e360ada16816a8ed488d5681"
         private const val WITNESS_UTXO_AMOUNT = 199909013L
         // Raw uint32 path elements (each already includes the 0x80000000
         // hardened bit where applicable) for 48'/0'/0'/2'/0/0.
