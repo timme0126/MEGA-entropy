@@ -234,14 +234,26 @@ fun serializePsbt(psbt: Psbt): ByteArray {
 
 fun PsbtMap.witnessUtxo(): TxOut? {
     val value = entries.find { it.keyType == 0x01 }?.value ?: return null
-    // Per BIP174: 8-byte LE amount + compact-size-prefixed scriptPubKey.
+    // Per BIP174: 8-byte LE amount + compact-size-prefixed scriptPubKey,
+    // and NOTHING ELSE — the value must be consumed exactly. A witness_utxo
+    // record with extra bytes after its script isn't a form BIP174 defines;
+    // silently ignoring the remainder would mean two different byte strings
+    // (one with trailing junk, one without) parse to the SAME TxOut, which
+    // is exactly the kind of ambiguity a canonical-encoding rule exists to
+    // close (see the global-unsigned-tx and compact-size hardening above).
     if (value.size < 8) throw IllegalArgumentException("Truncated witnessUtxo amount")
-    val amount = readUInt64LE(value, 0)
+    val amount = requireValidSatsAmount(readUInt64LE(value, 0), "witnessUtxo amount")
     val scriptLenResult = readCompactSize(value, 8)
     val scriptLen = scriptLenResult.value
     val offset = scriptLenResult.consumed
     if (offset + scriptLen > value.size) throw IllegalArgumentException("Truncated witnessUtxo script")
     val scriptPubKey = value.copyOfRange(offset, offset + scriptLen.toInt())
+    val consumedEnd = offset + scriptLen.toInt()
+    if (consumedEnd != value.size) {
+        throw IllegalArgumentException(
+            "witnessUtxo value has ${value.size - consumedEnd} trailing byte(s) after its script",
+        )
+    }
     return TxOut(amount, scriptPubKey)
 }
 
@@ -250,7 +262,12 @@ fun PsbtMap.partialSigs(): List<PsbtPartialSig> =
 
 fun PsbtMap.sighashType(): Long? =
     entries.find { it.keyType == 0x03 }?.value?.let {
-        if (it.size < 4) throw IllegalArgumentException("Truncated sighashType")
+        // PSBT_IN_SIGHASH_TYPE is a fixed 4-byte little-endian uint32 (BIP174)
+        // — not "at least 4 bytes". Accepting a longer value would silently
+        // discard trailing bytes a strict peer might interpret differently,
+        // the same divergence risk every other exact-length field here
+        // already guards against.
+        if (it.size != 4) throw IllegalArgumentException("PSBT_IN_SIGHASH_TYPE must be exactly 4 bytes, got ${it.size}")
         readUInt32LE(it, 0)
     }
 

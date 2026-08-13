@@ -14,6 +14,59 @@ data class TxOut(
     val scriptPubKey: ByteArray,
 )
 
+/** Total satoshis that will ever exist (21,000,000 BTC × 100,000,000
+ * sats/BTC) — the same MAX_MONEY bound Bitcoin Core's consensus rules
+ * enforce on every amount field. A PSBT or transaction claiming more than
+ * this for a single input/output is malformed by construction, not merely
+ * unusual: no real Bitcoin amount can ever reach it. Amounts are read from
+ * an attacker-controlled 8-byte little-endian field, so this range check
+ * also catches the case where the raw bits happen to set the Kotlin Long's
+ * sign bit (read back negative) — a negative value fails `>= 0` the same
+ * as an oversized one fails `<= MAX_MONEY_SATS`. */
+internal const val MAX_MONEY_SATS = 21_000_000L * 100_000_000L
+
+internal fun Long.isValidSatsAmount(): Boolean = this in 0L..MAX_MONEY_SATS
+
+internal fun requireValidSatsAmount(amount: Long, fieldDescription: String): Long {
+    if (!amount.isValidSatsAmount()) {
+        throw IllegalArgumentException(
+            "$fieldDescription is $amount sats, outside the valid range 0..$MAX_MONEY_SATS",
+        )
+    }
+    return amount
+}
+
+/**
+ * Sums a list of already-individually-validated satoshi amounts using
+ * checked (overflow-detecting) addition. Each amount is bounded to
+ * [MAX_MONEY_SATS] by its own parser, but a PSBT is free to declare an
+ * unbounded NUMBER of inputs/outputs, so a long enough list can still
+ * overflow a 64-bit sum — silently wrapping to a small or negative total
+ * would show the user a misleadingly small amount (or an implausible
+ * negative one) instead of failing. Throws rather than returning a wrapped
+ * value, so an overflowing total fails the whole computation closed
+ * instead of producing a number that looks plausible but isn't.
+ */
+internal fun checkedSumSats(amounts: List<Long>, whatIsBeingSummed: String): Long {
+    var total = 0L
+    for (amount in amounts) {
+        total = try {
+            Math.addExact(total, amount)
+        } catch (e: ArithmeticException) {
+            throw IllegalArgumentException("$whatIsBeingSummed overflows a 64-bit total — refusing to report it", e)
+        }
+    }
+    return total
+}
+
+/** Checked (overflow-detecting) subtraction for a fee calculation — see
+ * [checkedSumSats] for why silently wrapping is unacceptable here. */
+internal fun checkedSubtractSats(minuend: Long, subtrahend: Long, whatIsBeingComputed: String): Long = try {
+    Math.subtractExact(minuend, subtrahend)
+} catch (e: ArithmeticException) {
+    throw IllegalArgumentException("$whatIsBeingComputed overflows a 64-bit value — refusing to report it", e)
+}
+
 data class Transaction(
     val version: Long,
     val inputs: List<TxIn>,
@@ -129,7 +182,7 @@ fun parseTransaction(bytes: ByteArray): Transaction {
 
     val outputs = mutableListOf<TxOut>()
     for (i in 0 until outputCount) {
-        val valueSats = readUInt64LE(bytes, offset); offset += 8
+        val valueSats = requireValidSatsAmount(readUInt64LE(bytes, offset), "Output $i amount"); offset += 8
 
         val scriptPubKeyLenResult = readCompactSize(bytes, offset); offset = scriptPubKeyLenResult.consumed
         val scriptPubKeyLen = scriptPubKeyLenResult.value

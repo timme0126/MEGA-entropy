@@ -84,6 +84,19 @@ class PsbtSummaryTest {
             val witnessScript: ByteArray,
         )
 
+        /** A real, cryptographically valid partial_sig for [master]'s derived child key over [witnessScript] at input 0. */
+        private fun realCosignerSig(
+            master: Bip32ExtendedPrivateKey,
+            witnessScript: ByteArray,
+            unsignedTx: Transaction,
+            amountSats: Long,
+        ): ByteArray {
+            val child = childKeyFor(master)
+            val scriptCode = compactSize(witnessScript.size) + witnessScript
+            val sighash = computeSegwitSighash(unsignedTx, 0, scriptCode, amountSats, 1)
+            return signEcdsaDer(child.privateKey, sighash) + byteArrayOf(0x01)
+        }
+
         private fun unsignedTxWith(outputs: List<Pair<Long, ByteArray>>, inputCount: Int = 1): Transaction {
             val dummyPrevTxid = ByteArray(32)
             return Transaction(
@@ -245,13 +258,16 @@ class PsbtSummaryTest {
         val scriptPubKey = p2wshScriptPubKey(fixture.witnessScript)
         val unsignedTx = unsignedTxWith(outputs = listOf(50_000L to p2wpkhScriptPubKey()))
         // Cosigner A has already signed — only cosigner B's signature is still needed.
+        // willFinalizeIfSigned now cryptographically verifies existing partial_sigs
+        // (finding #6), so A's signature here must be real and valid, not a placeholder.
+        val sigA = realCosignerSig(fixture.masterA, fixture.witnessScript, unsignedTx, amountSats = 60_000L)
         val inputMap = PsbtMap(
             listOf(
                 PsbtKeyValue(0x01, ByteArray(0), witnessUtxoValue(60_000L, scriptPubKey)),
                 PsbtKeyValue(0x05, ByteArray(0), fixture.witnessScript),
                 PsbtKeyValue(0x06, fixture.pubkeyA, bip32DerivationValue(fixture.masterA.fingerprint())),
                 PsbtKeyValue(0x06, fixture.pubkeyB, bip32DerivationValue(fixture.masterB.fingerprint())),
-                PsbtKeyValue(0x02, fixture.pubkeyA, byteArrayOf(0x30, 0x00)), // existing partial_sig for A (content irrelevant to the summary)
+                PsbtKeyValue(0x02, fixture.pubkeyA, sigA),
             ),
         )
         val outputs = listOf(PsbtMap(emptyList()))
@@ -262,6 +278,40 @@ class PsbtSummaryTest {
 
         assertTrue(summary.deviceCanSignAnyInput == true)
         assertTrue(summary.willFinalizeIfSigned == true)
+    }
+
+    // --- 7b. willFinalizeIfSigned is false, not true, when an existing signature is present but invalid ---
+
+    @Test
+    fun `willFinalizeIfSigned is false when an existing partial_sig meets the count but fails verification`() {
+        // Same shape as test 7 (device B would complete the 2-of-2), except
+        // cosigner A's "signature" is malformed bytes rather than real ones.
+        // A naive count-based prediction would see 2 candidates for a 2-of-2
+        // and predict true; the actual finalizer can never produce a valid
+        // witness from this PSBT, so the summary must not claim it can either
+        // (finding #6 — the UI's "ready to broadcast" prediction must track
+        // the real finalizer, not a signature count).
+        val fixture = twoCosignerFixture()
+        val scriptPubKey = p2wshScriptPubKey(fixture.witnessScript)
+        val unsignedTx = unsignedTxWith(outputs = listOf(50_000L to p2wpkhScriptPubKey()))
+        val garbageSigForA = byteArrayOf(0x30, 0x44, 0x01) + ByteArray(68) { 0x11 } + byteArrayOf(0x01)
+        val inputMap = PsbtMap(
+            listOf(
+                PsbtKeyValue(0x01, ByteArray(0), witnessUtxoValue(60_000L, scriptPubKey)),
+                PsbtKeyValue(0x05, ByteArray(0), fixture.witnessScript),
+                PsbtKeyValue(0x06, fixture.pubkeyA, bip32DerivationValue(fixture.masterA.fingerprint())),
+                PsbtKeyValue(0x06, fixture.pubkeyB, bip32DerivationValue(fixture.masterB.fingerprint())),
+                PsbtKeyValue(0x02, fixture.pubkeyA, garbageSigForA),
+            ),
+        )
+        val outputs = listOf(PsbtMap(emptyList()))
+        val summary = computePsbtSummary(
+            buildPsbtBytes(unsignedTx, listOf(inputMap), outputs),
+            deviceMasterFingerprint = masterKeyFingerprint(TEST_WORDS_B, ""),
+        )
+
+        assertTrue(summary.deviceCanSignAnyInput == true)
+        assertFalse(summary.willFinalizeIfSigned == true)
     }
 
     // --- 8. deviceCanSignAnyInput false when the fingerprint matches nothing ---

@@ -2,7 +2,8 @@
 
 How MEGA's PSBT (BIP174) signing is kept safe, and what a reviewer should
 check first. This documents the security invariants of the signing pipeline
-added in v0.1.8–v0.1.9 and hardened after the v0.1.9 audit.
+added in v0.1.8–v0.1.9, hardened after the v0.1.9 audit, and further
+hardened around amount validation and finalization signature verification.
 
 ## The one-sentence rule
 
@@ -69,10 +70,34 @@ scan (camera, local-only)  →  review (computePsbtSummary, no keys touched)
   exact `OP_M <pubkeys> OP_N OP_CHECKMULTISIG` templates whose script
   matches the spent UTXO; anything else stays unfinalized rather than
   becoming an invalid "final" transaction.
-- **BBQr zip bombs**: 'Z'-encoding inflate output is capped (8 MB); every
-  frame's Base32 chunk must independently decode to whole bytes (Sparrow
-  compatibility); conflicting same-index frames in the scanner are
-  reported, never silently mixed.
+- **Unverified partial signatures**: `finalizePsbt` cryptographically
+  verifies every candidate `partial_sig` — correct DER encoding, low-S,
+  the correct derived/committed pubkey, and the correct sighash byte —
+  before it counts toward a multisig threshold or is written into
+  `finalScriptWitness`. A malformed, forged, or wrong-key signature is
+  never counted, even if enough of them are merely *present* to look like
+  a satisfied threshold; the input is left unfinalized instead. The same
+  verification backs the review screen's "will this finalize" prediction,
+  so it can't claim a PSBT is ready to broadcast based on a signature
+  count that the real finalizer wouldn't accept.
+- **Out-of-range or overflowing amounts**: every satoshi amount read from
+  the wire (transaction-output values, `witness_utxo` amounts) is bounded
+  to Bitcoin's `MAX_MONEY` range (0 to 21,000,000 BTC), including the case
+  where an attacker-controlled 8-byte value's high bit would otherwise read
+  back as a negative number. Totals and fees are computed with
+  overflow-checked arithmetic that fails closed instead of wrapping.
+- **Under- or over-consumed PSBT fields**: a `witness_utxo` value must be
+  consumed exactly (amount, then compact-size script length, then the
+  script itself, with nothing left over); `PSBT_IN_SIGHASH_TYPE` must be
+  exactly 4 bytes. Either mismatch is rejected rather than silently
+  ignoring the extra or missing bytes.
+- **BBQr zip bombs and truncated streams**: 'Z'-encoding inflate output is
+  capped (8 MB); every frame's Base32 chunk must independently decode to
+  whole bytes (Sparrow compatibility); conflicting same-index frames in the
+  scanner are reported, never silently mixed; and decompression only
+  succeeds once the stream actually reaches its end-of-stream marker — a
+  truncated or corrupted compressed payload is rejected rather than
+  returning whatever prefix happened to decode.
 
 ## What the review shows (and how it stays honest)
 

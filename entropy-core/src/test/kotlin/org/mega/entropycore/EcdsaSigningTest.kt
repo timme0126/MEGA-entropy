@@ -146,4 +146,29 @@ class EcdsaSigningTest {
         val hash = "bc62d4b80d9e36da29c16c5d4d9f11731f36052c72401a76c23c0fb5a9b74423".hexToByteArray()
         assertFalse(verifyEcdsa(pubkey, hash, derSig))
     }
+
+    @Test fun `verifyEcdsa returns false for a high-S signature even though it satisfies the raw ECDSA equation`() {
+        // (r, s) and (r, N-s) are BOTH mathematically valid ECDSA signatures for
+        // the same message/key — that's exactly why BIP62/BIP146 mandate low-S:
+        // without it, anyone could flip a valid signature into a second,
+        // still-valid one (transaction malleability). verifyEcdsa must reject
+        // the high-S form outright, not just happen to accept only the one a
+        // signer produced.
+        val pk = "0000000000000000000000000000000000000000000000000000000000000001".hexToByteArray()
+        val hash = "bc62d4b80d9e36da29c16c5d4d9f11731f36052c72401a76c23c0fb5a9b74423".hexToByteArray()
+        val pubkey = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".hexToByteArray()
+
+        val sig = signEcdsaRaw(pk, hash) // low-S by construction
+        val n = java.math.BigInteger("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16)
+        val highS = n - java.math.BigInteger(1, sig.s)
+
+        fun derInt(value: java.math.BigInteger): ByteArray {
+            val bytes = value.toByteArray() // BigInteger's own encoding already matches DER INTEGER's minimal form
+            return byteArrayOf(0x02, bytes.size.toByte()) + bytes
+        }
+        val content = derInt(java.math.BigInteger(1, sig.r)) + derInt(highS)
+        val highSDer = byteArrayOf(0x30, content.size.toByte()) + content
+
+        assertFalse(verifyEcdsa(pubkey, hash, highSDer))
+    }
 }

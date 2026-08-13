@@ -143,15 +143,27 @@ fun computePsbtSummary(
         )
     }
 
-    // 4. Totals
-    val totalOutputSats = psbt.unsignedTx.outputs.sumOf { it.valueSats }
+    // 4. Totals — checked (overflow-detecting) arithmetic throughout. Every
+    // individual amount is already bounded to MAX_MONEY_SATS by its own
+    // parser (Transaction.kt / Psbt.kt), but a PSBT can declare an
+    // unbounded NUMBER of inputs/outputs, so a long enough list can still
+    // overflow a 64-bit sum. checkedSumSats/checkedSubtractSats throw
+    // rather than silently wrapping, so an overflowing PSBT fails this
+    // whole review closed instead of showing a plausible-looking but wrong
+    // total (see computePsbtSummary's own doc comment: never signs, and
+    // every caller here already treats a thrown exception as "could not
+    // parse this PSBT").
+    val totalOutputSats = checkedSumSats(psbt.unsignedTx.outputs.map { it.valueSats }, "Total output amount")
     // We return null for the total input amount if ANY input lacks a witness_utxo.
     // Silently summing only known inputs would misrepresent the transaction's true cost.
-    val totalInputSats = if (inputSummaries.any { it.amountSats == null }) null
-    else inputSummaries.sumOf { it.amountSats!! }
+    val totalInputSats = if (inputSummaries.any { it.amountSats == null }) {
+        null
+    } else {
+        checkedSumSats(inputSummaries.map { it.amountSats!! }, "Total input amount")
+    }
 
     // 5. Fee
-    val feeSats = totalInputSats?.let { it - totalOutputSats }
+    val feeSats = totalInputSats?.let { checkedSubtractSats(it, totalOutputSats, "Fee") }
 
     // 6. Estimated fee rate
     // This is explicitly an ESTIMATE. Pre-signature fee rates are inherently
@@ -233,26 +245,39 @@ fun computePsbtSummary(
     }
 
     val willFinalizeIfSigned = if (deviceCanSignAnyInput == true) {
-        // We only predict finalization if we can confidently determine the
-        // required threshold for EVERY input. An input whose threshold is
-        // unparseable must make the WHOLE prediction null (Unknown) — folding
-        // it into "false" would be a silent guess ("this will stay partially
-        // signed") dressed up as a definite answer, exactly what this
-        // function must never do. So each input maps to a nullable Boolean
-        // first, and only once none of them are null do we reduce to a
-        // single true/false.
-        val perInputWillReachThreshold = psbt.inputs.map { inputMap ->
-            val threshold = inputThreshold(inputMap) ?: return@map null
+        // We only predict finalization if we can confidently determine that
+        // EVERY input will actually finalize. An input the finalizer could
+        // never touch at all (unparseable script, UTXO/script mismatch —
+        // see finalizableInputTemplate, which mirrors finalizePsbt's own
+        // gating exactly) must make the WHOLE prediction null (Unknown) —
+        // folding it into "false" would be a silent guess dressed up as a
+        // definite answer. So each input maps to a nullable Boolean first,
+        // and only once none of them are null do we reduce to true/false.
+        //
+        // Crucially, "how many signatures does this input already have" is
+        // answered by countValidSignatures — CRYPTOGRAPHICALLY VALID
+        // signatures only, using the exact same isValidPartialSig check the
+        // real finalizer applies. A PSBT carrying malformed or forged
+        // partial_sig entries that merely meet a raw COUNT threshold must
+        // never be predicted "ready to broadcast": that is precisely the
+        // gap this prediction exists to close now that the finalizer itself
+        // refuses to finalize on invalid signatures.
+        val perInputWillReachThreshold = psbt.inputs.mapIndexed { index, inputMap ->
+            val template = finalizableInputTemplate(inputMap) ?: return@mapIndexed null
+            val witnessUtxo = inputMap.witnessUtxo() ?: return@mapIndexed null
+            val threshold = template.first
             // Only count this device as contributing a NEW signature if it has
             // a matching derivation for a pubkey that doesn't already have a
             // partial_sig — otherwise, if this device already signed this
-            // input in an earlier round, its existing signature is already
-            // included in partialSigs().size and must not be counted twice.
+            // input in an earlier round, its existing (valid, since MEGA
+            // produced it) signature is already counted below and must not
+            // be counted twice.
             val weWouldAddASignatureHere = inputMap.bip32Derivations().any { derivation ->
                 derivation.matchesFingerprint(normalizedFp!!) &&
                     inputMap.partialSigs().none { it.pubkey.contentEquals(derivation.pubkey) }
             }
-            val sigsAfter = inputMap.partialSigs().size + if (weWouldAddASignatureHere) 1 else 0
+            val validExistingCount = countValidSignatures(psbt.unsignedTx, index, inputMap, witnessUtxo, template)
+            val sigsAfter = validExistingCount + if (weWouldAddASignatureHere) 1 else 0
             sigsAfter >= threshold
         }
         if (perInputWillReachThreshold.any { it == null }) null else perInputWillReachThreshold.all { it == true }
@@ -328,17 +353,6 @@ private fun scriptPubKeyToAddress(scriptPubKey: ByteArray, network: WalletNetwor
 private fun hrpFor(network: WalletNetwork): String = when (network) {
     WalletNetwork.MAINNET -> "bc"
     WalletNetwork.TESTNET -> "tb"
-}
-
-/**
- * Determines the required signature count for an input.
- * Returns null if the input carries a witness script that isn't an exact
- * bare-multisig template (meaning we genuinely cannot determine the
- * threshold). Returns 1 for P2WPKH or inputs without a witness script.
- */
-private fun inputThreshold(inputMap: PsbtMap): Int? {
-    val ws = inputMap.witnessScript() ?: return 1
-    return parseBareMultisigWitnessScript(ws)?.first
 }
 
 /** Extension to compare a derivation's master fingerprint against a hex string. */

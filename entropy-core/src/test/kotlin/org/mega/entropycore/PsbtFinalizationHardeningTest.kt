@@ -16,15 +16,45 @@ import org.junit.Test
 class PsbtFinalizationHardeningTest {
 
     companion object {
-        private val PUBKEY_A = "03b1341ccba7683b6af4f1238cd6e97e7167d569fac47f1e48d47541844355bd46".hexToBytes()
-        private val PUBKEY_B = "03de55d1e1dac805e3f8a58c1fbf9b94c02f3dbaafe127fefca4995f26f82083bd".hexToBytes()
-        private val WITNESS_SCRIPT = "522103b1341ccba7683b6af4f1238cd6e97e7167d569fac47f1e48d47541844355bd462103de55d1e1dac805e3f8a58c1fbf9b94c02f3dbaafe127fefca4995f26f82083bd52ae".hexToBytes()
-        private val SCRIPT_PUBKEY = "0020771fd18ad459666dd49f3d564e3dbc42f4c84774e360ada16816a8ed488d5681".hexToBytes()
+        private val PRIVATE_KEY_A = ByteArray(32) { 0x01 }
+        private val PRIVATE_KEY_B = ByteArray(32) { 0x02 }
+        private val PRIVATE_KEY_P2WPKH = ByteArray(32) { 0x03 }
+        private val PUBKEY_A = Secp256k1.publicKeyFromPrivateKey(PRIVATE_KEY_A)
+        private val PUBKEY_B = Secp256k1.publicKeyFromPrivateKey(PRIVATE_KEY_B)
+        private val WITNESS_SCRIPT = multisigScript(2, listOf(PUBKEY_A, PUBKEY_B))
+        private val SCRIPT_PUBKEY = byteArrayOf(0x00, 0x20) + sha256(WITNESS_SCRIPT)
         private const val AMOUNT = 199909013L
-        private val DUMMY_SIG_A = byteArrayOf(0x30, 0x44, 0x01) + ByteArray(68) { 0x11 } + byteArrayOf(0x01)
-        private val DUMMY_SIG_B = byteArrayOf(0x30, 0x44, 0x01) + ByteArray(68) { 0x22 } + byteArrayOf(0x01)
 
-        private fun String.hexToBytes(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        private val UNSIGNED_TX = Transaction(
+            version = 2,
+            inputs = listOf(TxIn(ByteArray(32) { 0x11 }, 0, ByteArray(0), 0xffffffffL)),
+            outputs = listOf(TxOut(1000L, byteArrayOf(0x00, 0x14) + ByteArray(20) { 0x22 })),
+            locktime = 0,
+        )
+
+        // Real, cryptographically valid partial_sigs for PUBKEY_A/PUBKEY_B over
+        // WITNESS_SCRIPT above — finalizePsbt now verifies every candidate
+        // signature instead of trusting whatever bytes are attached to a matching
+        // pubkey, so a fixture claiming "both signatures finalize" needs sigs that
+        // actually verify. Reused as-is by the garbage-script tests below, where
+        // parsing fails before signature verification is ever reached, so their
+        // exact content doesn't matter there.
+        private val DUMMY_SIG_A = realMultisigSig(PRIVATE_KEY_A)
+        private val DUMMY_SIG_B = realMultisigSig(PRIVATE_KEY_B)
+
+        private fun multisigScript(threshold: Int, pubkeys: List<ByteArray>): ByteArray {
+            var out = byteArrayOf((0x50 + threshold).toByte())
+            for (pk in pubkeys) out += byteArrayOf(0x21) + pk
+            out += byteArrayOf((0x50 + pubkeys.size).toByte(), 0xAE.toByte())
+            return out
+        }
+
+        private fun realMultisigSig(privateKey: ByteArray): ByteArray {
+            val scriptCode = writeCompactSize(WITNESS_SCRIPT.size.toLong()) + WITNESS_SCRIPT
+            val sighash = computeSegwitSighash(UNSIGNED_TX, 0, scriptCode, AMOUNT, 1)
+            return signEcdsaDer(privateKey, sighash) + byteArrayOf(0x01)
+        }
+
         private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
         private fun Long.toUInt64LE(): ByteArray = byteArrayOf(
             (this and 0xFF).toByte(), ((this shr 8) and 0xFF).toByte(),
@@ -50,13 +80,7 @@ class PsbtFinalizationHardeningTest {
         }
 
         private fun psbtWith(inputMap: PsbtMap): Psbt {
-            val tx = Transaction(
-                version = 2,
-                inputs = listOf(TxIn(ByteArray(32) { 0x11 }, 0, ByteArray(0), 0xffffffffL)),
-                outputs = listOf(TxOut(1000L, byteArrayOf(0x00, 0x14) + ByteArray(20) { 0x22 })),
-                locktime = 0,
-            )
-            return Psbt(tx, PsbtMap(emptyList()), listOf(inputMap), listOf(PsbtMap(emptyList())))
+            return Psbt(UNSIGNED_TX, PsbtMap(emptyList()), listOf(inputMap), listOf(PsbtMap(emptyList())))
         }
     }
 
@@ -105,7 +129,8 @@ class PsbtFinalizationHardeningTest {
 
     @Test
     fun `a witnessScript the UTXO does not commit to does NOT finalize`() {
-        val unrelatedScriptPubKey = "002031cac084d8f475b03993ffed425ddd0d2fd31b0bcd4395ee0d57ed42ead8ecdd".hexToBytes()
+        val unrelatedScriptPubKey = "002031cac084d8f475b03993ffed425ddd0d2fd31b0bcd4395ee0d57ed42ead8ecdd"
+            .chunked(2).map { it.toInt(16).toByte() }.toByteArray()
         val psbt = psbtWith(
             inputMapWith(
                 WITNESS_SCRIPT,
@@ -118,7 +143,8 @@ class PsbtFinalizationHardeningTest {
 
     @Test
     fun `a P2WPKH partial sig for the wrong pubkey does NOT finalize`() {
-        val p2wpkhProgram = "0014c0cebcd6c3d3ca8c75dc5ec62ebe55330ef910e2".hexToBytes()
+        val p2wpkhProgram = "0014c0cebcd6c3d3ca8c75dc5ec62ebe55330ef910e2"
+            .chunked(2).map { it.toInt(16).toByte() }.toByteArray()
         // Sig is attributed to PUBKEY_A, whose hash160 is NOT the UTXO's program.
         val psbt = psbtWith(inputMapWith(null, listOf(PUBKEY_A to DUMMY_SIG_A), scriptPubKey = p2wpkhProgram))
         assertNull(finalizePsbt(psbt).inputs[0].finalScriptWitness())
@@ -126,11 +152,13 @@ class PsbtFinalizationHardeningTest {
 
     @Test
     fun `a P2WPKH partial sig for the right pubkey still finalizes`() {
-        // hash160(PUBKEY at m/84'/0'/0'/0/0 of the standard test mnemonic) —
-        // c0cebcd6... is PsbtSigningP2wpkhTest's fixture program.
-        val pubkey = "0330d54fd0dd420a6e5f8d3624f5f3482cae350f79d5f0753bf5beef9c2d91af3c".hexToBytes()
-        val p2wpkhProgram = "0014c0cebcd6c3d3ca8c75dc5ec62ebe55330ef910e2".hexToBytes()
-        val psbt = psbtWith(inputMapWith(null, listOf(pubkey to DUMMY_SIG_A), scriptPubKey = p2wpkhProgram))
+        val pubkey = Secp256k1.publicKeyFromPrivateKey(PRIVATE_KEY_P2WPKH)
+        val p2wpkhProgram = byteArrayOf(0x00, 0x14) + hash160(pubkey)
+        val scriptCode = byteArrayOf(0x19, 0x76.toByte(), 0xa9.toByte(), 0x14) +
+            hash160(pubkey) + byteArrayOf(0x88.toByte(), 0xac.toByte())
+        val sighash = computeSegwitSighash(UNSIGNED_TX, 0, scriptCode, AMOUNT, 1)
+        val sig = signEcdsaDer(PRIVATE_KEY_P2WPKH, sighash) + byteArrayOf(0x01)
+        val psbt = psbtWith(inputMapWith(null, listOf(pubkey to sig), scriptPubKey = p2wpkhProgram))
         val witness = finalizePsbt(psbt).inputs[0].finalScriptWitness()
         assertNotNull(witness)
         // witness = 02 <len sig> <sig> <len pubkey> <pubkey>

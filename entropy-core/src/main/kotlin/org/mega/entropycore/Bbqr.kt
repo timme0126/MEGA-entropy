@@ -321,6 +321,12 @@ private fun inflateRawDeflate(compressed: ByteArray): ByteArray {
     try {
         while (!inflater.finished()) {
             val count = inflater.inflate(buffer)
+            // A TRUNCATED or corrupt stream can exhaust its input
+            // (needsInput()/needsDictionary()) without ever reaching the
+            // deflate end-of-stream marker — that is exactly the failure
+            // case this function must catch, not a normal exit. Stop
+            // pulling more input here, but do NOT treat it as success: the
+            // finished() check right after the loop is what decides that.
             if (count == 0 && (inflater.needsInput() || inflater.needsDictionary())) break
             output.write(buffer, 0, count)
             if (output.size() > MAX_BBQR_INFLATED_BYTES) {
@@ -328,6 +334,15 @@ private fun inflateRawDeflate(compressed: ByteArray): ByteArray {
                     "BBQr data decompresses to more than ${MAX_BBQR_INFLATED_BYTES / (1024 * 1024)} MB — refusing to expand it further.",
                 )
             }
+        }
+        // Decompression is only genuinely complete once Inflater itself
+        // reports finished() — reaching here via the needsInput()/
+        // needsDictionary() break above without it means the stream ran out
+        // before its end-of-stream marker. Returning the partial bytes
+        // accumulated so far would silently hand back WRONG data (a valid
+        // decode of a truncated prefix) dressed up as a successful one.
+        if (!inflater.finished()) {
+            throw IllegalArgumentException("Truncated or corrupt BBQr compressed stream — decompression did not complete")
         }
     } catch (e: DataFormatException) {
         throw IllegalArgumentException("Could not decompress BBQr data (zlib error).", e)

@@ -76,4 +76,43 @@ class BbqrHardeningTest {
         val decoded = assembleBbqrPartsAsBytes(parts)
         assertTrue(decoded.contentEquals(payload))
     }
+
+    @Test
+    fun `a truncated compressed stream is rejected instead of returning a partial decode`() {
+        // Cut the stream well before its end-of-stream marker — Inflater can
+        // still consume all of this input without error, but never reaches
+        // finished(). Returning what was decoded so far would silently hand
+        // back a truncated PSBT/descriptor dressed up as a successful parse.
+        val payload = "wsh(sortedmulti(2,placeholder)) — a small, legit export, repeated a bit. ".repeat(20)
+            .encodeToByteArray()
+        val compressed = rawDeflate(payload)
+        val truncated = compressed.copyOfRange(0, compressed.size / 2)
+        val parts = bbqrZParts(truncated)
+        val e = assertThrows(IllegalArgumentException::class.java) {
+            assembleBbqrPartsAsBytes(parts)
+        }
+        assertTrue(e.message.orEmpty().contains("Truncated or corrupt"))
+    }
+
+    @Test
+    fun `a corrupted compressed stream is rejected, not silently misdecoded`() {
+        val payload = "wsh(sortedmulti(2,placeholder)) — a small, legit export, repeated a bit. ".repeat(20)
+            .encodeToByteArray()
+        val compressed = rawDeflate(payload)
+        // Flip every third byte across most of the stream — for a
+        // Huffman-coded deflate block this reliably breaks the bit-exact
+        // structure decoding depends on, whether the corruption lands in a
+        // Huffman table, a length/distance code, or the block header.
+        val corrupt = compressed.copyOf()
+        for (i in corrupt.indices step 3) {
+            corrupt[i] = (corrupt[i].toInt() xor 0xFF).toByte()
+        }
+        val parts = bbqrZParts(corrupt)
+        val e = assertThrows(IllegalArgumentException::class.java) {
+            assembleBbqrPartsAsBytes(parts)
+        }
+        assertTrue(
+            e.message.orEmpty().contains("zlib error") || e.message.orEmpty().contains("Truncated or corrupt"),
+        )
+    }
 }

@@ -95,6 +95,49 @@ alongside the confirmed findings.
   (5 tests) pinning OP_CHECKMULTISIG's positional signature ordering and
   exact-threshold selection, which were correct but previously untested.
 
+### Fixed (security — signature and amount hardening)
+
+A further pass over PSBT amount handling and the finalization boundary,
+closing gaps the audits above didn't reach: amounts were range-checked at
+parse time but not everywhere they're later combined, and finalization
+counted signatures without ever verifying them.
+
+- **finalizePsbt trusted every `partial_sig` it saw.** Any bytes attached to
+  a matching pubkey counted toward a multisig threshold and could be
+  emitted straight into `finalScriptWitness`, including malformed DER,
+  high-S, wrong-pubkey, or wrong-sighash-byte signatures — a corrupted or
+  hostile PSBT could make the app "finalize" a transaction with a witness
+  that would never actually validate on the network. Every candidate
+  signature is now cryptographically verified (correct DER, low-S, correct
+  pubkey, correct sighash) before it counts toward a threshold or is
+  written into a witness; multisig ordering, exact-threshold selection, and
+  P2WPKH UTXO-pubkey binding are unchanged. The transaction-summary
+  "will this finalize" prediction now shares this same verification path,
+  so the review screen can no longer suggest a PSBT is ready to broadcast
+  based on a signature count alone.
+- **Satoshi amounts weren't bounded everywhere they're read or combined.**
+  Transaction-output and PSBT `witness_utxo` amounts are now checked
+  against Bitcoin's `MAX_MONEY` bound (0 to 21,000,000 BTC in satoshis) at
+  parse time — including the case where an attacker-controlled 8-byte
+  little-endian field's high bit reads back as a negative `Long` — and
+  totals/fees are computed with overflow-checked addition/subtraction that
+  fails closed instead of wrapping.
+- **`witness_utxo`'s value wasn't required to be consumed exactly** —
+  trailing bytes after its script were silently ignored rather than
+  rejected. **`PSBT_IN_SIGHASH_TYPE` accepted any length ≥ 4** instead of
+  requiring exactly 4 bytes.
+- **A truncated BBQr 'Z' (deflate) stream could return partial bytes as a
+  successful decode.** Decompression now only succeeds once the underlying
+  inflater reports the stream actually finished; a truncated or corrupted
+  compressed payload is now rejected instead of silently handing back
+  whatever prefix happened to decode. The existing 8 MB output cap is
+  unchanged.
+- New/expanded regression suites covering every rejection path above:
+  `TransactionAmountValidationTest`, `PsbtWitnessUtxoAndSighashHardeningTest`,
+  `PsbtFinalizationSignatureVerificationTest`, plus new truncated/corrupted-
+  stream cases in `BbqrHardeningTest` and a high-S case in
+  `EcdsaSigningTest`.
+
 ## [0.1.9] — 2026-08-13
 
 Driven by real multisig testing against Sparrow Wallet.
