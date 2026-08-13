@@ -57,12 +57,15 @@ Run through:
 9. Screenshot and Recent Apps blocking on sensitive screens.
 10. Uninstall or user-profile deletion to confirm app data disappears.
 11. Advanced Mode: manual mnemonic entry, wallet public key/address
-    derivation, BIP85 child mnemonics, and "Setup Multi-Signature Vault"
-    (choose an M-of-N policy, fill each cosigner slot from a saved session,
-    a pasted descriptor fragment, and a pasted full `wsh(sortedmulti(...))`
-    descriptor, and a QR-scanned descriptor fragment/full descriptor — then
-    cross-check the resulting descriptor/address against
-    another descriptor-aware wallet, e.g. Sparrow).
+    derivation, BIP85 child mnemonics, "Import via SeedQR" (both Standard
+    and Compact SeedQR, e.g. from SeedSigner or Sparrow), and "Setup
+    Multi-Signature Vault" (choose an M-of-N policy, fill each cosigner
+    slot from a saved session, a pasted descriptor fragment, and a pasted
+    full `wsh(sortedmulti(...))` descriptor, and a QR-scanned descriptor
+    fragment/full descriptor — including a BBQr animated series, e.g.
+    Sparrow's multisig descriptor export — then cross-check the resulting
+    descriptor/address against another descriptor-aware wallet, e.g.
+    Sparrow).
 
 Use [`GRAPHENEOS-CHECKLIST.md`](GRAPHENEOS-CHECKLIST.md) for the full manual QA checklist.
 

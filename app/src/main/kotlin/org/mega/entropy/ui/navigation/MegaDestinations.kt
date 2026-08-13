@@ -60,6 +60,11 @@ object MegaDestinations {
      * existing saved session's words into Advanced Mode instead of typing
      * them by hand. */
     const val ADVANCED_MODE_IMPORT_PICKER = "advanced_mode_import_picker"
+    /** Camera scanner for importing a seed phrase via SeedQR (Standard or
+     * Compact) — a third way into Advanced Mode alongside manual entry and
+     * saved-session import. Not PIN-gated: unlike ADVANCED_MODE_IMPORT_PICKER,
+     * nothing already-saved is being accessed here. */
+    const val ADVANCED_MODE_SEED_QR = "advanced_mode_seed_qr"
 
     /** "Setup Multi-Signature Vault" — reachable directly from
      * ADVANCED_MODE_ENTRY, not from the Hub: unlike every other Advanced

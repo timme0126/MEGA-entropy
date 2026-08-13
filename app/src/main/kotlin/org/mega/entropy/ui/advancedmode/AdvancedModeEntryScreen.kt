@@ -13,8 +13,9 @@ import org.mega.entropy.ui.theme.MegaError
 /**
  * Advanced Mode's landing page (spec "Advanced Mode workflow"): pick how
  * an existing (not dice-generated) seed phrase gets into MEGA — type it
- * in by hand (AdvancedModeMnemonicEntryScreen), or import an already-saved
- * session's words (AdvancedModeImportPickerScreen). Only reachable when
+ * in by hand (AdvancedModeMnemonicEntryScreen), import an already-saved
+ * session's words (AdvancedModeImportPickerScreen), or scan a SeedQR code
+ * (SeedQrScanScreen). Only reachable when
  * Advanced Mode is on, itself gated behind the confirmation dialog in
  * Saved Session Settings — the warning here is a quieter, always-visible
  * reminder of the same risk, not the first (or only) time the user sees
@@ -27,6 +28,7 @@ fun AdvancedModeEntryScreen(
     onBack: () -> Unit,
     onManualEntry: () -> Unit,
     onImportFromSavedSession: () -> Unit,
+    onImportViaSeedQr: () -> Unit,
     onMultisigVaults: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
@@ -45,6 +47,7 @@ fun AdvancedModeEntryScreen(
 
         MegaPrimaryButton(text = "Manual Seed Word Entry", onClick = onManualEntry)
         MegaPrimaryButton(text = "Import from Saved Session", onClick = onImportFromSavedSession)
+        MegaPrimaryButton(text = "Import via SeedQR", onClick = onImportViaSeedQr)
         // Deliberately does not require a seed to already be loaded first —
         // unlike every button above, a multisig vault's cosigners are each
         // filled independently from within that flow itself (saved

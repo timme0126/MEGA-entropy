@@ -37,6 +37,7 @@ import org.mega.entropy.ui.advancedmode.AdvancedModeHubScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeImportPickerScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeMnemonicEntryScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeWalletScreen
+import org.mega.entropy.ui.advancedmode.SeedQrScanScreen
 import org.mega.entropy.ui.advancedmode.multisig.AdvancedModeMultisigDeriveCosignerScreen
 import org.mega.entropy.ui.advancedmode.multisig.AdvancedModeMultisigScannerScreen
 import org.mega.entropy.ui.advancedmode.multisig.AdvancedModeMultisigVaultScreen
@@ -572,6 +573,9 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onImportFromSavedSession = {
                     coroutineScope.launch { enterSavedSessionsGate(MegaDestinations.ADVANCED_MODE_IMPORT_PICKER) }
                 },
+                onImportViaSeedQr = {
+                    navController.navigate(MegaDestinations.ADVANCED_MODE_SEED_QR)
+                },
                 onMultisigVaults = {
                     coroutineScope.launch { enterMultisigVaultsEntry() }
                 },
@@ -582,6 +586,18 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 allowScreenshots = allowScreenshots,
                 onBack = { navController.popBackStack() },
                 onValidated = { words ->
+                    advancedModeWords = words
+                    advancedModePassphrase = ""
+                    advancedModeSourceSessionLabel = null
+                    navController.navigate(MegaDestinations.ADVANCED_MODE_HUB)
+                },
+            )
+        }
+        composable(MegaDestinations.ADVANCED_MODE_SEED_QR) {
+            SeedQrScanScreen(
+                allowScreenshots = allowScreenshots,
+                onBack = { navController.popBackStack() },
+                onScanned = { words ->
                     advancedModeWords = words
                     advancedModePassphrase = ""
                     advancedModeSourceSessionLabel = null
