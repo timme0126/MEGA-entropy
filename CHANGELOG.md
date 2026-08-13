@@ -9,6 +9,19 @@ everything below is unreleased on top of it, not yet in a tagged build.
 Driven by real multisig testing against Sparrow Wallet.
 
 ### Added
+- **Sign PSBT for a saved multisig vault**: a saved vault's detail screen
+  now has a "Sign PSBT" action. Since a saved vault stores only public
+  cosigner data (fingerprint/path/xpub — never a link to a local seed),
+  the flow makes the user pick which cosigner slot this device
+  represents, pick a candidate saved session, and verifies — fail
+  closed — that the session's own BIP32 master fingerprint actually
+  matches the claimed cosigner's stored fingerprint before ever
+  reaching the PSBT scanner (`entropy-core`'s new `signPsbtForCosigner`
+  re-checks the same fingerprint again immediately before signing, as
+  defense in depth). A mismatch that actually belongs to a *different*
+  cosigner in the same vault is called out by name rather than shown as
+  a generic failure. Reuses the existing PSBT scanner and sign-result
+  screens unchanged.
 - **Sign PSBT**: Advanced Mode can now sign a PSBT (Partially Signed
   Bitcoin Transaction) with the loaded seed. Scan a PSBT as a single
   base64 QR or an animated BBQr series, and MEGA signs every input it

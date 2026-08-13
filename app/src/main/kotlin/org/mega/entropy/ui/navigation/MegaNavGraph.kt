@@ -29,6 +29,7 @@ import org.mega.entropy.security.pin.PinManager
 import org.mega.entropy.security.pin.hasSavedSessionGraceWindowExpired
 import org.mega.entropy.security.pin.isSavedSessionUnlockStillValid
 import org.mega.entropy.storage.MultisigVaultRepository
+import org.mega.entropy.storage.SavedMultisigCosigner
 import org.mega.entropy.storage.SavedMultisigVault
 import org.mega.entropy.storage.SessionRepository
 import org.mega.entropy.ui.about.AboutScreen
@@ -48,6 +49,8 @@ import org.mega.entropy.ui.advancedmode.multisig.MultisigVaultViewModel
 import org.mega.entropy.ui.advancedmode.multisig.SavedMultisigVaultDetailScreen
 import org.mega.entropy.ui.advancedmode.multisig.SavedMultisigVaultsScreen
 import org.mega.entropy.ui.advancedmode.multisig.SavedMultisigVaultsViewModel
+import org.mega.entropy.ui.advancedmode.multisig.SavedVaultCosignerPickScreen
+import org.mega.entropy.ui.advancedmode.multisig.SavedVaultCosignerVerifyScreen
 import org.mega.entropy.ui.advancedmode.multisig.toCosignerDisplayInfo
 import org.mega.entropy.ui.advancedmode.multisig.toSavedCosigners
 import org.mega.entropy.ui.biascheck.BiasCheckScreen
@@ -157,6 +160,39 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     // blocks on the same NavHost can't share a locally remembered var, so
     // this lives here instead.
     var scanningFullDescriptor by remember { mutableStateOf(false) }
+    // "Sign PSBT" for an EXISTING SAVED multisig vault — separate, narrowly
+    // scoped state from every other Advanced Mode flow (not advancedModeWords,
+    // not multisigCosignerSourceWords): this flow's loaded seed exists only
+    // to verify+sign ONE PSBT for ONE saved vault, so unlike advancedModeWords
+    // (which lives for the whole Hub session) it must be cleared on ANY exit
+    // from this flow, not just its natural end — see exitSavedVaultPsbtFlow.
+    var savedVaultPsbtVault by remember { mutableStateOf<SavedMultisigVault?>(null) }
+    var savedVaultPsbtSelectedCosigner by remember { mutableStateOf<SavedMultisigCosigner?>(null) }
+    var savedVaultPsbtSourceWords by remember { mutableStateOf<List<String>?>(null) }
+    var savedVaultPsbtSourceLabel by remember { mutableStateOf("") }
+    var savedVaultPsbtPassphrase by remember { mutableStateOf("") }
+    var savedVaultPsbtScannedBytes by remember { mutableStateOf<ByteArray?>(null) }
+
+    // Called from Back at any step of the saved-vault PSBT-sign flow, and
+    // from its terminal Done button — eagerly drops every sensitive value
+    // this flow loaded (candidate seed words, passphrase, scanned PSBT
+    // bytes) regardless of how the flow is left, then returns to the
+    // originating vault's detail screen (or a plain pop if that route isn't
+    // on the back stack for some reason).
+    fun exitSavedVaultPsbtFlow() {
+        val vaultId = savedVaultPsbtVault?.id
+        savedVaultPsbtVault = null
+        savedVaultPsbtSelectedCosigner = null
+        savedVaultPsbtSourceWords = null
+        savedVaultPsbtSourceLabel = ""
+        savedVaultPsbtPassphrase = ""
+        savedVaultPsbtScannedBytes = null
+        val poppedToDetail = vaultId != null &&
+            navController.popBackStack(MegaDestinations.savedMultisigVaultDetailRoute(vaultId), inclusive = false)
+        if (!poppedToDetail) {
+            navController.popBackStack()
+        }
+    }
     // Set when AdvancedModeHubScreen's or Bip85Screen's save icon is used
     // but no MEGA PIN exists yet — the same "must have a PIN before
     // saving" redirect the dice flow's SAVE_SESSION uses, just carrying
@@ -961,11 +997,96 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                                 navController.popBackStack()
                             }
                         },
+                        onSignPsbt = {
+                            savedVaultPsbtVault = currentVault
+                            navController.navigate(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_COSIGNER_PICK)
+                        },
                     )
                 } else {
                     LaunchedEffect(Unit) { navController.popBackStack() }
                 }
             } else if (loadFailed) {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
+        }
+        composable(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_COSIGNER_PICK) {
+            val vault = savedVaultPsbtVault
+            if (vault != null) {
+                val coroutineScope = rememberCoroutineScope()
+                SavedVaultCosignerPickScreen(
+                    vaultLabel = vault.label,
+                    cosigners = vault.cosigners,
+                    allowScreenshots = allowScreenshots,
+                    onBack = { exitSavedVaultPsbtFlow() },
+                    onCosignerSelected = { cosigner ->
+                        savedVaultPsbtSelectedCosigner = cosigner
+                        coroutineScope.launch {
+                            enterSavedSessionsGate(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_SESSION_PICKER)
+                        }
+                    },
+                )
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
+        }
+        composable(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_SESSION_PICKER) {
+            LockGuard(appLockViewModel, navController)
+            AdvancedModeImportPickerScreen(
+                allowScreenshots = allowScreenshots,
+                onBack = { exitSavedVaultPsbtFlow() },
+                onImported = { words, sourceLabel ->
+                    savedVaultPsbtSourceWords = words
+                    savedVaultPsbtSourceLabel = sourceLabel
+                    navController.navigate(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_VERIFY)
+                },
+            )
+        }
+        composable(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_VERIFY) {
+            val vault = savedVaultPsbtVault
+            val cosigner = savedVaultPsbtSelectedCosigner
+            val words = savedVaultPsbtSourceWords
+            if (vault != null && cosigner != null && words != null) {
+                SavedVaultCosignerVerifyScreen(
+                    mnemonicWords = words,
+                    sourceLabel = savedVaultPsbtSourceLabel,
+                    selectedCosigner = cosigner,
+                    allVaultCosigners = vault.cosigners,
+                    allowScreenshots = allowScreenshots,
+                    onBack = { exitSavedVaultPsbtFlow() },
+                    onVerified = { passphrase ->
+                        savedVaultPsbtPassphrase = passphrase
+                        navController.navigate(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_SCAN)
+                    },
+                )
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
+        }
+        composable(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_SCAN) {
+            PsbtScanScreen(
+                allowScreenshots = allowScreenshots,
+                onBack = { exitSavedVaultPsbtFlow() },
+                onScanned = { bytes ->
+                    savedVaultPsbtScannedBytes = bytes
+                    navController.navigate(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_SIGN_RESULT)
+                },
+            )
+        }
+        composable(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_SIGN_RESULT) {
+            val cosigner = savedVaultPsbtSelectedCosigner
+            val words = savedVaultPsbtSourceWords
+            val bytes = savedVaultPsbtScannedBytes
+            if (cosigner != null && words != null && bytes != null) {
+                PsbtSignResultScreen(
+                    psbtBytes = bytes,
+                    mnemonicWords = words,
+                    passphrase = savedVaultPsbtPassphrase,
+                    allowScreenshots = allowScreenshots,
+                    allowSeedCopy = allowSeedCopy,
+                    expectedCosignerFingerprint = cosigner.masterFingerprint,
+                    onBack = { exitSavedVaultPsbtFlow() },
+                )
+            } else {
                 LaunchedEffect(Unit) { navController.popBackStack() }
             }
         }

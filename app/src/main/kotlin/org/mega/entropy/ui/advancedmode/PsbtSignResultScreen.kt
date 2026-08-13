@@ -14,10 +14,12 @@ import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
+import org.mega.entropycore.SignForCosignerResult
 import org.mega.entropycore.encodeBbqr
 import org.mega.entropycore.extractFinalTransactionHex
 import org.mega.entropycore.isPsbtFullyFinalized
 import org.mega.entropycore.signAndFinalizePsbt
+import org.mega.entropycore.signPsbtForCosigner
 
 private fun hexStringToByteArray(hex: String): ByteArray {
     return hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
@@ -30,15 +32,50 @@ fun PsbtSignResultScreen(
     passphrase: String,
     allowScreenshots: Boolean,
     allowSeedCopy: Boolean,
+    expectedCosignerFingerprint: String? = null,
     onBack: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
-    val signResult = remember(psbtBytes, mnemonicWords, passphrase) {
-        runCatching { signAndFinalizePsbt(psbtBytes, mnemonicWords, passphrase) }
+
+    // Calls signPsbtForCosigner AT MOST ONCE per distinct set of inputs — it
+    // performs real cryptographic signing, so it must not run again on every
+    // recomposition. mismatch and signResult below both read this single
+    // cached attempt rather than invoking signPsbtForCosigner a second time.
+    val cosignerAttempt: Result<SignForCosignerResult>? = if (expectedCosignerFingerprint != null) {
+        remember(psbtBytes, mnemonicWords, passphrase, expectedCosignerFingerprint) {
+            runCatching { signPsbtForCosigner(psbtBytes, expectedCosignerFingerprint, mnemonicWords, passphrase) }
+        }
+    } else {
+        null
+    }
+    val mismatch = cosignerAttempt?.getOrNull() as? SignForCosignerResult.FingerprintMismatch
+
+    val signResult = remember(psbtBytes, mnemonicWords, passphrase, expectedCosignerFingerprint) {
+        if (expectedCosignerFingerprint == null) {
+            runCatching { signAndFinalizePsbt(psbtBytes, mnemonicWords, passphrase) }
+        } else {
+            val attempt = cosignerAttempt!!
+            if (attempt.isFailure) {
+                Result.failure(attempt.exceptionOrNull() ?: IllegalStateException("This PSBT could not be signed by this device."))
+            } else {
+                when (val outcome = attempt.getOrThrow()) {
+                    is SignForCosignerResult.Signed -> Result.success(outcome.psbtBytes)
+                    is SignForCosignerResult.FingerprintMismatch -> Result.failure(IllegalStateException("Cosigner fingerprint mismatch"))
+                }
+            }
+        }
     }
 
     MegaInfoScaffold(title = "Sign PSBT", onBack = onBack) {
-            if (signResult.isFailure) {
+            if (mismatch != null) {
+                MegaCard(title = "Wrong Cosigner") {
+                    Text(
+                        text = "This saved session's key does not match the selected cosigner (expected fingerprint ${mismatch.expectedFingerprint}, this session's key is ${mismatch.actualFingerprint}). Signing has been refused.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MegaError
+                    )
+                }
+            } else if (signResult.isFailure) {
                 MegaCard(title = "Could Not Sign PSBT") {
                     Text(
                         text = signResult.exceptionOrNull()?.message ?: "This PSBT could not be signed by this device.",

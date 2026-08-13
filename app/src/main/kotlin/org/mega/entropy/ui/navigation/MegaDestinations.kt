@@ -103,4 +103,20 @@ object MegaDestinations {
      * hand to the next cosigner. */
     const val ADVANCED_MODE_PSBT_SCAN = "advanced_mode_psbt_scan"
     const val ADVANCED_MODE_PSBT_SIGN_RESULT = "advanced_mode_psbt_sign_result"
+
+    /** "Sign PSBT" for an EXISTING SAVED multisig vault — reachable from
+     * SAVED_MULTISIG_VAULT_DETAIL. Distinct from the single-seed
+     * ADVANCED_MODE_PSBT_* flow above: a saved vault stores only public
+     * cosigner data (no link to a local seed), so this flow makes the user
+     * pick which cosigner slot they represent, pick a candidate saved
+     * session, and verifies (fail closed) that the session's key actually
+     * matches the claimed cosigner before ever reaching the scanner. See
+     * MegaNavGraph's savedVaultPsbt* state and exitSavedVaultPsbtFlow. */
+    const val SAVED_MULTISIG_VAULT_PSBT_COSIGNER_PICK = "saved_multisig_vault_psbt_cosigner_pick"
+    /** PIN-gated picker (same gate as SAVED_SESSIONS/ADVANCED_MODE_MULTISIG_COSIGNER_PICKER)
+     * for choosing which saved session is the candidate signing seed. */
+    const val SAVED_MULTISIG_VAULT_PSBT_SESSION_PICKER = "saved_multisig_vault_psbt_session_picker"
+    const val SAVED_MULTISIG_VAULT_PSBT_VERIFY = "saved_multisig_vault_psbt_verify"
+    const val SAVED_MULTISIG_VAULT_PSBT_SCAN = "saved_multisig_vault_psbt_scan"
+    const val SAVED_MULTISIG_VAULT_PSBT_SIGN_RESULT = "saved_multisig_vault_psbt_sign_result"
 }

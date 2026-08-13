@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaLabelSessionDialog
+import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropycore.MultisigWallet
 
@@ -38,6 +39,7 @@ fun SavedMultisigVaultDetailScreen(
     onBack: () -> Unit,
     onRename: (String) -> Unit,
     onDelete: () -> Unit,
+    onSignPsbt: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
 
@@ -58,6 +60,7 @@ fun SavedMultisigVaultDetailScreen(
         },
     ) {
         MultisigVaultResultDisplay(wallet = wallet, cosigners = cosigners, allowSeedCopy = allowSeedCopy)
+        MegaPrimaryButton(text = "Sign PSBT", onClick = onSignPsbt)
     }
 
     if (renaming) {
