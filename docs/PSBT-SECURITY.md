@@ -52,6 +52,19 @@ scan (camera, local-only)  →  review (computePsbtSummary, no keys touched)
   uniqueness), a non-canonical or witness-serialized unsigned transaction,
   or non-empty scriptSigs in the unsigned transaction are all rejected at
   parse time.
+- **Non-canonical PSBT encodings** (added after the second review pass —
+  see [`SECURITY-AUDIT-V0.1.9.md`](SECURITY-AUDIT-V0.1.9.md) NEW-1..NEW-3):
+  a global unsigned-transaction key must appear exactly once and carry no
+  keydata, and no key may carry keydata for a type BIP174 defines as
+  un-keyed (`witness_utxo`, `sighash_type`, `witness_script`,
+  `final_scriptWitness`, …). Without this, a decoy key such as `01 aa`
+  would be returned by the accessor's `find { keyType == 0x01 }` ahead of
+  the real one — letting a file show MEGA one value and a strict peer
+  another. Trailing bytes after the final output map are rejected, so the
+  signed PSBT is never merely a prefix of what was scanned. Compact-size
+  varints must use their minimal form, and an 8-byte length with bit 63
+  set (which reads back negative and would slip past bounds checks) is
+  refused outright.
 - **Non-standard multisig finalization**: `finalizePsbt` only finalizes
   exact `OP_M <pubkeys> OP_N OP_CHECKMULTISIG` templates whose script
   matches the spent UTXO; anything else stays unfinalized rather than

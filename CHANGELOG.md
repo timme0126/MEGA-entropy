@@ -49,6 +49,40 @@ security model.
   only then labeled "Change back to this vault (verified)"; unverified
   lookalikes are flagged as NOT verified.
 
+### Fixed (security — found by an independent re-review of the above)
+
+A second review pass re-derived every finding above from the code rather
+than trusting the first pass's report, and found five more it had missed.
+Each was reproduced against the pre-fix code before a fix was written. See
+[`docs/SECURITY-AUDIT-V0.1.9.md`](docs/SECURITY-AUDIT-V0.1.9.md).
+
+- **A decoy PSBT key could supply the unsigned transaction.** BIP174 defines
+  `PSBT_GLOBAL_UNSIGNED_TX` as the type byte alone, but the duplicate-key
+  rule compares *full* keys — so `00` and `00 aa` counted as different keys
+  and a file could carry both. Parsing resolved to whichever came first
+  while Bitcoin Core rejects such a file outright, meaning MEGA could review
+  and sign a transaction a strict peer refuses to read. The same shape
+  applied to every un-keyed type an accessor resolves with
+  `find { keyType == N }` (`witness_utxo`, `sighash_type`, `witness_script`,
+  `final_scriptWitness`). Parsing now requires exactly one global
+  unsigned-transaction key and rejects keydata on any type BIP174 defines
+  as un-keyed.
+- **Trailing bytes after the final output map were silently ignored**, so
+  the reviewed-and-signed PSBT could be a mere prefix of the scanned bytes.
+  Now rejected.
+- **Non-minimal compact-size varints were accepted**, giving the same
+  logical content multiple valid encodings; and the 8-byte form could read
+  back as a negative Kotlin `Long`, slipping past every `offset + len > size`
+  bounds check. Both now rejected.
+- `signPsbt`'s already-signed-pubkey guard is now updated as it signs, so it
+  no longer depends on the parser's duplicate-key rule to avoid emitting two
+  `partial_sig` entries with identical keys (defence in depth).
+
+One concern raised during this pass — that the PIN entry/setup screens lack
+`FLAG_SECURE` — was investigated and **rejected**: both delegate to
+`PinEntryScreen`, which applies it. The audit report records the rejection
+alongside the confirmed findings.
+
 ### Added / Changed (hardening)
 - Transaction review additions: per-input sighash surfacing, blocking on
   unsupported sighash or negative fee, a >10%-of-inputs high-fee warning,
@@ -56,6 +90,10 @@ security model.
   inferred) so the single-seed flow shows bech32 addresses instead of
   raw hex when paths permit.
 - Removed the app's only `Log` call (PDF export failure path).
+- New regression suites: `PsbtCanonicalEncodingTest` (12 tests) for the
+  canonical-encoding fixes above, and `PsbtFinalizationOrderingTest`
+  (5 tests) pinning OP_CHECKMULTISIG's positional signature ordering and
+  exact-threshold selection, which were correct but previously untested.
 
 ## [0.1.9] — 2026-08-13
 

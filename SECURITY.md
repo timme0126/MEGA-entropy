@@ -74,7 +74,23 @@ directly. Include:
    pipeline described as future work in
    [`docs/REPRODUCIBLE-BUILD.md`](docs/REPRODUCIBLE-BUILD.md), which doesn't
    exist yet.
-4. **Not done, and can't be done by any AI tool run by the project itself**
-   run by the project itself — this needs a human/firm with no relationship
-   to development. Steps 1-3 are defense-in-depth evidence for this step,
-   not a substitute for it.
+4. **Done (automated, not human-independent):**
+   [`docs/SECURITY-AUDIT-V0.1.9.md`](docs/SECURITY-AUDIT-V0.1.9.md) — a
+   review of the PSBT signing pipeline, saved multisig-vault signing,
+   transaction review/confirmation, and BBQr handling added in v0.1.8–v0.1.9,
+   checked against BIP174/BIP143/BIP32/BIP67/BIP144 and the BBQr spec. Two
+   passes: an initial audit, then an independent re-review that treated the
+   first pass's report as a hypothesis and re-derived every claim from the
+   code. The first pass's eleven findings were confirmed and fixed; the
+   second pass found five more the first had missed (the most serious: a
+   PSBT key of type `0x00` carrying keydata was accepted as the global
+   unsigned transaction, so MEGA could review and sign a transaction from a
+   file a strict peer rejects outright). One raised concern was investigated
+   and **rejected** as a false positive; the report records it as such.
+   Still AI-run, and an AI reviewing another AI's work shares blind spots
+   with it — not a substitute for #5.
+5. **Not done, and can't be done by any AI tool run by the project itself**
+   — this needs a human/firm with no relationship to development. Steps 1-4
+   are defense-in-depth evidence for this step, not a substitute for it. In
+   particular, no pass so far has run on a real device, and none has done
+   side-channel, timing, or hardware-level analysis.
