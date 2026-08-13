@@ -48,13 +48,16 @@ import com.google.zxing.ReaderException
 import com.google.zxing.common.HybridBinarizer
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.min
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
+import org.mega.entropycore.BbqrPart
+import org.mega.entropycore.assembleBbqrParts
+import org.mega.entropycore.parseBbqrPart
 
 /**
  * Camera scanner for multisig cosigner QR codes. Decoding is entirely local:
@@ -110,13 +113,69 @@ private fun CameraPermissionContent(onRequestPermission: () -> Unit) {
     }
 }
 
+/**
+ * Handles both a single plain QR (a cosigner fragment, a bare xpub, or a
+ * full descriptor — same as before) and a BBQr animated series (the format
+ * Sparrow/Coldcard/etc use to spread a larger export, e.g. a full
+ * multisig descriptor with several cosigners, across multiple QR codes —
+ * see Bbqr.kt). Every distinct decoded frame from the camera arrives here;
+ * a non-BBQr frame finishes immediately exactly as before, while a BBQr
+ * part is accumulated until every part 0 until total has been seen, at
+ * which point [assembleBbqrParts] reconstructs the original text and
+ * finishes the same way.
+ */
 @Composable
 private fun ScannerContent(onScanned: (String) -> Unit) {
     var cameraError by remember { mutableStateOf<String?>(null) }
+    var bbqrParts by remember { mutableStateOf<Map<Int, BbqrPart>>(emptyMap()) }
+    var bbqrError by remember { mutableStateOf<String?>(null) }
+    // Guards against acting on a decode that arrives after this screen
+    // already found its answer and asked to leave — CameraX keeps
+    // analyzing frames for the brief window before navigation actually
+    // tears the camera down.
+    var finished by remember { mutableStateOf(false) }
+
+    fun handleDecodedText(text: String) {
+        if (finished) return
+        val part = parseBbqrPart(text)
+        if (part == null) {
+            finished = true
+            onScanned(text)
+            return
+        }
+
+        val current = bbqrParts.values.firstOrNull()
+        val sameSequence = current == null ||
+            (current.total == part.total && current.encoding == part.encoding && current.fileType == part.fileType)
+        // A part that doesn't match the sequence in progress means the
+        // camera moved to a different BBQr code entirely (a mis-scan, or
+        // the user pointing at the wrong series) — start over with just
+        // this new part rather than mixing two unrelated sequences
+        // together.
+        val updated = if (sameSequence) bbqrParts + (part.index to part) else mapOf(part.index to part)
+        bbqrParts = updated
+        bbqrError = null
+
+        if (updated.size == part.total) {
+            try {
+                val assembled = assembleBbqrParts(updated.values.toList())
+                finished = true
+                onScanned(assembled)
+            } catch (e: IllegalArgumentException) {
+                // Assembly failing after every expected part arrived means the
+                // data itself is bad (corrupted scan, unsupported content) —
+                // not "keep waiting for more parts". Reset so the user can
+                // rescan the series rather than being stuck on a dead end.
+                bbqrError = e.message ?: "Could not read this BBQr code."
+                bbqrParts = emptyMap()
+            }
+        }
+    }
 
     MegaCard {
         Text(
-            text = "Point the camera at a descriptor fragment or full multisig descriptor QR code.",
+            text = "Point the camera at a descriptor fragment or full multisig descriptor QR code — " +
+                "including an animated BBQr series (e.g. Sparrow's multisig export).",
             style = MaterialTheme.typography.bodyMedium,
         )
     }
@@ -131,7 +190,7 @@ private fun ScannerContent(onScanned: (String) -> Unit) {
         ) {
             CameraPreview(
                 modifier = Modifier.fillMaxSize(),
-                onScanned = onScanned,
+                onScanned = ::handleDecodedText,
                 onCameraError = { cameraError = it },
             )
             Icon(
@@ -141,14 +200,23 @@ private fun ScannerContent(onScanned: (String) -> Unit) {
                 tint = Color.White.copy(alpha = 0.78f),
             )
         }
-        Text(
-            text = "Nothing scanned is stored. The decoded text is parsed once and the scanner closes after the first valid QR read.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        val partsInProgress = bbqrParts.values.firstOrNull()
+        if (partsInProgress != null) {
+            Text(
+                text = "Scanned ${bbqrParts.size} of ${partsInProgress.total} parts — keep the camera on the animated QR code until every part is read.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Text(
+                text = "Nothing scanned is stored. The scanner closes once a single QR (or every part of an animated BBQr series) has been read.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 
-    val currentError = cameraError
+    val currentError = cameraError ?: bbqrError
     if (currentError != null) {
         Text(
             text = currentError,
@@ -228,7 +296,16 @@ private class QrCodeAnalyzer(
     private val mainExecutor: Executor,
     private val onQrScanned: (String) -> Unit,
 ) : ImageAnalysis.Analyzer {
-    private val decoded = AtomicBoolean(false)
+    // Dedupes identical CONSECUTIVE frames only — not a one-shot gate. A
+    // BBQr animated QR sequence needs every distinct part decoded as the
+    // exporting wallet cycles through them, so this analyzer must keep
+    // running past the first successful decode; without dedup, though, the
+    // same still-on-screen QR would re-invoke onQrScanned dozens of times a
+    // second for no benefit. The caller (ScannerContent) is what decides
+    // when scanning is actually "done" — a single non-BBQr QR, or a
+    // complete BBQr part set — this class only reports every distinct
+    // decode.
+    private val lastDecodedText = AtomicReference<String?>(null)
     private val reader = MultiFormatReader().apply {
         setHints(
             mapOf(
@@ -239,11 +316,6 @@ private class QrCodeAnalyzer(
     }
 
     override fun analyze(image: ImageProxy) {
-        if (decoded.get()) {
-            image.close()
-            return
-        }
-
         try {
             val luminance = image.extractLuminanceBytes()
             val source = PlanarYUVLuminanceSource(
@@ -266,7 +338,7 @@ private class QrCodeAnalyzer(
             // before any QR code was ever in view.
             val result = decode(source)
             val text = result?.trim().orEmpty()
-            if (text.isNotEmpty() && decoded.compareAndSet(false, true)) {
+            if (text.isNotEmpty() && lastDecodedText.getAndSet(text) != text) {
                 mainExecutor.execute { onQrScanned(text) }
             }
         } catch (_: Exception) {
