@@ -5,6 +5,7 @@ data class PsbtInputSummary(
     val amountSats: Long?,               // null if this input's witness_utxo is missing — amount genuinely unknown
     val existingSignatureCount: Int,      // partial_sig entries already present, before this device signs anything
     val cosignerCount: Int?,              // total distinct PSBT_IN_BIP32_DERIVATION entries on this input (how many different cosigner keys this input's script involves) — null if there are none at all (nothing to derive a count from)
+    val sighashType: Long?,               // the input's PSBT_IN_SIGHASH_TYPE, null when absent (absent means SIGHASH_ALL per BIP143) — anything present and != 1 is unsupported by this app's signer and must be surfaced, never silently signed
 )
 
 /** Everything safely known about one PSBT output. */
@@ -26,21 +27,34 @@ sealed class PsbtThresholdInfo {
 }
 
 data class PsbtSummary(
-    val network: WalletNetwork?,                  // as given by the caller (this function cannot determine network from PSBT bytes alone — there is no network field in a PSBT, and raw scriptPubKey bytes are identical across networks; only the caller, if it already knows which wallet/vault this PSBT is for, can supply this)
+    val network: WalletNetwork?,                  // caller-supplied, or inferred from the inputs' derivation-path coin types when every path agrees (see networkWasInferred) — null when genuinely unknown; a PSBT has no network field, and raw scriptPubKey bytes are identical across networks
+    val networkWasInferred: Boolean,              // true when `network` came from the PSBT's own derivation paths rather than from the caller — the UI should label it as inferred, not asserted
     val inputCount: Int,
     val outputCount: Int,
     val inputs: List<PsbtInputSummary>,
     val outputs: List<PsbtOutputSummary>,
     val totalInputSats: Long?,                    // null if ANY input's amount is unknown (never silently sum only the known ones and present a partial total as if it were the whole picture)
     val totalOutputSats: Long,                    // always known
-    val feeSats: Long?,                           // totalInputSats - totalOutputSats; null whenever totalInputSats is null
-    val estimatedFeeRateSatsPerVByte: Double?,     // see calculation below; null whenever feeSats is null
+    val feeSats: Long?,                           // totalInputSats - totalOutputSats; null whenever totalInputSats is null; NEGATIVE when outputs exceed inputs (an invalid transaction — the review screen must treat that as a blocking error, not a number)
+    val estimatedFeeRateSatsPerVByte: Double?,     // see calculation below; null whenever feeSats is null or negative
     val isAlreadyPartiallySigned: Boolean,         // true if existingSignatureCount > 0 for any input, BEFORE this device signs anything
     val existingSignatureCount: Int,               // sum of every input's existingSignatureCount
     val requiredThreshold: PsbtThresholdInfo,
     val deviceCanSignAnyInput: Boolean?,           // null if deviceMasterFingerprint (the function parameter) was null; otherwise true iff at least one input has a PSBT_IN_BIP32_DERIVATION whose masterFingerprint matches deviceMasterFingerprint AND doesn't already have a partial_sig for that same pubkey
     val willFinalizeIfSigned: Boolean?,            // best-effort prediction of whether signing with deviceMasterFingerprint would bring EVERY input to its own threshold — null if deviceMasterFingerprint is null, or if any input's threshold can't be determined (see below); true only if confident every input reaches enough signatures
-)
+) {
+    /** True when any input requests a sighash type this app's signer refuses
+     * (present and != SIGHASH_ALL) — a review screen must block signing on
+     * this, since a non-ALL signature would not commit to the transaction
+     * being shown. */
+    val hasUnsupportedSighashType: Boolean
+        get() = inputs.any { it.sighashType != null && it.sighashType != 1L }
+
+    /** True when every input's amount is known and the outputs total MORE
+     * than the inputs — a consensus-invalid transaction (negative fee). */
+    val feeIsNegative: Boolean
+        get() = feeSats != null && feeSats < 0
+}
 
 /**
  * Computes a full pre-signing review summary for [psbtBytes]. Never signs,
@@ -81,9 +95,18 @@ fun computePsbtSummary(
         PsbtInputSummary(
             amountSats = inputMap.witnessUtxo()?.valueSats,
             existingSignatureCount = inputMap.partialSigs().size,
-            cosignerCount = inputMap.bip32Derivations().size.let { if (it == 0) null else it }
+            cosignerCount = inputMap.bip32Derivations().size.let { if (it == 0) null else it },
+            sighashType = inputMap.sighashType(),
         )
     }
+
+    // 1b. Network: the caller's knowledge wins when it has any; otherwise
+    // infer from the inputs' bip32 derivation coin types (second path
+    // element — hardened 0' for mainnet, 1' for testnet) when EVERY
+    // derivation present agrees. A PSBT with no derivations, or with
+    // disagreeing ones, stays genuinely Unknown rather than guessed.
+    val inferredNetwork = if (knownNetwork != null) null else inferNetworkFromDerivationPaths(psbt)
+    val effectiveNetwork = knownNetwork ?: inferredNetwork
 
     // 2. Collect input fingerprints early for change detection.
     // We normalize to lowercase hex strings so we can safely compare
@@ -97,7 +120,7 @@ fun computePsbtSummary(
     val outputSummaries = psbt.unsignedTx.outputs.mapIndexed { index, txOut ->
         val outputMap = psbt.outputs[index]
         val scriptPubKeyHex = txOut.scriptPubKey.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
-        val address = knownNetwork?.let { network ->
+        val address = effectiveNetwork?.let { network ->
             // We only attempt address decoding when the network is known.
             // MEGA's wallets only produce native segwit outputs, so we strictly
             // check for P2WPKH and P2WSH shapes. Anything else is genuinely
@@ -135,7 +158,7 @@ fun computePsbtSummary(
     // approximate because signature sizes vary slightly, and we don't yet
     // know the exact witness weight. We calculate it honestly and label it
     // as such so the user understands it's a projection, not a guarantee.
-    val estimatedFeeRateSatsPerVByte = feeSats?.let { fee ->
+    val estimatedFeeRateSatsPerVByte = feeSats?.takeIf { it >= 0 }?.let { fee ->
         // Base weight: unsigned transaction bytes * 4 (standard weight unit conversion)
         val baseWeightUnits = serializeTransaction(psbt.unsignedTx).size * 4
 
@@ -156,7 +179,7 @@ fun computePsbtSummary(
         // script and skipping the other's).
         val estimatedWitnessBytes = psbt.inputs.sumOf { inputMap ->
             val ws = inputMap.witnessScript()
-            val threshold = if (ws != null && isStandardMultisig(ws)) parseThreshold(ws) else 1
+            val threshold = ws?.let { parseBareMultisigWitnessScript(it)?.first } ?: 1
             threshold * 72
         }
 
@@ -168,16 +191,16 @@ fun computePsbtSummary(
     }
 
     // 7. Threshold determination
-    // We parse each input's witness_script independently. If an input has
-    // no witness_script (e.g., P2WPKH), it contributes nothing to this
-    // determination — it's simply not a multisig input. We only look at
-    // inputs that actually carry a parseable bare-multisig script.
+    // We parse each input's witness_script independently — strictly, via the
+    // same full-template parser the finalizer uses, so a script that only
+    // LOOKS multisig-shaped at its edges can't produce a bogus "M of N" here.
+    // An input with no witness_script (e.g., P2WPKH) contributes nothing.
     val multisigThresholds = psbt.inputs.mapNotNull { inputMap ->
         val ws = inputMap.witnessScript()
-        if (ws != null && isStandardMultisig(ws)) {
-            val threshold = parseThreshold(ws)
-            val cosignerCount = parseCosignerCount(ws)
-            Pair(threshold, cosignerCount)
+        if (ws != null) {
+            parseBareMultisigWitnessScript(ws)?.let { (threshold, pubkeys) ->
+                Pair(threshold, pubkeys.size)
+            }
         } else {
             null
         }
@@ -238,7 +261,8 @@ fun computePsbtSummary(
     }
 
     return PsbtSummary(
-        network = knownNetwork,
+        network = effectiveNetwork,
+        networkWasInferred = knownNetwork == null && inferredNetwork != null,
         inputCount = inputCount,
         outputCount = outputCount,
         inputs = inputSummaries,
@@ -253,6 +277,27 @@ fun computePsbtSummary(
         deviceCanSignAnyInput = deviceCanSignAnyInput,
         willFinalizeIfSigned = willFinalizeIfSigned
     )
+}
+
+/**
+ * Infers the network from the coin-type element (index 1) of every input's
+ * bip32 derivation paths: hardened 0' → mainnet, hardened 1' → testnet.
+ * Returns null when no input carries a usable derivation path, or when the
+ * coin types disagree — a mixed-network PSBT is nonsense, but "we can't
+ * tell" is the only honest answer this function is allowed to give.
+ */
+private fun inferNetworkFromDerivationPaths(psbt: Psbt): WalletNetwork? {
+    val coinTypes = psbt.inputs
+        .flatMap { it.bip32Derivations() }
+        .mapNotNull { it.path.getOrNull(1) }
+    if (coinTypes.isEmpty()) return null
+    val distinct = coinTypes.toSet()
+    if (distinct.size != 1) return null
+    return when (distinct.single()) {
+        HARDENED_OFFSET + 0L -> WalletNetwork.MAINNET
+        HARDENED_OFFSET + 1L -> WalletNetwork.TESTNET
+        else -> null
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -286,38 +331,14 @@ private fun hrpFor(network: WalletNetwork): String = when (network) {
 }
 
 /**
- * Checks if a witness script follows the standard bare-multisig layout:
- * OP_<M> <pubkey1>...<pubkeyN> OP_<N> OP_CHECKMULTISIG
- * We verify the first and second-to-last bytes are valid OP_1..OP_16 codes.
- */
-private fun isStandardMultisig(witnessScript: ByteArray): Boolean =
-    witnessScript.size >= 3 &&
-    witnessScript[0].toUByte().toInt() in 0x51..0x60 &&
-    witnessScript[witnessScript.size - 2].toUByte().toInt() in 0x51..0x60
-
-/**
- * Extracts the threshold M from a standard bare-multisig witness script.
- * OP_<k> is encoded as 0x50 + k, so we subtract 0x50 to get the integer.
- */
-private fun parseThreshold(witnessScript: ByteArray): Int =
-    witnessScript[0].toUByte().toInt() - 0x50
-
-/**
- * Extracts the cosigner count N from a standard bare-multisig witness script.
- * Located at the second-to-last byte (right before OP_CHECKMULTISIG).
- */
-private fun parseCosignerCount(witnessScript: ByteArray): Int =
-    witnessScript[witnessScript.size - 2].toUByte().toInt() - 0x50
-
-/**
  * Determines the required signature count for an input.
- * Returns null if the input carries a witness script that isn't a parseable
- * bare-multisig (meaning we genuinely cannot determine the threshold).
- * Returns 1 for P2WPKH or inputs without a witness script.
+ * Returns null if the input carries a witness script that isn't an exact
+ * bare-multisig template (meaning we genuinely cannot determine the
+ * threshold). Returns 1 for P2WPKH or inputs without a witness script.
  */
 private fun inputThreshold(inputMap: PsbtMap): Int? {
     val ws = inputMap.witnessScript() ?: return 1
-    return if (isStandardMultisig(ws)) parseThreshold(ws) else null
+    return parseBareMultisigWitnessScript(ws)?.first
 }
 
 /** Extension to compare a derivation's master fingerprint against a hex string. */
