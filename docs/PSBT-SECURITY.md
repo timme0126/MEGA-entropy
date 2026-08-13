@@ -2,7 +2,7 @@
 
 How MEGA's PSBT (BIP174) signing is kept safe, and what a reviewer should
 check first. This documents the security invariants of the signing pipeline
-added in v0.1.8–v0.1.9, hardened after the v0.1.9 audit, and further
+added in v0.1.8–v0.1.10, hardened after the v0.1.9 audit, and further
 hardened around amount validation and finalization signature verification.
 
 ## The one-sentence rule

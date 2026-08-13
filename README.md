@@ -10,15 +10,15 @@ six-sided die rolls, supplied entirely by the user,** into a valid 12- or
 
 ## Download the beta APK
 
-**Current beta:** [`mega-beta-v0.1.9.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.9/mega-beta-v0.1.9.apk)
+**Current beta:** [`mega-beta-v0.1.10.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.10/mega-beta-v0.1.10.apk)
 
-Release page: [`MEGA Beta v0.1.9`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.9)
+Release page: [`MEGA Beta v0.1.10`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.10)
 
 Verify the primary release APK before installing:
 
 ```bash
-sha256sum mega-beta-v0.1.9.apk
-# 763fa80a499cb644130679daa666a413df2f6600ab700a4a0b7496709f4e1336
+sha256sum mega-beta-v0.1.10.apk
+# 3526b0324d4791a7640648382e6820494624db8c2a007a3a2af209726cab4081
 ```
 
 This primary build is a **release-type, non-debuggable APK signed with the
@@ -38,7 +38,7 @@ installed`, you likely have a debug-signed build already installed. Use the
 compatibility APK below only to update that older test install without wiping
 local test data:
 
-[`mega-beta-v0.1.9-debug-compat.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.9/mega-beta-v0.1.9-debug-compat.apk)
+[`mega-beta-v0.1.9-debug-compat.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.10/mega-beta-v0.1.9-debug-compat.apk)
 
 ```bash
 sha256sum mega-beta-v0.1.9-debug-compat.apk

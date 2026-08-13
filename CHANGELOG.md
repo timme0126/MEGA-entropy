@@ -1,12 +1,10 @@
 # Changelog
 
-Notable changes to MEGA, most recent first. The current beta build
-is `v0.1.9` (see [`README.md`](README.md#download-the-beta-apk)) —
-the changes below are included in this tagged release.
+Notable changes to MEGA, most recent first. The current beta build is `v0.1.10` (see [`README.md`](README.md#download-the-beta-apk)).
 
-## [Unreleased] — security-audit hardening
+## [0.1.10] — 2026-08-13
 
-Findings from a full security audit of v0.1.9 (PSBT signing, multisig
+Findings from a full security audit of v0.1.9 and an independent follow-up review (PSBT signing, multisig
 vaults, BBQr/SeedQR, storage, release pipeline). All fixes carry
 regression tests. See `docs/PSBT-SECURITY.md` for the resulting signing
 security model.
@@ -49,7 +47,7 @@ security model.
   only then labeled "Change back to this vault (verified)"; unverified
   lookalikes are flagged as NOT verified.
 
-### Fixed (security — found by an independent re-review of the above)
+### Fixed (security — independent re-review)
 
 A second review pass re-derived every finding above from the code rather
 than trusting the first pass's report, and found five more it had missed.
