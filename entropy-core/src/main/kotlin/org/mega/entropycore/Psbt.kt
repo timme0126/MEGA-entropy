@@ -39,9 +39,28 @@ fun parsePsbt(bytes: ByteArray): Psbt {
     val globalMapResult = readMap(bytes, offset)
     offset = globalMapResult.consumed
 
-    // Every valid PSBT must contain the unsigned transaction (keyType 0x00).
-    val unsignedTxEntry = globalMapResult.map.entries.find { it.keyType == 0x00 }
-        ?: throw IllegalArgumentException("Missing unsigned transaction in global map")
+    // Every valid PSBT must contain EXACTLY ONE unsigned transaction
+    // (keyType 0x00), and BIP174 requires its key to be the single type byte
+    // with NO keydata ("The key must only contain the 1 byte type").
+    //
+    // Both halves matter. Without the count check, a file carrying two
+    // different type-0x00 keys (legal under the duplicate-FULL-key rule, since
+    // `00` and `00 aa` are different keys) would resolve to whichever came
+    // first here while a strict parser rejects the file outright — the same
+    // display-vs-sign divergence the duplicate-key rule exists to prevent.
+    // Without the keydata check, a lone malformed `00 aa` key would be
+    // accepted as the unsigned transaction even though Bitcoin Core and
+    // Sparrow both refuse it.
+    val globalUnsignedTxEntries = globalMapResult.map.entries.filter { it.keyType == 0x00 }
+    if (globalUnsignedTxEntries.size != 1) {
+        throw IllegalArgumentException(
+            "A PSBT must contain exactly one global unsigned transaction, found ${globalUnsignedTxEntries.size}",
+        )
+    }
+    val unsignedTxEntry = globalUnsignedTxEntries.single()
+    if (unsignedTxEntry.keyData.isNotEmpty()) {
+        throw IllegalArgumentException("Global unsigned transaction key must be the type byte alone (BIP174)")
+    }
     val unsignedTx = parseTransaction(unsignedTxEntry.value)
     // The unsigned tx must be exactly the bytes given, nothing more and in
     // canonical form: re-serializing the parsed tx must reproduce the value
@@ -63,6 +82,7 @@ fun parsePsbt(bytes: ByteArray): Psbt {
     for (i in 0 until unsignedTx.inputs.size) {
         val inputMapResult = readMap(bytes, offset)
         offset = inputMapResult.consumed
+        requireEmptyKeyDataForSingletonTypes(inputMapResult.map, SINGLETON_INPUT_KEY_TYPES, "input", i)
         inputs.add(inputMapResult.map)
     }
 
@@ -71,10 +91,54 @@ fun parsePsbt(bytes: ByteArray): Psbt {
     for (i in 0 until unsignedTx.outputs.size) {
         val outputMapResult = readMap(bytes, offset)
         offset = outputMapResult.consumed
+        requireEmptyKeyDataForSingletonTypes(outputMapResult.map, SINGLETON_OUTPUT_KEY_TYPES, "output", i)
         outputs.add(outputMapResult.map)
     }
 
+    // Nothing may follow the final output map. Silently ignoring trailing
+    // bytes would mean the reviewed-and-signed PSBT is only a PREFIX of the
+    // bytes actually scanned, so a peer that interprets the remainder
+    // differently could disagree with MEGA about what the file contains.
+    if (offset != bytes.size) {
+        throw IllegalArgumentException("Trailing bytes after the final PSBT output map (${bytes.size - offset} extra)")
+    }
+
     return Psbt(unsignedTx, globalMapResult.map, inputs, outputs)
+}
+
+/** BIP174 input key types whose key is defined as the type byte ALONE (no
+ * keydata): non_witness_utxo, witness_utxo, sighash_type, redeem_script,
+ * witness_script, final_scriptSig, final_scriptWitness. The keyed types
+ * (0x02 partial_sig, 0x06 bip32_derivation) legitimately carry a pubkey and
+ * are deliberately absent. */
+private val SINGLETON_INPUT_KEY_TYPES = setOf(0x00, 0x01, 0x03, 0x04, 0x05, 0x07, 0x08)
+
+/** BIP174 output key types whose key is the type byte alone: redeem_script
+ * and witness_script. 0x02 (bip32_derivation) carries a pubkey. */
+private val SINGLETON_OUTPUT_KEY_TYPES = setOf(0x00, 0x01)
+
+/**
+ * Rejects a key that carries keydata for a type BIP174 defines as un-keyed.
+ *
+ * Every typed accessor in this file resolves such a type with
+ * `entries.find { it.keyType == N }`, so a malformed `N <extra>` key would be
+ * silently accepted and — if it sorted first — returned in place of the real
+ * one. That turns a decoy key into a way to show the user one witness_utxo,
+ * sighash type, or witness_script while a strict peer sees another. Failing
+ * closed at parse time keeps every accessor unambiguous by construction.
+ */
+private fun requireEmptyKeyDataForSingletonTypes(
+    map: PsbtMap,
+    singletonTypes: Set<Int>,
+    mapKind: String,
+    mapIndex: Int,
+) {
+    val offender = map.entries.firstOrNull { it.keyType in singletonTypes && it.keyData.isNotEmpty() }
+        ?: return
+    throw IllegalArgumentException(
+        "PSBT $mapKind map $mapIndex has a key of type 0x${offender.keyType.toString(16)} with keydata, " +
+            "but BIP174 defines that key as the type byte alone",
+    )
 }
 
 private data class MapResult(val map: PsbtMap, val consumed: Int)

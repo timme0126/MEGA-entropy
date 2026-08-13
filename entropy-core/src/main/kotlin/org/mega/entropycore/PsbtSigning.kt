@@ -56,7 +56,13 @@ internal fun signPsbt(psbt: Psbt, masterKey: Bip32ExtendedPrivateKey): Psbt {
 
         // f. Track already-signed pubkeys to avoid duplicate signatures.
         // ByteArray lacks structural equals/hashCode, so we convert to List for Set membership.
-        val signedPubkeys = inputMap.partialSigs().map { it.pubkey.toList() }.toSet()
+        // MUTABLE and updated as we go: two bip32_derivation entries naming the
+        // SAME pubkey would otherwise each produce a partial_sig, emitting two
+        // entries with identical full keys — a PSBT that parsePsbt itself now
+        // refuses to read back. The parser's duplicate-key rule already makes
+        // that input unreachable through the app's own flow, but signPsbt must
+        // not depend on its caller having parsed the PSBT to stay correct.
+        val signedPubkeys = inputMap.partialSigs().map { it.pubkey.toList() }.toMutableSet()
 
         // g. Start with existing entries to preserve all other PSBT fields.
         var newEntries = inputMap.entries
@@ -111,6 +117,7 @@ internal fun signPsbt(psbt: Psbt, masterKey: Bip32ExtendedPrivateKey): Psbt {
 
             // Append the new partial signature entry.
             newEntries = newEntries + PsbtKeyValue(keyType = 0x02, keyData = derivation.pubkey, value = signature)
+            signedPubkeys.add(derivation.pubkey.toList())
         }
 
         // f. Return the updated PsbtMap for this input.

@@ -34,18 +34,32 @@ internal fun readCompactSize(bytes: ByteArray, offset: Int): VarIntResult {
         253 -> {
             if (offset + 3 > bytes.size) throw IllegalArgumentException("Truncated compact-size varint (0xfd)")
             val v = bytes[offset + 1].toUByte().toLong() or (bytes[offset + 2].toUByte().toLong() shl 8)
+            // Bitcoin's compact-size encoding is canonical: a value must use the
+            // SHORTEST form that can represent it. Accepting `fd 01 00` for 1
+            // would let one serialization of the same logical content have many
+            // byte representations — a divergence surface between MEGA and any
+            // strict implementation reading the same file (Bitcoin Core and
+            // Sparrow both reject non-minimal encodings).
+            if (v < 253L) throw IllegalArgumentException("Non-minimal compact-size varint (0xfd used for $v)")
             VarIntResult(v, offset + 3)
         }
         254 -> {
             if (offset + 5 > bytes.size) throw IllegalArgumentException("Truncated compact-size varint (0xfe)")
             var v = 0L
             for (i in 0..3) v = v or (bytes[offset + 1 + i].toUByte().toLong() shl (i * 8))
+            if (v <= 0xFFFFL) throw IllegalArgumentException("Non-minimal compact-size varint (0xfe used for $v)")
             VarIntResult(v, offset + 5)
         }
         255 -> {
             if (offset + 9 > bytes.size) throw IllegalArgumentException("Truncated compact-size varint (0xff)")
             var v = 0L
             for (i in 0..7) v = v or (bytes[offset + 1 + i].toUByte().toLong() shl (i * 8))
+            // A value with bit 63 set reads back NEGATIVE as a Kotlin Long, which
+            // would slip past every `offset + len > size` bounds check below and
+            // reach copyOfRange with a negative end index. Reject it outright
+            // rather than relying on a downstream throw.
+            if (v < 0L) throw IllegalArgumentException("Compact-size varint exceeds the maximum supported length")
+            if (v <= 0xFFFFFFFFL) throw IllegalArgumentException("Non-minimal compact-size varint (0xff used for $v)")
             VarIntResult(v, offset + 9)
         }
         else -> throw IllegalArgumentException("Invalid compact-size varint")
