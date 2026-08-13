@@ -10,7 +10,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,7 +47,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -66,24 +64,24 @@ import org.mega.entropy.ui.theme.MegaSuccess
 
 /**
  * Brand wordmark treatment follows the active theme: dark mode keeps the
- * original transparent wordmark, while light mode supplies the black backing
- * the original artwork expects.
+ * original wordmark, while light mode uses its dedicated artwork.
  */
 @Composable
 fun MegaLogo(
     modifier: Modifier = Modifier,
 ) {
-    val backgroundColor = if (isSystemInDarkTheme()) Color.Transparent else Color.Black
+    val isDarkTheme = isSystemInDarkTheme()
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1672f / 941f)
-            .background(backgroundColor)
             .padding(12.dp),
     ) {
         Image(
-            painter = painterResource(R.drawable.mega_wordmark),
+            painter = painterResource(
+                if (isDarkTheme) R.drawable.mega_wordmark else R.drawable.mega_lightmode,
+            ),
             contentDescription = stringResource(R.string.app_name),
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxWidth(),
