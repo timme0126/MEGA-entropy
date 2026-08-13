@@ -30,7 +30,7 @@ class BbqrEncodeTest {
     @Test
     fun `encodeBbqr produces a single well-formed part when the payload fits in one`() {
         val data = TEST_DATA_HEX.hexToBytes()
-        val parts = encodeBbqr('P', data, partPayloadSize = 150)
+        val parts = encodeBbqr('P', data, partPayloadSize = 152)
 
         assertEquals(1, parts.size)
         assertEquals("B\$2P0100$EXPECTED_BASE32_PAYLOAD", parts[0])
@@ -39,15 +39,17 @@ class BbqrEncodeTest {
     @Test
     fun `encodeBbqr splits into the correct number of parts with correct total-index headers`() {
         val data = TEST_DATA_HEX.hexToBytes()
-        val parts = encodeBbqr('P', data, partPayloadSize = 10)
+        val parts = encodeBbqr('P', data, partPayloadSize = 8)
 
-        // 61 Base32 chars / 10 per part = 7 parts (ceiling division).
-        assertEquals(7, parts.size)
+        // 61 Base32 chars / 8 per part = 8 parts (ceiling division); partPayloadSize
+        // must be a multiple of 8 so every part but the last independently decodes
+        // to a whole number of bytes, per the BBQr spec's Base32 requirement.
+        assertEquals(8, parts.size)
         parts.forEachIndexed { i, part ->
             val parsed = parseBbqrPart(part)
             assertEquals('2', parsed?.encoding)
             assertEquals('P', parsed?.fileType)
-            assertEquals(7, parsed?.total)
+            assertEquals(8, parsed?.total)
             assertEquals(i, parsed?.index)
         }
         // Reassembling every part's payload in order reproduces the full Base32 string.
@@ -57,7 +59,7 @@ class BbqrEncodeTest {
     @Test
     fun `encodeBbqr followed by assembleBbqrPartsAsBytes round-trips arbitrary bytes`() {
         val original = TEST_DATA_HEX.hexToBytes()
-        val parts = encodeBbqr('P', original, partPayloadSize = 12).map { parseBbqrPart(it)!! }
+        val parts = encodeBbqr('P', original, partPayloadSize = 16).map { parseBbqrPart(it)!! }
 
         assertArrayEquals(original, assembleBbqrPartsAsBytes(parts))
     }
@@ -93,10 +95,22 @@ class BbqrEncodeTest {
 
     @Test
     fun `encodeBbqr rejects data that would need more parts than BBQr's header can address`() {
-        // 1000 bytes -> 1600 Base32 chars; at 1 char/part that's 1600 parts, over the 1296 max.
-        val tooBigForOneCharPerPart = ByteArray(1000)
+        // 10000 bytes -> 16000 Base32 chars; at 8 chars/part (the smallest valid,
+        // multiple-of-8 size) that's 2000 parts, over the 1296 max.
+        val tooBigForSmallestValidPartSize = ByteArray(10000)
         assertThrows(IllegalArgumentException::class.java) {
-            encodeBbqr('P', tooBigForOneCharPerPart, partPayloadSize = 1)
+            encodeBbqr('P', tooBigForSmallestValidPartSize, partPayloadSize = 8)
+        }
+    }
+
+    @Test
+    fun `encodeBbqr rejects a partPayloadSize that is not a multiple of 8`() {
+        // The BBQr spec requires every Base32 block to independently decode to a
+        // whole number of bytes ("for Base32 you must send complete bytes") — the
+        // reported real-world failure (Sparrow: "Invalid input length 150") came
+        // from exactly this: a 150-character part size, and 150 % 8 == 6.
+        assertThrows(IllegalArgumentException::class.java) {
+            encodeBbqr('P', TEST_DATA_HEX.hexToBytes(), partPayloadSize = 150)
         }
     }
 }

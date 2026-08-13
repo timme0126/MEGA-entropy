@@ -115,11 +115,32 @@ private fun combineAndDecodeBbqrParts(parts: List<BbqrPart>, supportedFileTypes:
         "Unsupported BBQr file type '$fileType' — expected one of $supportedFileTypes."
     }
 
-    val combinedPayload = (0 until total).joinToString("") { byIndex.getValue(it).payload }
+    // Decodes each part's payload to bytes INDEPENDENTLY, then concatenates the
+    // resulting byte arrays — NOT "concatenate every part's raw text first, then
+    // decode the combined string once" (a prior version of this function did
+    // that, and it silently tolerated per-part chunk lengths that don't
+    // themselves decode to a whole number of bytes). The BBQr spec is explicit
+    // that this is wrong: "Just as it is an error to send an odd number of hex
+    // digits in a QR block, for Base32 you must send complete bytes."
+    // (https://github.com/coinkite/BBQr/blob/master/BBQr.md). A spec-compliant
+    // decoder (e.g. Sparrow, which uses Guava's strict BaseEncoding) decodes
+    // each block on its own and rejects one that doesn't — decoding the same
+    // way here means a chunk [encodeBbqr] could never legally produce is caught
+    // immediately as a decode error instead of silently accepted by a decoder
+    // lenient enough to paper over it.
+    val orderedParts = (0 until total).map { byIndex.getValue(it) }
     val decodedBytes = when (encoding) {
-        'H' -> decodeBbqrHex(combinedPayload)
-        '2' -> decodeBase32(combinedPayload)
-        'Z' -> inflateRawDeflate(decodeBase32(combinedPayload))
+        'H' -> orderedParts.fold(ByteArray(0)) { acc, part -> acc + decodeBbqrHex(part.payload) }
+        '2' -> orderedParts.fold(ByteArray(0)) { acc, part -> acc + decodeBase32(part.payload) }
+        'Z' -> {
+            // Deflate is a single continuous compressed stream — unlike the
+            // Base32 stage, it cannot be inflated one part at a time. Each
+            // part's Base32 text is still decoded independently (per the spec
+            // requirement above), then the resulting COMPRESSED bytes are
+            // concatenated back into one stream before the single inflate call.
+            val compressed = orderedParts.fold(ByteArray(0)) { acc, part -> acc + decodeBase32(part.payload) }
+            inflateRawDeflate(compressed)
+        }
         else -> throw IllegalArgumentException("Unsupported BBQr encoding '$encoding'.")
     }
     return fileType to decodedBytes
@@ -133,8 +154,9 @@ private const val MAX_BBQR_PARTS = 1296
  * fixed 8-character "B$2<fileType><total><index>" header) — small enough
  * that each resulting QR stays comfortably scannable by a phone camera at
  * a normal viewing distance across an animated series, matching the kind
- * of part size other Bitcoin-signing-device BBQr exporters commonly use. */
-private const val DEFAULT_BBQR_PART_PAYLOAD_SIZE = 150
+ * of part size other Bitcoin-signing-device BBQr exporters commonly use.
+ * MUST be a multiple of 8 — see [encodeBbqr]'s partPayloadSize requirement. */
+private const val DEFAULT_BBQR_PART_PAYLOAD_SIZE = 152
 
 /**
  * Splits [data] into a sequence of complete BBQr part strings — each
@@ -149,9 +171,33 @@ private const val DEFAULT_BBQR_PART_PAYLOAD_SIZE = 150
  * raw transaction, etc — see the BBQr spec) — this function does not
  * validate it, since new file types may need exporting later and nothing
  * about splitting/encoding bytes actually depends on which one is used.
+ *
+ * [partPayloadSize] MUST be a multiple of 8: 8 Base32 characters encode
+ * exactly 5 bytes with no leftover bits, so a multiple-of-8 chunk boundary
+ * guarantees every part except possibly the last is independently a
+ * "complete bytes" chunk per the BBQr spec's explicit requirement ("for
+ * Base32 you must send complete bytes") — and since removing whole
+ * multiples of 8 characters from the front of a validly-encoded payload
+ * never changes its length's remainder mod 8, the trailing (possibly
+ * shorter) last part inherits that same validity automatically, with no
+ * special-casing needed. A part length that doesn't satisfy this (150, the
+ * previous default, does not: 150 mod 8 = 6) produces BBQr output that
+ * MEGA's own scanner round-trips successfully (since it used to decode
+ * only after concatenating every part's raw text back together) but which
+ * a spec-compliant decoder that decodes each part on its own — e.g.
+ * Sparrow, which uses Guava's strict BaseEncoding — rejects outright with
+ * a decoding error. This was a real interop bug: Sparrow reported "Error
+ * scanning QR :: com.google.common.io.BaseEncoding$DecodingException:
+ * Invalid input length 150" when scanning a PSBT MEGA exported at the old
+ * default part size.
  */
 fun encodeBbqr(fileType: Char, data: ByteArray, partPayloadSize: Int = DEFAULT_BBQR_PART_PAYLOAD_SIZE): List<String> {
     require(partPayloadSize > 0) { "partPayloadSize must be positive, got $partPayloadSize" }
+    require(partPayloadSize % 8 == 0) {
+        "partPayloadSize must be a multiple of 8 (8 Base32 characters = 5 complete bytes, " +
+            "with no leftover bits) so every part independently decodes to a whole number of " +
+            "bytes, per the BBQr spec's Base32 requirement — got $partPayloadSize"
+    }
     val payload = encodeBase32(data)
     val total = if (payload.isEmpty()) 1 else (payload.length + partPayloadSize - 1) / partPayloadSize
     require(total <= MAX_BBQR_PARTS) {
@@ -205,14 +251,35 @@ private fun decodeBbqrHex(text: String): ByteArray {
     }
 }
 
+/** Characters mod 8 that a complete (no-padding) Base32 encoding of a
+ * whole number of bytes can legally end on: 0 (0 leftover bits — an exact
+ * multiple of 5 bytes), 2 (1 byte), 4 (2 bytes), 5 (3 bytes), 7 (4 bytes).
+ * 1, 3, and 6 are impossible outputs of [encodeBase32] for any input and
+ * indicate a truncated or corrupted chunk if seen by [decodeBase32]. */
+private val VALID_BASE32_LENGTH_REMAINDERS = setOf(0, 2, 4, 5, 7)
+
 /** Standard 5-bits-per-character Base32 decode, MSB-first, no padding.
  * [bits] only ever needs to hold a handful of not-yet-emitted bits
  * between characters (never a whole accumulated stream) because it's
  * masked back down to just the unconsumed remainder after every byte
  * emitted — without that masking, [bits] would grow by 5 bits per
  * character indefinitely and overflow Int well before a realistic BBQr
- * payload (a few hundred characters) finished decoding. */
+ * payload (a few hundred characters) finished decoding.
+ *
+ * Requires [text]'s length to be one every complete encoding can actually
+ * produce (see [VALID_BASE32_LENGTH_REMAINDERS]) — matching the strict
+ * validation a spec-compliant decoder (e.g. Sparrow, via Guava's
+ * BaseEncoding) performs, rather than silently dropping whatever partial
+ * bits are left over at the end of a length this function was never
+ * meant to be handed as a complete unit. Without this check, a caller
+ * accidentally handing this function a truncated chunk (e.g. one BBQr
+ * part out of several, decoded independently) would get back silently
+ * truncated — wrong — bytes instead of a clear error. */
 private fun decodeBase32(text: String): ByteArray {
+    require(text.length % 8 in VALID_BASE32_LENGTH_REMAINDERS) {
+        "BBQr Base32 payload has an invalid length (${text.length} characters) — not a " +
+            "complete encoding of a whole number of bytes."
+    }
     var bits = 0
     var bitCount = 0
     val output = ByteArrayOutputStream((text.length * 5) / 8 + 1)
