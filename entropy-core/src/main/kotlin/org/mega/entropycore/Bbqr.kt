@@ -297,13 +297,22 @@ private fun decodeBase32(text: String): ByteArray {
     return output.toByteArray()
 }
 
+/** Hard cap on BBQr 'Z'-encoding inflate output. Raw input is bounded by the
+ * format itself (≤1296 frames of at most one QR's capacity each, a few MB at
+ * most), but a DEFLATE stream can expand ~1000:1 — an adversarial QR series
+ * could otherwise inflate to gigabytes and exhaust memory (a zip bomb). No
+ * legitimate BBQr payload (a PSBT, a multisig descriptor, a transaction)
+ * comes anywhere near this: even a 15-of-15 multisig PSBT is a few KB. */
+private const val MAX_BBQR_INFLATED_BYTES = 8 * 1024 * 1024
+
 /** Zlib-inflates a raw (headerless) deflate stream — the fixed compression
  * BBQr's 'Z' encoding requires (wbits=10, no zlib/gzip header — see
  * BBQr.md's "Advanced Encodings" section). [Inflater]'s nowrap=true mode
  * decodes raw deflate without needing the encoder's window size (2^10 =
  * 1KB) configured explicitly: a decompressor's window only needs to be AT
  * LEAST as large as the one used to compress, and Inflater's default
- * window comfortably exceeds 1KB. */
+ * window comfortably exceeds 1KB. Output is capped at
+ * [MAX_BBQR_INFLATED_BYTES] — exceeding it fails closed. */
 private fun inflateRawDeflate(compressed: ByteArray): ByteArray {
     val inflater = Inflater(true)
     inflater.setInput(compressed)
@@ -314,6 +323,11 @@ private fun inflateRawDeflate(compressed: ByteArray): ByteArray {
             val count = inflater.inflate(buffer)
             if (count == 0 && (inflater.needsInput() || inflater.needsDictionary())) break
             output.write(buffer, 0, count)
+            if (output.size() > MAX_BBQR_INFLATED_BYTES) {
+                throw IllegalArgumentException(
+                    "BBQr data decompresses to more than ${MAX_BBQR_INFLATED_BYTES / (1024 * 1024)} MB — refusing to expand it further.",
+                )
+            }
         }
     } catch (e: DataFormatException) {
         throw IllegalArgumentException("Could not decompress BBQr data (zlib error).", e)
