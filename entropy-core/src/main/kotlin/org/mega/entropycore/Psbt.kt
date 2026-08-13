@@ -169,8 +169,24 @@ fun PsbtMap.sighashType(): Long? =
 fun PsbtMap.witnessScript(): ByteArray? =
     entries.find { it.keyType == 0x05 }?.value
 
-fun PsbtMap.bip32Derivations(): List<PsbtBip32Derivation> =
-    entries.filter { it.keyType == 0x06 }.map { entry ->
+/** PSBT_IN_BIP32_DERIVATION (input-map keyType 0x06) — which cosigner
+ * pubkey(s) an INPUT's script involves, and the path to derive each from
+ * its own master. */
+fun PsbtMap.bip32Derivations(): List<PsbtBip32Derivation> = parseBip32Derivations(entries, 0x06)
+
+/** PSBT_OUT_BIP32_DERIVATION (output-map keyType 0x02 — a different
+ * meaning than the SAME numeric keyType in an input map, where 0x02 is
+ * PSBT_IN_PARTIAL_SIG; BIP174 scopes keyTypes independently per map kind)
+ * — which cosigner pubkey(s) an OUTPUT pays to, and the path to derive
+ * each from its own master. The standard way a wallet marks its own
+ * change output: present here with a path/fingerprint matching one of
+ * the transaction's own inputs, versus absent (or matching nothing) for
+ * a plain external payment. Value wire format is identical to the input
+ * case, so this shares the same parsing logic. */
+fun PsbtMap.outputBip32Derivations(): List<PsbtBip32Derivation> = parseBip32Derivations(entries, 0x02)
+
+private fun parseBip32Derivations(entries: List<PsbtKeyValue>, keyType: Int): List<PsbtBip32Derivation> =
+    entries.filter { it.keyType == keyType }.map { entry ->
         val value = entry.value
         if (value.size < 4) throw IllegalArgumentException("Truncated bip32Derivation fingerprint")
         val fingerprint = value.copyOfRange(0, 4)

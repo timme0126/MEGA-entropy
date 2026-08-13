@@ -8,7 +8,37 @@ everything below is unreleased on top of it, not yet in a tagged build.
 
 Driven by real multisig testing against Sparrow Wallet.
 
+### Fixed
+- **BBQr export rejected by Sparrow** ("Invalid input length 150"): the
+  BBQr spec requires every individual QR frame's Base32 chunk — not just
+  the full reassembled payload — to independently decode to a whole
+  number of bytes. MEGA's animated-QR export chunked at a fixed
+  150-character part size (150 mod 8 = 6, not a valid "complete bytes"
+  length), which round-tripped fine through MEGA's own decoder (which
+  used to concatenate every frame's text before decoding, masking the
+  problem) but was rejected outright by Sparrow's stricter, spec-
+  compliant per-frame decoding. `encodeBbqr`'s default part size is now
+  152 (a multiple of 8) and it rejects any non-multiple-of-8 size by
+  construction; the decoder side now also decodes each frame
+  independently before concatenating, matching the spec and catching a
+  malformed chunk immediately instead of only after full reassembly.
+  Verified against an independently-written reference Base32 decoder
+  applying Sparrow's exact strict validation rule, not just MEGA's own.
+
 ### Added
+- **Transaction review before signing**: every PSBT-signing flow (single-
+  seed and saved-vault) now shows a full review screen — network, input/
+  output counts and amounts, destination addresses, change-output
+  identification, total input/output amounts, fee and estimated fee
+  rate, existing-signature count, required threshold, whether this
+  device can sign, and whether signing will finalize the transaction —
+  with an explicit "Confirm and Sign" action required before anything is
+  signed. Scanning a PSBT no longer signs it immediately; Cancel or Back
+  at any point discards the scanned PSBT without signing. Any value that
+  can't be reliably determined is shown as "Unknown" rather than
+  guessed. New `computePsbtSummary` (entropy-core) never derives or
+  touches a private key — only compares an already-known fingerprint
+  string against fingerprints already embedded in the PSBT.
 - **Sign PSBT for a saved multisig vault**: a saved vault's detail screen
   now has a "Sign PSBT" action. Since a saved vault stores only public
   cosigner data (fingerprint/path/xpub — never a link to a local seed),

@@ -102,6 +102,12 @@ object MegaDestinations {
      * broadcast-ready transaction or the still-partially-signed PSBT to
      * hand to the next cosigner. */
     const val ADVANCED_MODE_PSBT_SCAN = "advanced_mode_psbt_scan"
+    /** Parses and summarizes the scanned PSBT and requires an explicit
+     * "Confirm and Sign" tap before ADVANCED_MODE_PSBT_SIGN_RESULT (which
+     * performs the actual signing) is ever reached — scanning alone must
+     * never sign anything. Back/Cancel from this screen discards the
+     * scanned PSBT and returns to ADVANCED_MODE_HUB, nothing signed. */
+    const val ADVANCED_MODE_PSBT_REVIEW = "advanced_mode_psbt_review"
     const val ADVANCED_MODE_PSBT_SIGN_RESULT = "advanced_mode_psbt_sign_result"
 
     /** "Sign PSBT" for an EXISTING SAVED multisig vault — reachable from
@@ -118,5 +124,9 @@ object MegaDestinations {
     const val SAVED_MULTISIG_VAULT_PSBT_SESSION_PICKER = "saved_multisig_vault_psbt_session_picker"
     const val SAVED_MULTISIG_VAULT_PSBT_VERIFY = "saved_multisig_vault_psbt_verify"
     const val SAVED_MULTISIG_VAULT_PSBT_SCAN = "saved_multisig_vault_psbt_scan"
+    /** Same role as ADVANCED_MODE_PSBT_REVIEW above, for the saved-vault
+     * flow — parses and summarizes before requiring explicit confirmation;
+     * Back/Cancel discards the scanned PSBT via exitSavedVaultPsbtFlow. */
+    const val SAVED_MULTISIG_VAULT_PSBT_REVIEW = "saved_multisig_vault_psbt_review"
     const val SAVED_MULTISIG_VAULT_PSBT_SIGN_RESULT = "saved_multisig_vault_psbt_sign_result"
 }

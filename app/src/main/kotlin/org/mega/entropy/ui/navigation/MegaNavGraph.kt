@@ -38,6 +38,7 @@ import org.mega.entropy.ui.advancedmode.AdvancedModeHubScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeImportPickerScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeMnemonicEntryScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeWalletScreen
+import org.mega.entropy.ui.advancedmode.PsbtReviewScreen
 import org.mega.entropy.ui.advancedmode.PsbtScanScreen
 import org.mega.entropy.ui.advancedmode.PsbtSignResultScreen
 import org.mega.entropy.ui.advancedmode.SeedQrScanScreen
@@ -78,6 +79,7 @@ import org.mega.entropy.ui.welcome.WelcomeScreen
 import org.mega.entropy.ui.words.WordDerivationScreen
 import org.mega.entropycore.MnemonicResult
 import org.mega.entropycore.buildMultisigWallet
+import org.mega.entropycore.masterKeyFingerprint
 
 private data class PendingAdvancedModeSave(
     val words: List<String>,
@@ -751,10 +753,48 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 allowScreenshots = allowScreenshots,
                 onBack = { navController.popBackStack() },
                 onScanned = { bytes ->
+                    // Scanning alone must never sign anything — this always
+                    // lands on the review/confirmation step next, never
+                    // directly on the screen that actually signs.
                     scannedPsbtBytes = bytes
-                    navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_SIGN_RESULT)
+                    navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_REVIEW)
                 },
             )
+        }
+        composable(MegaDestinations.ADVANCED_MODE_PSBT_REVIEW) {
+            val psbtBytes = scannedPsbtBytes
+            if (psbtBytes != null) {
+                // Cancel/Back here discards the scanned PSBT exactly like
+                // PsbtSignResultScreen's own onDone does — nothing has been
+                // signed yet at this point, so "cancel" and "done" both mean
+                // "leave this attempt behind, empty-handed."
+                fun onReviewCancelled() {
+                    scannedPsbtBytes = null
+                    advancedModePsbtPassphrase = ""
+                    if (!navController.popBackStack(MegaDestinations.ADVANCED_MODE_HUB, inclusive = false)) {
+                        navController.popBackStack()
+                    }
+                }
+                PsbtReviewScreen(
+                    psbtBytes = psbtBytes,
+                    // The single-seed flow has no concept of a target network
+                    // for an arbitrary scanned PSBT — Unknown is the honest
+                    // answer, not a guess.
+                    knownNetwork = null,
+                    deviceMasterFingerprint = remember(advancedModeWords, advancedModePsbtPassphrase) {
+                        advancedModeWords?.let { words ->
+                            runCatching { masterKeyFingerprint(words, advancedModePsbtPassphrase) }.getOrNull()
+                        }
+                    },
+                    allowScreenshots = allowScreenshots,
+                    onCancel = { onReviewCancelled() },
+                    onConfirm = { navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_SIGN_RESULT) },
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.popBackStack()
+                }
+            }
         }
         composable(MegaDestinations.ADVANCED_MODE_PSBT_SIGN_RESULT) {
             val words = advancedModeWords
@@ -1067,10 +1107,33 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 allowScreenshots = allowScreenshots,
                 onBack = { exitSavedVaultPsbtFlow() },
                 onScanned = { bytes ->
+                    // Scanning alone must never sign anything — always land
+                    // on review/confirmation next, never directly on the
+                    // screen that actually signs.
                     savedVaultPsbtScannedBytes = bytes
-                    navController.navigate(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_SIGN_RESULT)
+                    navController.navigate(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_REVIEW)
                 },
             )
+        }
+        composable(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_REVIEW) {
+            val vault = savedVaultPsbtVault
+            val cosigner = savedVaultPsbtSelectedCosigner
+            val bytes = savedVaultPsbtScannedBytes
+            if (vault != null && cosigner != null && bytes != null) {
+                PsbtReviewScreen(
+                    psbtBytes = bytes,
+                    knownNetwork = vault.network,
+                    // Already verified at SAVED_MULTISIG_VAULT_PSBT_VERIFY —
+                    // reused as-is rather than re-derived from the seed a
+                    // second time.
+                    deviceMasterFingerprint = cosigner.masterFingerprint,
+                    allowScreenshots = allowScreenshots,
+                    onCancel = { exitSavedVaultPsbtFlow() },
+                    onConfirm = { navController.navigate(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_SIGN_RESULT) },
+                )
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
         }
         composable(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_SIGN_RESULT) {
             val cosigner = savedVaultPsbtSelectedCosigner
