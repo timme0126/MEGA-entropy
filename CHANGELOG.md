@@ -4,6 +4,59 @@ Notable changes to MEGA, most recent first. The current beta build
 is `v0.1.9` (see [`README.md`](README.md#download-the-beta-apk)) —
 the changes below are included in this tagged release.
 
+## [Unreleased] — security-audit hardening
+
+Findings from a full security audit of v0.1.9 (PSBT signing, multisig
+vaults, BBQr/SeedQR, storage, release pipeline). All fixes carry
+regression tests. See `docs/PSBT-SECURITY.md` for the resulting signing
+security model.
+
+### Fixed (security)
+- **PSBT signing accepted arbitrary sighash types.** A malicious PSBT
+  could request SIGHASH_NONE/SINGLE/ANYONECANPAY, producing a signature
+  that does NOT commit to every output shown on the review screen — the
+  reviewed transaction would not be the transaction authorized. Signing
+  now refuses any input whose requested sighash type is present and not
+  SIGHASH_ALL, and the review screen blocks its Confirm action and says
+  why. (Found in audit; present since PSBT signing was introduced.)
+- **Duplicate keys in a PSBT map were not rejected**, despite BIP174
+  requiring uniqueness — a divergence vector between what MEGA and
+  another implementation see in the same file. Parsing now fails closed.
+- **PSBT unsigned-transaction laxity**: trailing garbage, witness
+  serialization (0x00 0x01 marker/flag), and non-empty scriptSigs are now
+  all rejected, per BIP174.
+- **Signing did not verify the spent UTXO commits to the script being
+  signed.** A witnessScript/P2WPKH-pubkey that doesn't match the
+  witness_utxo's scriptPubKey produced signatures that can never
+  validate (and let P2SH-wrapped inputs into a finalizer that can't
+  build their final_scriptSig). Mismatched inputs are now skipped;
+  already-finalized inputs are never re-signed.
+- **Finalizer could produce invalid "final" witnesses** for scripts that
+  only loosely resembled multisig (a leading byte ≤ OP_0 could even
+  finalize an input with zero signatures). Finalization now requires the
+  exact OP_M <keys> OP_N OP_CHECKMULTISIG template plus a matching UTXO,
+  and P2WPKH finalization requires the signature's pubkey to match the
+  UTXO program. Anything else stays unfinalized.
+- **BBQr 'Z' (deflate) decoding had no output cap** — a hostile animated
+  QR series could act as a zip bomb (memory-exhaustion DoS). Inflate
+  output is now capped at 8 MB.
+- **BBQr scanner silently overwrote a frame when a different payload
+  arrived for an already-scanned index**, allowing two QR series to mix.
+  Conflicts are now detected, reported, and never applied.
+- **"Likely change" could be spoofed by coordinator metadata.** In the
+  saved-vault flow, change outputs are now verified cryptographically
+  against the vault's own cosigner keys (`verifyVaultChangeOutput`) and
+  only then labeled "Change back to this vault (verified)"; unverified
+  lookalikes are flagged as NOT verified.
+
+### Added / Changed (hardening)
+- Transaction review additions: per-input sighash surfacing, blocking on
+  unsupported sighash or negative fee, a >10%-of-inputs high-fee warning,
+  and network inference from derivation-path coin types (labeled as
+  inferred) so the single-seed flow shows bech32 addresses instead of
+  raw hex when paths permit.
+- Removed the app's only `Log` call (PDF export failure path).
+
 ## [0.1.9] — 2026-08-13
 
 Driven by real multisig testing against Sparrow Wallet.
