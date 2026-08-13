@@ -50,6 +50,8 @@ import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.min
+import org.mega.entropy.bbqr.BbqrAccumulateStatus
+import org.mega.entropy.bbqr.accumulateBbqrPart
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
@@ -144,18 +146,15 @@ private fun ScannerContent(onScanned: (String) -> Unit) {
             return
         }
 
-        val current = bbqrParts.values.firstOrNull()
-        val sameSequence = current == null ||
-            (current.total == part.total && current.encoding == part.encoding && current.fileType == part.fileType)
-        // A part that doesn't match the sequence in progress means the
-        // camera moved to a different BBQr code entirely (a mis-scan, or
-        // the user pointing at the wrong series) — start over with just
-        // this new part rather than mixing two unrelated sequences
-        // together.
-        val updated = if (sameSequence) bbqrParts + (part.index to part) else mapOf(part.index to part)
-        bbqrParts = updated
-        bbqrError = null
+        val accumulation = accumulateBbqrPart(bbqrParts, part)
+        bbqrParts = accumulation.parts
+        bbqrError = when (accumulation.status) {
+            BbqrAccumulateStatus.ConflictingPart ->
+                "Scanned two different versions of part ${part.index + 1} — hold the camera on ONE QR series only."
+            else -> null
+        }
 
+        val updated = accumulation.parts
         if (updated.size == part.total) {
             try {
                 val assembled = assembleBbqrParts(updated.values.toList())
