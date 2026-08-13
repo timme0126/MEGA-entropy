@@ -1,11 +1,21 @@
 package org.mega.entropycore
 
+/** True when [scriptPubKey] is a native P2WPKH output: OP_0 (0x00) followed
+ * by a 20-byte push (0x14) of the pubkey hash — this app's single-sig
+ * (BIP84) wallets always spend from this script type. */
+private fun isP2wpkhScriptPubKey(scriptPubKey: ByteArray): Boolean =
+    scriptPubKey.size == 22 && scriptPubKey[0] == 0x00.toByte() && scriptPubKey[1] == 0x14.toByte()
+
 internal fun signPsbt(psbt: Psbt, masterKey: Bip32ExtendedPrivateKey): Psbt {
     val signedInputs = psbt.inputs.mapIndexed { i, inputMap ->
         // a. No witness UTXO means we cannot compute the BIP143 sighash.
         val witnessUtxo = inputMap.witnessUtxo() ?: return@mapIndexed inputMap
-        // b. Only P2WSH inputs are supported by this app's multisig.
-        val witnessScript = inputMap.witnessScript() ?: return@mapIndexed inputMap
+        // b. This app only signs P2WSH (multisig) and P2WPKH (single-sig)
+        // inputs — every input its own wallets ever produce. witnessScript
+        // present means P2WSH; its absence with a P2WPKH-shaped witness_utxo
+        // scriptPubKey means P2WPKH. Anything else has no known scriptCode.
+        val witnessScript = inputMap.witnessScript()
+        if (witnessScript == null && !isP2wpkhScriptPubKey(witnessUtxo.scriptPubKey)) return@mapIndexed inputMap
 
         // c. Track already-signed pubkeys to avoid duplicate signatures.
         // ByteArray lacks structural equals/hashCode, so we convert to List for Set membership.
@@ -34,8 +44,15 @@ internal fun signPsbt(psbt: Psbt, masterKey: Bip32ExtendedPrivateKey): Psbt {
             // Signing for a mismatched pubkey would misattribute the signature.
             if (!child.compressedPublicKey().contentEquals(derivation.pubkey)) continue
 
-            // P2WSH scriptCode per BIP143: witnessScript prefixed with its own compact-size length.
-            val scriptCode = writeCompactSize(witnessScript.size.toLong()) + witnessScript
+            // scriptCode per BIP143: for P2WSH, the witnessScript prefixed with its
+            // own compact-size length; for P2WPKH, the fixed P2PKH-shaped template
+            // over this pubkey's hash (the 0x19 length byte is part of the template
+            // itself, not a separately-added prefix).
+            val scriptCode = if (witnessScript != null) {
+                writeCompactSize(witnessScript.size.toLong()) + witnessScript
+            } else {
+                byteArrayOf(0x19, 0x76.toByte(), 0xa9.toByte(), 0x14) + hash160(derivation.pubkey) + byteArrayOf(0x88.toByte(), 0xac.toByte())
+            }
 
             // Default to SIGHASH_ALL (0x01) if not specified.
             val sighashType = (inputMap.sighashType() ?: 1L).toInt()
