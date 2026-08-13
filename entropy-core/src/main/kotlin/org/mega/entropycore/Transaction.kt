@@ -134,26 +134,29 @@ fun parseTransaction(bytes: ByteArray): Transaction {
 
 fun serializeTransaction(tx: Transaction): ByteArray {
     val buf = ByteArrayOutputStream()
-    buf.write(readUInt32LEBytes(tx.version))
+    buf.write(writeUInt32LE(tx.version))
     buf.write(writeCompactSize(tx.inputs.size.toLong()))
     for (input in tx.inputs) {
         buf.write(input.previousTxid)
-        buf.write(readUInt32LEBytes(input.previousVout))
+        buf.write(writeUInt32LE(input.previousVout))
         buf.write(writeCompactSize(input.scriptSig.size.toLong()))
         buf.write(input.scriptSig)
-        buf.write(readUInt32LEBytes(input.sequence))
+        buf.write(writeUInt32LE(input.sequence))
     }
     buf.write(writeCompactSize(tx.outputs.size.toLong()))
     for (output in tx.outputs) {
-        buf.write(readUInt64LEBytes(output.valueSats))
+        buf.write(writeUInt64LE(output.valueSats))
         buf.write(writeCompactSize(output.scriptPubKey.size.toLong()))
         buf.write(output.scriptPubKey)
     }
-    buf.write(readUInt32LEBytes(tx.locktime))
+    buf.write(writeUInt32LE(tx.locktime))
     return buf.toByteArray()
 }
 
-private fun readUInt32LEBytes(value: Long): ByteArray {
+// internal (not private): reused by SegwitSighash.kt and other files in
+// this package that need to write the same little-endian fixed-width
+// fields BIP143/PSBT serialization uses.
+internal fun writeUInt32LE(value: Long): ByteArray {
     return byteArrayOf(
         (value and 0xFF).toByte(),
         ((value shr 8) and 0xFF).toByte(),
@@ -162,7 +165,7 @@ private fun readUInt32LEBytes(value: Long): ByteArray {
     )
 }
 
-private fun readUInt64LEBytes(value: Long): ByteArray {
+internal fun writeUInt64LE(value: Long): ByteArray {
     return byteArrayOf(
         (value and 0xFF).toByte(),
         ((value shr 8) and 0xFF).toByte(),
