@@ -43,6 +43,20 @@ fun parsePsbt(bytes: ByteArray): Psbt {
     val unsignedTxEntry = globalMapResult.map.entries.find { it.keyType == 0x00 }
         ?: throw IllegalArgumentException("Missing unsigned transaction in global map")
     val unsignedTx = parseTransaction(unsignedTxEntry.value)
+    // The unsigned tx must be exactly the bytes given, nothing more and in
+    // canonical form: re-serializing the parsed tx must reproduce the value
+    // byte-for-byte. This rejects trailing garbage, non-minimal varint
+    // encodings, and witness-serialized (0x00 0x01 marker/flag) txs, which
+    // BIP174 forbids as the global unsigned transaction.
+    if (!serializeTransaction(unsignedTx).contentEquals(unsignedTxEntry.value)) {
+        throw IllegalArgumentException("Unsigned transaction is not in canonical non-witness serialization")
+    }
+    // BIP174: the unsigned tx's scriptSigs must be empty (script data lives
+    // in the input maps). A non-empty scriptSig would otherwise flow into a
+    // finalized transaction verbatim (see extractFinalTransactionHex).
+    if (unsignedTx.inputs.any { it.scriptSig.isNotEmpty() }) {
+        throw IllegalArgumentException("Unsigned transaction must have empty scriptSigs (BIP174)")
+    }
 
     // Parse input maps: exactly one per input in the unsigned transaction.
     val inputs = mutableListOf<PsbtMap>()
@@ -67,6 +81,12 @@ private data class MapResult(val map: PsbtMap, val consumed: Int)
 
 private fun readMap(bytes: ByteArray, offset: Int): MapResult {
     val entries = mutableListOf<PsbtKeyValue>()
+    // BIP174: "The keys must be unique within each map." A duplicate full key
+    // (type byte + keyData) would otherwise resolve to the first occurrence
+    // here while another implementation may take the last — a display-vs-sign
+    // ambiguity — so it fails closed at parse time. Distinct keyData under the
+    // same keyType (e.g. one bip32_derivation per pubkey) remains allowed.
+    val seenKeys = HashSet<List<Byte>>()
     var currentOffset = offset
 
     while (true) {
@@ -83,6 +103,10 @@ private fun readMap(bytes: ByteArray, offset: Int): MapResult {
         if (currentOffset + keyLen > bytes.size) throw IllegalArgumentException("Truncated key in map")
         val key = bytes.copyOfRange(currentOffset, currentOffset + keyLen.toInt())
         currentOffset += keyLen.toInt()
+
+        if (!seenKeys.add(key.toList())) {
+            throw IllegalArgumentException("Duplicate key in PSBT map (BIP174 requires unique keys)")
+        }
 
         // key[0] is keyType (unsigned), rest is keyData.
         val keyType = key[0].toUByte().toInt()
