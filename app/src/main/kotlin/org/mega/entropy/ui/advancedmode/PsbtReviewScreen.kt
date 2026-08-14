@@ -2,10 +2,10 @@ package org.mega.entropy.ui.advancedmode
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -18,6 +18,7 @@ import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.MultisigCosignerOrigin
+import org.mega.entropycore.PsbtSummary
 import org.mega.entropycore.PsbtThresholdInfo
 import org.mega.entropycore.WalletNetwork
 import org.mega.entropycore.computePsbtSummary
@@ -41,16 +42,18 @@ fun PsbtReviewScreen(
 ) {
     SecureScreen(enabled = !allowScreenshots)
 
-    val summaryResult = remember(psbtBytes, knownNetwork, deviceMasterFingerprint) {
+    // Both computations involve BIP32 derivation, expensive enough to run
+    // off the Compose main thread — see producePsbtAsync's own doc.
+    val summaryState = producePsbtAsync(psbtBytes, knownNetwork, deviceMasterFingerprint) {
         runCatching { computePsbtSummary(psbtBytes, knownNetwork, deviceMasterFingerprint) }
     }
     // Parse once more for vault change verification — only when vault
     // context was supplied (the saved-vault flow). Errors here are already
     // covered by summaryResult's own failure display, so default to none.
-    val verifiedChange: Set<Int> = remember(psbtBytes, vaultThreshold, vaultCosigners) {
+    val verifiedChangeState = producePsbtAsync(psbtBytes, vaultThreshold, vaultCosigners, knownNetwork) {
         val threshold = vaultThreshold
         val cosigners = vaultCosigners
-        if (threshold == null || cosigners == null || knownNetwork == null) return@remember emptySet()
+        if (threshold == null || cosigners == null || knownNetwork == null) return@producePsbtAsync emptySet()
         runCatching {
             val psbt = parsePsbt(psbtBytes)
             psbt.unsignedTx.outputs.mapIndexedNotNull { index, txOut ->
@@ -63,8 +66,16 @@ fun PsbtReviewScreen(
         }.getOrDefault(emptySet())
     }
 
+    val summaryResult: Result<PsbtSummary>? = when (summaryState) {
+        PsbtAsyncState.Loading -> null
+        is PsbtAsyncState.Success -> summaryState.value
+        is PsbtAsyncState.Failed -> Result.failure(summaryState.error)
+    }
+
     MegaInfoScaffold(title = "Review Transaction", onBack = onCancel) {
-        if (summaryResult.isFailure) {
+        if (summaryResult == null) {
+            CircularProgressIndicator()
+        } else if (summaryResult.isFailure) {
             MegaCard(title = "Could Not Parse PSBT") {
                 Text(
                     text = summaryResult.exceptionOrNull()?.message ?: "This PSBT could not be read.",
@@ -74,6 +85,7 @@ fun PsbtReviewScreen(
             }
         } else {
             val summary = summaryResult.getOrThrow()
+            val verifiedChange: Set<Int> = (verifiedChangeState as? PsbtAsyncState.Success)?.value ?: emptySet()
             // Conditions under which "Confirm and Sign" must not be offered:
             // the signer would refuse (unsupported sighash) or the
             // transaction is invalid on its face (outputs exceed inputs).

@@ -2,6 +2,11 @@
 
 Notable changes to MEGA, most recent first. The current beta build is `v0.1.10` (see [`README.md`](README.md#download-the-beta-apk)).
 
+## [Unreleased] — PSBT hotfixes
+
+- Moved PSBT review, diagnostics, and signing off the Compose main thread with cancellable, single-execution workers.
+- Fixed RFC6979 `bits2octets` handling for the secp256k1 boundary where a SHA-256 hash is at or above the curve order.
+
 ## [0.1.10] — 2026-08-13
 
 Findings from a full security audit of v0.1.9 and an independent follow-up review (PSBT signing, multisig

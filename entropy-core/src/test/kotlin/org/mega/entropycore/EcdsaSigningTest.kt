@@ -78,6 +78,11 @@ class EcdsaSigningTest {
         assertTrue(verifyEcdsa(expectedPubkey.hexToByteArray(), hash, derSig))
     }
 
+    @Test fun `RFC6979 bits2octets reduces a hash at or above the curve order`() {
+        val nPlusOne = Secp256k1.N.add(java.math.BigInteger.ONE).toFixed32Bytes()
+        assertArrayEquals(ByteArray(31) + byteArrayOf(1), rfc6979Bits2Octets(nPlusOne))
+    }
+
     @Test fun `signEcdsaRaw is deterministic — same inputs produce the same output every time`() {
         val pk = "0000000000000000000000000000000000000000000000000000000000000001".hexToByteArray()
         val hash = "bc62d4b80d9e36da29c16c5d4d9f11731f36052c72401a76c23c0fb5a9b74423".hexToByteArray()

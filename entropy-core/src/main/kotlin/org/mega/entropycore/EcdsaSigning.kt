@@ -20,6 +20,11 @@ internal fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray {
     return mac.doFinal(data)
 }
 
+internal fun rfc6979Bits2Octets(messageHash32: ByteArray): ByteArray {
+    require(messageHash32.size == 32) { "messageHash32 must be 32 bytes" }
+    return messageHash32.toPositiveBigInteger().mod(Secp256k1.N).toFixed32Bytes()
+}
+
 internal fun signEcdsaRaw(privateKey: ByteArray, messageHash32: ByteArray): EcdsaSignature {
     // Step 1: Validate inputs strictly before any crypto operations.
     // A single byte mismatch here could silently proceed with invalid state.
@@ -29,9 +34,10 @@ internal fun signEcdsaRaw(privateKey: ByteArray, messageHash32: ByteArray): Ecds
     val d = privateKey.toPositiveBigInteger()
     if (d.signum() <= 0 || d >= Secp256k1.N) throw IllegalArgumentException("privateKey must be in [1, N-1]")
     
-    // Step 2: h1 is the message hash directly. Since hlen == 32 (SHA-256 output)
-    // and the curve order is also 256 bits, bits2octets simplifies to a direct copy.
-    val h1 = messageHash32
+    // Step 2: RFC6979 bits2octets. SHA-256 and secp256k1 are both 256 bits,
+    // but the hash integer still has to be reduced modulo q when it is >= q.
+    // This branch is extraordinarily rare, but omitting it is a standards violation.
+    val h1 = rfc6979Bits2Octets(messageHash32)
     val h1BigInt = h1.toPositiveBigInteger()
     
     // Step 3: RFC6979 section 3.2 initialization
