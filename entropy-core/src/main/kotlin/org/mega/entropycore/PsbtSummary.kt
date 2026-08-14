@@ -91,9 +91,9 @@ fun computePsbtSummary(
     // 1. Per-input summary
     // We zip the unsigned transaction's inputs with the PSBT's input maps
     // because BIP174 guarantees they are always the same length.
-    val inputSummaries = psbt.unsignedTx.inputs.zip(psbt.inputs).map { (txIn, inputMap) ->
+    val inputSummaries = psbt.unsignedTx.inputs.zip(psbt.inputs).mapIndexed { index, (_, inputMap) ->
         PsbtInputSummary(
-            amountSats = inputMap.witnessUtxo()?.valueSats,
+            amountSats = resolveInputUtxo(psbt.unsignedTx, index, inputMap)?.valueSats,
             existingSignatureCount = inputMap.partialSigs().size,
             cosignerCount = inputMap.bip32Derivations().size.let { if (it == 0) null else it },
             sighashType = inputMap.sighashType(),
@@ -263,8 +263,8 @@ fun computePsbtSummary(
         // gap this prediction exists to close now that the finalizer itself
         // refuses to finalize on invalid signatures.
         val perInputWillReachThreshold = psbt.inputs.mapIndexed { index, inputMap ->
-            val template = finalizableInputTemplate(inputMap) ?: return@mapIndexed null
-            val witnessUtxo = inputMap.witnessUtxo() ?: return@mapIndexed null
+            val template = finalizableInputTemplate(psbt.unsignedTx, index, inputMap) ?: return@mapIndexed null
+            val witnessUtxo = resolveInputUtxo(psbt.unsignedTx, index, inputMap) ?: return@mapIndexed null
             val threshold = template.first
             // Only count this device as contributing a NEW signature if it has
             // a matching derivation for a pubkey that doesn't already have a

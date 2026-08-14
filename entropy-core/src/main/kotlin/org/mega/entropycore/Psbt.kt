@@ -257,6 +257,43 @@ fun PsbtMap.witnessUtxo(): TxOut? {
     return TxOut(amount, scriptPubKey)
 }
 
+/**
+ * PSBT_IN_NON_WITNESS_UTXO: the complete previous transaction. Accepts
+ * either legacy or BIP144 witness-serialized form (see
+ * [parsePreviousTransactionAllowingWitness]) — unlike the PSBT's own
+ * global unsigned transaction, BIP174 imposes no canonical-serialization
+ * requirement here, and a real coordinator's raw-transaction lookup
+ * routinely returns the witness-inclusive form for an ancestor
+ * transaction that itself carries witness data.
+ */
+fun PsbtMap.nonWitnessUtxo(): Transaction? {
+    val value = entries.find { it.keyType == 0x00 }?.value ?: return null
+    return parsePreviousTransactionAllowingWitness(value)
+}
+
+/** Resolves the spent output, accepting either BIP174 UTXO representation. */
+internal fun resolveInputUtxo(unsignedTx: Transaction, inputIndex: Int, inputMap: PsbtMap): TxOut? {
+    val witness = inputMap.witnessUtxo()
+    val previous = inputMap.nonWitnessUtxo()
+    val previousOutput = if (previous != null) {
+        val input = unsignedTx.inputs.getOrNull(inputIndex)
+            ?: throw IllegalArgumentException("PSBT input $inputIndex has no unsigned transaction input")
+        if (!doubleSha256(serializeTransaction(previous)).reversedArray().contentEquals(input.previousTxid)) {
+            throw IllegalArgumentException("PSBT input $inputIndex non_witness_utxo txid does not match its outpoint")
+        }
+        if (input.previousVout < 0L || input.previousVout >= previous.outputs.size.toLong()) {
+            throw IllegalArgumentException("PSBT input $inputIndex outpoint index is outside non_witness_utxo")
+        }
+        previous.outputs[input.previousVout.toInt()]
+    } else null
+    if (witness != null && previousOutput != null &&
+        (witness.valueSats != previousOutput.valueSats || !witness.scriptPubKey.contentEquals(previousOutput.scriptPubKey))
+    ) {
+        throw IllegalArgumentException("PSBT input $inputIndex witness_utxo disagrees with non_witness_utxo")
+    }
+    return witness ?: previousOutput
+}
+
 fun PsbtMap.partialSigs(): List<PsbtPartialSig> =
     entries.filter { it.keyType == 0x02 }.map { PsbtPartialSig(it.keyData, it.value) }
 

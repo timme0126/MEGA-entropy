@@ -106,4 +106,41 @@ class PsbtWorkflowTest {
 
         assertEquals(EXPECTED_FINAL_TX_HEX, extractFinalTransactionHex(resultBytes))
     }
+    @Test
+    fun `signAndFinalizePsbt accepts a Native SegWit PSBT with only non-witness UTXO`() {
+        // A real ancestor transaction always has at least one input — a
+        // zero-input transaction spends nothing and never appears on the
+        // network. This matters here specifically because parsing code
+        // that accepts BIP144 witness-serialized non_witness_utxo blobs
+        // (see parsePreviousTransactionAllowingWitness) relies on that fact
+        // to unambiguously recognize the marker/flag pair; a degenerate
+        // zero-input fixture would defeat that check for reasons that have
+        // nothing to do with what this test is actually covering.
+        val previous = Transaction(
+            version = 1L,
+            inputs = listOf(TxIn(ByteArray(32) { 0x11 }, 0L, ByteArray(0), 0xffffffffL)),
+            outputs = listOf(TxOut(WITNESS_UTXO_AMOUNT, SCRIPT_PUBKEY_HEX.hexToBytes())),
+            locktime = 0L,
+        )
+        val unsigned = parseTransaction(UNSIGNED_TX_HEX.hexToBytes())
+        val updatedInput = unsigned.inputs[0].copy(
+            previousTxid = doubleSha256(serializeTransaction(previous)).reversedArray(),
+            previousVout = 0L,
+        )
+        val updatedUnsigned = unsigned.copy(inputs = listOf(updatedInput))
+        val inputMap = PsbtMap(
+            listOf(
+                PsbtKeyValue(0x00, ByteArray(0), serializeTransaction(previous)),
+                PsbtKeyValue(0x06, EXPECTED_PUBKEY_HEX.hexToBytes(), bip32DerivationValue()),
+            ),
+        )
+        val psbt = Psbt(
+            unsignedTx = updatedUnsigned,
+            global = PsbtMap(listOf(PsbtKeyValue(0x00, ByteArray(0), serializeTransaction(updatedUnsigned)))),
+            inputs = listOf(inputMap),
+            outputs = updatedUnsigned.outputs.map { PsbtMap(emptyList()) },
+        )
+        val signed = signAndFinalizePsbt(serializePsbt(psbt), TEST_WORDS, TEST_PASSPHRASE)
+        assertTrue(isPsbtFullyFinalized(signed))
+    }
 }

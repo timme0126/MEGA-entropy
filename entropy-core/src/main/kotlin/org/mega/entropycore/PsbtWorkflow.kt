@@ -24,6 +24,21 @@ fun signAndFinalizePsbt(psbtBytes: ByteArray, mnemonicWords: List<String>, passp
     return serializePsbt(finalized)
 }
 
+/**
+ * Read-only, safe-to-display explanation of why each input of [psbtBytes]
+ * was or will be signed by this device — see [PsbtInputSigningDiagnostic]
+ * for exactly what's included (never seed words, passphrase, private
+ * keys, signatures, or full PSBT contents). Computed independently of
+ * [signAndFinalizePsbt] and has no effect on it; call this alongside a
+ * failed or unexpectedly-empty signing attempt to show the user (or log)
+ * a structured reason instead of a generic failure message.
+ */
+fun diagnosePsbtSigning(psbtBytes: ByteArray, mnemonicWords: List<String>, passphrase: String = ""): List<PsbtInputSigningDiagnostic> {
+    val psbt = parsePsbt(psbtBytes)
+    val masterKey = bip32MasterKeyFromSeed(deriveSeed(mnemonicWords, passphrase).bytes)
+    return diagnosePsbtInputSigning(psbt, masterKey)
+}
+
 /** True when every input has a PSBT_IN_FINAL_SCRIPTWITNESS — i.e. the
  * transaction is ready to extract and broadcast, needing no further
  * cosigner. A multisig PSBT below its threshold, or a PSBT with an input

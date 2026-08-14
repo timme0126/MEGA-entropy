@@ -151,52 +151,146 @@ internal fun readUInt64LE(bytes: ByteArray, offset: Int): Long {
     return v
 }
 
+private data class ParsedInputsResult(val inputs: List<TxIn>, val consumed: Int)
+
+private fun parseTxInputs(bytes: ByteArray, offset: Int, count: Long): ParsedInputsResult {
+    var currentOffset = offset
+    val inputs = mutableListOf<TxIn>()
+    for (i in 0 until count) {
+        if (currentOffset + 32 > bytes.size) throw IllegalArgumentException("Truncated txid")
+        val previousTxid = bytes.copyOfRange(currentOffset, currentOffset + 32); currentOffset += 32
+
+        val previousVout = readUInt32LE(bytes, currentOffset); currentOffset += 4
+
+        val scriptSigLenResult = readCompactSize(bytes, currentOffset); currentOffset = scriptSigLenResult.consumed
+        val scriptSigLen = scriptSigLenResult.value
+
+        if (currentOffset + scriptSigLen > bytes.size) throw IllegalArgumentException("Truncated scriptSig")
+        val scriptSig = bytes.copyOfRange(currentOffset, currentOffset + scriptSigLen.toInt()); currentOffset += scriptSigLen.toInt()
+
+        val sequence = readUInt32LE(bytes, currentOffset); currentOffset += 4
+
+        inputs.add(TxIn(previousTxid, previousVout, scriptSig, sequence))
+    }
+    return ParsedInputsResult(inputs, currentOffset)
+}
+
+private data class ParsedOutputsResult(val outputs: List<TxOut>, val consumed: Int)
+
+private fun parseTxOutputs(bytes: ByteArray, offset: Int, count: Long): ParsedOutputsResult {
+    var currentOffset = offset
+    val outputs = mutableListOf<TxOut>()
+    for (i in 0 until count) {
+        val valueSats = requireValidSatsAmount(readUInt64LE(bytes, currentOffset), "Output $i amount"); currentOffset += 8
+
+        val scriptPubKeyLenResult = readCompactSize(bytes, currentOffset); currentOffset = scriptPubKeyLenResult.consumed
+        val scriptPubKeyLen = scriptPubKeyLenResult.value
+
+        if (currentOffset + scriptPubKeyLen > bytes.size) throw IllegalArgumentException("Truncated scriptPubKey")
+        val scriptPubKey = bytes.copyOfRange(currentOffset, currentOffset + scriptPubKeyLen.toInt()); currentOffset += scriptPubKeyLen.toInt()
+
+        outputs.add(TxOut(valueSats, scriptPubKey))
+    }
+    return ParsedOutputsResult(outputs, currentOffset)
+}
+
 fun parseTransaction(bytes: ByteArray): Transaction {
     if (bytes.size < 4) throw IllegalArgumentException("Truncated transaction")
     var offset = 0
     val version = readUInt32LE(bytes, offset); offset += 4
 
     val inputCountResult = readCompactSize(bytes, offset); offset = inputCountResult.consumed
-    val inputCount = inputCountResult.value
-
-    val inputs = mutableListOf<TxIn>()
-    for (i in 0 until inputCount) {
-        if (offset + 32 > bytes.size) throw IllegalArgumentException("Truncated txid")
-        val previousTxid = bytes.copyOfRange(offset, offset + 32); offset += 32
-
-        val previousVout = readUInt32LE(bytes, offset); offset += 4
-
-        val scriptSigLenResult = readCompactSize(bytes, offset); offset = scriptSigLenResult.consumed
-        val scriptSigLen = scriptSigLenResult.value
-
-        if (offset + scriptSigLen > bytes.size) throw IllegalArgumentException("Truncated scriptSig")
-        val scriptSig = bytes.copyOfRange(offset, offset + scriptSigLen.toInt()); offset += scriptSigLen.toInt()
-
-        val sequence = readUInt32LE(bytes, offset); offset += 4
-
-        inputs.add(TxIn(previousTxid, previousVout, scriptSig, sequence))
-    }
+    val inputsResult = parseTxInputs(bytes, offset, inputCountResult.value)
+    offset = inputsResult.consumed
 
     val outputCountResult = readCompactSize(bytes, offset); offset = outputCountResult.consumed
-    val outputCount = outputCountResult.value
+    val outputsResult = parseTxOutputs(bytes, offset, outputCountResult.value)
+    offset = outputsResult.consumed
 
-    val outputs = mutableListOf<TxOut>()
-    for (i in 0 until outputCount) {
-        val valueSats = requireValidSatsAmount(readUInt64LE(bytes, offset), "Output $i amount"); offset += 8
+    if (offset + 4 > bytes.size) throw IllegalArgumentException("Truncated locktime")
+    val locktime = readUInt32LE(bytes, offset); offset += 4
 
-        val scriptPubKeyLenResult = readCompactSize(bytes, offset); offset = scriptPubKeyLenResult.consumed
-        val scriptPubKeyLen = scriptPubKeyLenResult.value
+    return Transaction(version, inputsResult.inputs, outputsResult.outputs, locktime)
+}
 
-        if (offset + scriptPubKeyLen > bytes.size) throw IllegalArgumentException("Truncated scriptPubKey")
-        val scriptPubKey = bytes.copyOfRange(offset, offset + scriptPubKeyLen.toInt()); offset += scriptPubKeyLen.toInt()
+/**
+ * Parses a previous transaction's raw bytes for PSBT_IN_NON_WITNESS_UTXO
+ * purposes. Unlike [parseTransaction] — which is intentionally strict and
+ * accepts ONLY the canonical legacy (non-witness) form, because BIP174
+ * mandates that exact form for the PSBT's OWN global unsigned transaction
+ * — this accepts EITHER valid Bitcoin wire serialization: plain legacy, or
+ * BIP144 witness-serialized (marker 0x00, flag 0x01, one witness stack per
+ * input after the outputs).
+ *
+ * BIP174 defines non_witness_utxo's value as simply "the transaction in
+ * network serialization format the current input spends from" — there is
+ * no canonical-form requirement, unlike the global unsigned tx. In
+ * practice, a node's raw-transaction lookup returns the witness-inclusive
+ * form whenever the REFERENCED (ancestor) transaction itself carries
+ * witness data — the norm for the overwhelming majority of transactions
+ * today, regardless of whether the CURRENT input being signed is itself
+ * segwit. A parser that only accepts the legacy form breaks on nearly
+ * every real-world PSBT a segwit-aware coordinator (e.g. Sparrow) embeds
+ * a non_witness_utxo into — it misreads the marker byte as a zero input
+ * count and the flag byte as an output count, producing garbage that (at
+ * best) fails a later sanity check with a misleading message, silently
+ * making every input relying on that non_witness_utxo unsignable.
+ *
+ * Witness data itself is read and discarded — non_witness_utxo exists only
+ * to let a signer independently verify the spent output's amount/
+ * scriptPubKey and recompute this transaction's TXID, neither of which
+ * involves the witness stack. The security-critical check — that this
+ * transaction's TXID (computed EXCLUDING witness data, exactly as BIP141
+ * defines it, regardless of which serialization was actually used here)
+ * equals the input's declared previousTxid — is performed by
+ * [resolveInputUtxo] against this function's [Transaction.version]/
+ * inputs/outputs/locktime, unchanged by which form was accepted.
+ */
+internal fun parsePreviousTransactionAllowingWitness(bytes: ByteArray): Transaction {
+    if (bytes.size < 6) throw IllegalArgumentException("Truncated transaction")
+    var offset = 0
+    val version = readUInt32LE(bytes, offset); offset += 4
 
-        outputs.add(TxOut(valueSats, scriptPubKey))
+    // BIP144: a segwit-serialized transaction always starts its post-version
+    // bytes with marker 0x00, flag 0x01. A LEGACY transaction can never
+    // legitimately have this pair here — an input count of exactly 0 (what
+    // marker byte 0x00 would otherwise mean) describes a transaction with
+    // no inputs, which spends nothing and is never valid — so this pair is
+    // an unambiguous, standard signal, not a heuristic guess.
+    val hasWitness = bytes[offset] == 0x00.toByte() && bytes[offset + 1] == 0x01.toByte()
+    if (hasWitness) offset += 2
+
+    val inputCountResult = readCompactSize(bytes, offset); offset = inputCountResult.consumed
+    val inputsResult = parseTxInputs(bytes, offset, inputCountResult.value)
+    offset = inputsResult.consumed
+
+    val outputCountResult = readCompactSize(bytes, offset); offset = outputCountResult.consumed
+    val outputsResult = parseTxOutputs(bytes, offset, outputCountResult.value)
+    offset = outputsResult.consumed
+
+    if (hasWitness) {
+        // One witness stack per input, in input order (BIP144): compactSize
+        // item count, then each item as compactSize length + bytes. Read and
+        // discard — see the doc comment above for why this data isn't kept.
+        for (i in inputsResult.inputs.indices) {
+            val itemCountResult = readCompactSize(bytes, offset); offset = itemCountResult.consumed
+            for (j in 0 until itemCountResult.value) {
+                val itemLenResult = readCompactSize(bytes, offset); offset = itemLenResult.consumed
+                val itemLen = itemLenResult.value
+                if (offset + itemLen > bytes.size) throw IllegalArgumentException("Truncated witness item")
+                offset += itemLen.toInt()
+            }
+        }
     }
 
     if (offset + 4 > bytes.size) throw IllegalArgumentException("Truncated locktime")
     val locktime = readUInt32LE(bytes, offset); offset += 4
 
-    return Transaction(version, inputs, outputs, locktime)
+    if (offset != bytes.size) {
+        throw IllegalArgumentException("Trailing bytes after transaction data (${bytes.size - offset} extra)")
+    }
+
+    return Transaction(version, inputsResult.inputs, outputsResult.outputs, locktime)
 }
 
 fun serializeTransaction(tx: Transaction): ByteArray {

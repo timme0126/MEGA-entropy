@@ -130,8 +130,8 @@ internal fun isValidPartialSig(
  * candidate signature). Returns null when finalization can never succeed
  * for this input regardless of what signatures arrive.
  */
-internal fun finalizableInputTemplate(inputMap: PsbtMap): Pair<Int, List<ByteArray>?>? {
-    val witnessUtxo = inputMap.witnessUtxo() ?: return null
+internal fun finalizableInputTemplate(unsignedTx: Transaction, inputIndex: Int, inputMap: PsbtMap): Pair<Int, List<ByteArray>?>? {
+    val witnessUtxo = resolveInputUtxo(unsignedTx, inputIndex, inputMap) ?: return null
     val witnessScript = inputMap.witnessScript()
     if (witnessScript != null) {
         val parsed = parseBareMultisigWitnessScript(witnessScript) ?: return null
@@ -193,9 +193,10 @@ internal fun countValidSignatures(
  * the input is left untouched instead.
  */
 private fun finalizeSingleSigInput(unsignedTx: Transaction, inputIndex: Int, inputMap: PsbtMap): PsbtMap {
-    val witnessUtxoEntry = inputMap.entries.find { it.keyType == 0x01 }
+    val utxoEntry = inputMap.entries.find { it.keyType == 0x01 }
+        ?: inputMap.entries.find { it.keyType == 0x00 }
         ?: return inputMap
-    val witnessUtxo = inputMap.witnessUtxo() ?: return inputMap
+    val witnessUtxo = resolveInputUtxo(unsignedTx, inputIndex, inputMap) ?: return inputMap
     val program = witnessUtxo.scriptPubKey
     if (program.size != 22 || program[0] != 0x00.toByte() || program[1] != 0x14.toByte()) return inputMap
     val expectedHash = program.copyOfRange(2, 22)
@@ -215,7 +216,7 @@ private fun finalizeSingleSigInput(unsignedTx: Transaction, inputIndex: Int, inp
     val finalWitness = serializeWitnessStack(listOf(sig.signature, sig.pubkey))
     return PsbtMap(
         entries = listOf(
-            witnessUtxoEntry,
+            utxoEntry,
             PsbtKeyValue(keyType = 0x08, keyData = ByteArray(0), value = finalWitness)
         )
     )
@@ -234,8 +235,10 @@ private fun finalizeMultisigInput(unsignedTx: Transaction, inputIndex: Int, inpu
 
     // The UTXO being spent must actually commit to this script — otherwise
     // any witness assembled here is invalid by construction.
-    val witnessUtxoEntry = inputMap.entries.find { it.keyType == 0x01 } ?: return inputMap
-    val witnessUtxo = inputMap.witnessUtxo() ?: return inputMap
+    val utxoEntry = inputMap.entries.find { it.keyType == 0x01 }
+        ?: inputMap.entries.find { it.keyType == 0x00 }
+        ?: return inputMap
+    val witnessUtxo = resolveInputUtxo(unsignedTx, inputIndex, inputMap) ?: return inputMap
     val expectedScriptPubKey = byteArrayOf(0x00, 0x20) + sha256(witnessScript)
     if (!witnessUtxo.scriptPubKey.contentEquals(expectedScriptPubKey)) return inputMap
 
@@ -272,7 +275,7 @@ private fun finalizeMultisigInput(unsignedTx: Transaction, inputIndex: Int, inpu
 
     return PsbtMap(
         entries = listOf(
-            witnessUtxoEntry,
+            utxoEntry,
             PsbtKeyValue(keyType = 0x08, keyData = ByteArray(0), value = finalWitness)
         )
     )

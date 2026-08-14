@@ -2,8 +2,11 @@ package org.mega.entropycore
 
 /** True when [scriptPubKey] is a native P2WPKH output: OP_0 (0x00) followed
  * by a 20-byte push (0x14) of the pubkey hash — this app's single-sig
- * (BIP84) wallets always spend from this script type. */
-private fun isP2wpkhScriptPubKey(scriptPubKey: ByteArray): Boolean =
+ * (BIP84) wallets always spend from this script type. Internal (not
+ * private) so PsbtSigningDiagnostics.kt's read-only prediction can classify
+ * a UTXO's script the same way signPsbt itself does, without a second,
+ * potentially-drifting copy of this check. */
+internal fun isP2wpkhScriptPubKey(scriptPubKey: ByteArray): Boolean =
     scriptPubKey.size == 22 && scriptPubKey[0] == 0x00.toByte() && scriptPubKey[1] == 0x14.toByte()
 
 /** The only sighash type this app will ever sign: absent (BIP143's default)
@@ -28,7 +31,7 @@ internal fun signPsbt(psbt: Psbt, masterKey: Bip32ExtendedPrivateKey): Psbt {
         //    finalization is terminal for a reason.
         if (inputMap.finalScriptWitness() != null) return@mapIndexed inputMap
         // b. No witness UTXO means we cannot compute the BIP143 sighash.
-        val witnessUtxo = inputMap.witnessUtxo() ?: return@mapIndexed inputMap
+        val witnessUtxo = resolveInputUtxo(psbt.unsignedTx, i, inputMap) ?: return@mapIndexed inputMap
         // c. A requested sighash type other than SIGHASH_ALL fails the whole
         //    signing operation closed — never sign away less than what a
         //    review screen showed. (Absent means SIGHASH_ALL per BIP143.)

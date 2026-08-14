@@ -100,4 +100,4 @@ fun computeSegwitSighash(
  * Reuses the existing single SHA-256 from Sha256Checksum.kt to compute double-SHA256.
  * This avoids importing java.security.MessageDigest directly in this module.
  */
-private fun doubleSha256(bytes: ByteArray): ByteArray = sha256(sha256(bytes))
+internal fun doubleSha256(bytes: ByteArray): ByteArray = sha256(sha256(bytes))
