@@ -46,6 +46,14 @@ fun masterKeyFingerprint(mnemonicWords: List<String>, passphrase: String = ""): 
  * input derivations whose OWN per-input master fingerprint matches this
  * same master key — see its call into `signPsbt`), returning
  * [SignForCosignerResult.Signed] with the result.
+ *
+ * Always signs with [FingerprintTrustPolicy.STRICT] — explicitly, not just
+ * by relying on its default — since a saved-vault cosigner slot's identity
+ * must come from a verified fingerprint match, never from an unrecorded
+ * (00000000) fingerprint plus a merely-plausible pubkey match. See
+ * [FingerprintTrustPolicy]'s doc for why: the same seed can be a cosigner
+ * in multiple different vaults, each expecting a different fingerprint, so
+ * this is the one call site that must never be relaxed.
  */
 fun signPsbtForCosigner(
     psbtBytes: ByteArray,
@@ -55,10 +63,12 @@ fun signPsbtForCosigner(
 ): SignForCosignerResult {
     val normalizedExpected = normalizeMasterFingerprint(expectedMasterFingerprint)
     val actual = masterKeyFingerprint(mnemonicWords, passphrase)
-    
+
     if (normalizedExpected != actual) {
         return SignForCosignerResult.FingerprintMismatch(normalizedExpected, actual)
     }
-    
-    return SignForCosignerResult.Signed(signAndFinalizePsbt(psbtBytes, mnemonicWords, passphrase))
+
+    return SignForCosignerResult.Signed(
+        signAndFinalizePsbt(psbtBytes, mnemonicWords, passphrase, FingerprintTrustPolicy.STRICT),
+    )
 }

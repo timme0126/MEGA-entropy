@@ -9,20 +9,15 @@ package org.mega.entropycore
 enum class PsbtInputScriptKind { P2WPKH, P2WSH_MULTISIG, UNRECOGNIZED, UNRESOLVED }
 
 /**
- * One PSBT_IN_BIP32_DERIVATION entry's relationship to this device's key.
- * [fingerprintHex] and [path] are copied verbatim from the scanned PSBT —
- * both are plaintext fields BIP174 puts there for exactly this purpose,
- * not secrets. [derivedPubkeyMatchesClaimed] is only meaningful when
- * [fingerprintMatchesLoadedKey] is true (a mismatched fingerprint means
- * this device never even attempts to derive along [path]); it stays false
- * otherwise, never null, so a diagnostic list is trivial to scan without
- * every reader re-deriving the same precondition.
+ * One PSBT_IN_BIP32_DERIVATION entry's relationship to this device's key —
+ * see [FingerprintMatchStatus]. [fingerprintHex] and [path] are copied
+ * verbatim from the scanned PSBT — both are plaintext fields BIP174 puts
+ * there for exactly this purpose, not secrets.
  */
 data class PsbtInputKeyDiagnostic(
     val fingerprintHex: String,
     val path: List<Long>,
-    val fingerprintMatchesLoadedKey: Boolean,
-    val derivedPubkeyMatchesClaimed: Boolean,
+    val matchStatus: FingerprintMatchStatus,
 )
 
 /**
@@ -47,7 +42,17 @@ data class PsbtInputSigningDiagnostic(
     val sighashSupported: Boolean,
     val keys: List<PsbtInputKeyDiagnostic>,
     val existingPartialSigCount: Int,
+    /** True when a [FingerprintMatchStatus.VERIFIED_MATCH] key alone is
+     * enough to sign this input — i.e. true under [FingerprintTrustPolicy.STRICT],
+     * the only policy the saved-vault/cosigner flow ever uses. */
     val wouldAddSignature: Boolean,
+    /** True when this input would ONLY gain a signature by additionally
+     * trusting a [FingerprintMatchStatus.UNKNOWN_FINGERPRINT_PUBKEY_MATCH]
+     * key — i.e. [wouldAddSignature] is false, but signing WOULD succeed
+     * under [FingerprintTrustPolicy.ALLOW_UNKNOWN_FINGERPRINT_WITH_KEY_MATCH].
+     * Single-seed Advanced Mode is the only caller ever allowed to act on
+     * this — see PsbtSignResultScreen's explicit warning/confirmation gate. */
+    val wouldAddSignatureWithUnverifiedFingerprint: Boolean,
 )
 
 /**
@@ -55,18 +60,18 @@ data class PsbtInputSigningDiagnostic(
  * [psbt], given [masterKey] — computed independently of, and without any
  * effect on, the real signing path, so it can be shown to the user
  * (or logged) as a safe explanation even when signing throws or silently
- * signs nothing. Mirrors signPsbt's own gating conditions in order (a-h,
- * see PsbtSigning.kt) closely enough that "wouldAddSignature" here always
- * agrees with what signPsbt would actually do for the same input — but
- * this function itself never throws: any per-input resolution failure
- * (malformed non_witness_utxo, txid mismatch, disagreeing UTXO
- * representations, etc.) is reported as `utxoResolved = false` rather than
- * propagating, since the whole point of this function is to explain a
- * failure, not risk becoming a second one.
+ * signs nothing. Reports FACTS (each key's [FingerprintMatchStatus], UTXO/
+ * script/sighash checks) rather than a policy-filtered verdict — see
+ * [PsbtInputSigningDiagnostic.wouldAddSignature] vs
+ * [PsbtInputSigningDiagnostic.wouldAddSignatureWithUnverifiedFingerprint]
+ * for the two policies this app ever applies. This function itself never
+ * throws: any per-input resolution failure (malformed non_witness_utxo,
+ * txid mismatch, disagreeing UTXO representations, etc.) is reported as
+ * `utxoResolved = false` rather than propagating, since the whole point of
+ * this function is to explain a failure, not risk becoming a second one.
  */
 internal fun diagnosePsbtInputSigning(psbt: Psbt, masterKey: Bip32ExtendedPrivateKey): List<PsbtInputSigningDiagnostic> {
-    val loadedFingerprint = masterKey.fingerprint()
-    val loadedFingerprintHex = loadedFingerprint.toHex()
+    val loadedFingerprintHex = masterKey.fingerprint().toHex()
 
     return psbt.inputs.mapIndexed { index, inputMap ->
         val hasWitnessUtxo = inputMap.entries.any { it.keyType == 0x01 }
@@ -114,45 +119,39 @@ internal fun diagnosePsbtInputSigning(psbt: Psbt, masterKey: Bip32ExtendedPrivat
         val sighashSupported = sighashType == null || sighashType == 1L
 
         val existingPubkeys = inputMap.partialSigs().map { it.pubkey.toList() }.toSet()
+        val derivations = inputMap.bip32Derivations()
 
-        val keys = inputMap.bip32Derivations().map { derivation ->
-            val fingerprintMatches = derivation.masterFingerprint.contentEquals(loadedFingerprint)
-            val derivedPubkeyMatches = if (!fingerprintMatches) {
-                false
-            } else {
-                try {
-                    var child = masterKey
-                    for (rawIndex in derivation.path) {
-                        val hardened = rawIndex >= HARDENED_OFFSET
-                        val childIndex = if (hardened) rawIndex - HARDENED_OFFSET else rawIndex
-                        child = child.deriveChild(childIndex, hardened)
-                    }
-                    child.compressedPublicKey().contentEquals(derivation.pubkey)
-                } catch (e: Exception) {
-                    false
-                }
-            }
+        val keys = derivations.map { derivation ->
             PsbtInputKeyDiagnostic(
                 fingerprintHex = derivation.masterFingerprint.toHex(),
                 path = derivation.path,
-                fingerprintMatchesLoadedKey = fingerprintMatches,
-                derivedPubkeyMatchesClaimed = derivedPubkeyMatches,
+                matchStatus = classifyFingerprintMatch(derivation, masterKey),
             )
         }
 
-        // Would signPsbt add a NEW signature for this input? Mirrors its own
-        // gating exactly: not already finalized, UTXO resolves and matches
-        // its declared script, sighash is supported, and at least one
-        // derivation both matches this device's key AND isn't already
-        // signed (for P2WPKH, the UTXO program must also hash to that
-        // specific derived pubkey — parallels signPsbt step (e)/(f) above).
-        val wouldAddSignature = !alreadyFinalized && resolvedUtxo != null && utxoMatchesDeclaredScript && sighashSupported &&
-            inputMap.bip32Derivations().any { derivation ->
-                derivation.masterFingerprint.contentEquals(loadedFingerprint) &&
-                    derivation.pubkey.toList() !in existingPubkeys &&
-                    (scriptKind != PsbtInputScriptKind.P2WPKH || resolvedUtxo.scriptPubKey.contentEquals(byteArrayOf(0x00, 0x14) + hash160(derivation.pubkey))) &&
-                    keys.any { it.fingerprintHex == derivation.masterFingerprint.toHex() && it.path == derivation.path && it.derivedPubkeyMatchesClaimed }
-            }
+        val baseEligible = !alreadyFinalized && resolvedUtxo != null && utxoMatchesDeclaredScript && sighashSupported
+
+        fun derivationIsSignable(derivation: PsbtBip32Derivation, requiredStatus: FingerprintMatchStatus): Boolean {
+            if (derivation.pubkey.toList() in existingPubkeys) return false
+            if (classifyFingerprintMatch(derivation, masterKey) != requiredStatus) return false
+            // classifyFingerprintMatch's VERIFIED_MATCH is purely a
+            // fingerprint-metadata classification — it does NOT itself
+            // confirm pubkey derivation (only UNKNOWN_FINGERPRINT_PUBKEY_MATCH
+            // does, as part of its own definition). Re-verify explicitly,
+            // exactly matching signPsbt's own defense-in-depth check, so this
+            // prediction can never say "would sign" for an input the real
+            // signer would refuse over a pubkey mismatch.
+            if (!derivedPubkeyMatchesClaimed(derivation, masterKey)) return false
+            // For P2WPKH, the UTXO program must also hash to THIS specific
+            // derived pubkey — parallels signPsbt step (e)/(f).
+            return scriptKind != PsbtInputScriptKind.P2WPKH ||
+                resolvedUtxo!!.scriptPubKey.contentEquals(byteArrayOf(0x00, 0x14) + hash160(derivation.pubkey))
+        }
+
+        val wouldAddSignature = baseEligible &&
+            derivations.any { derivationIsSignable(it, FingerprintMatchStatus.VERIFIED_MATCH) }
+        val wouldAddSignatureWithUnverifiedFingerprint = !wouldAddSignature && baseEligible &&
+            derivations.any { derivationIsSignable(it, FingerprintMatchStatus.UNKNOWN_FINGERPRINT_PUBKEY_MATCH) }
 
         PsbtInputSigningDiagnostic(
             inputIndex = index,
@@ -167,6 +166,7 @@ internal fun diagnosePsbtInputSigning(psbt: Psbt, masterKey: Bip32ExtendedPrivat
             keys = keys,
             existingPartialSigCount = inputMap.partialSigs().size,
             wouldAddSignature = wouldAddSignature,
+            wouldAddSignatureWithUnverifiedFingerprint = wouldAddSignatureWithUnverifiedFingerprint,
         )
     }
 }

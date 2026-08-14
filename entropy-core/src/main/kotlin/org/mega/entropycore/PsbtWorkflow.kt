@@ -15,11 +15,23 @@ package org.mega.entropycore
  * still short of its threshold after this device's signature) — that's
  * expected, not an error. Use [isPsbtFullyFinalized] to check whether the
  * result is ready for [extractFinalTransactionHex].
+ *
+ * [fingerprintTrustPolicy] defaults to [FingerprintTrustPolicy.STRICT] —
+ * every existing caller keeps its current behavior unless it explicitly
+ * opts into [FingerprintTrustPolicy.ALLOW_UNKNOWN_FINGERPRINT_WITH_KEY_MATCH],
+ * which only single-seed Advanced Mode signing may do, and only after
+ * showing the user the required warning and getting explicit confirmation.
+ * See [FingerprintTrustPolicy]'s own doc for the full security rationale.
  */
-fun signAndFinalizePsbt(psbtBytes: ByteArray, mnemonicWords: List<String>, passphrase: String = ""): ByteArray {
+fun signAndFinalizePsbt(
+    psbtBytes: ByteArray,
+    mnemonicWords: List<String>,
+    passphrase: String = "",
+    fingerprintTrustPolicy: FingerprintTrustPolicy = FingerprintTrustPolicy.STRICT,
+): ByteArray {
     val psbt = parsePsbt(psbtBytes)
     val masterKey = bip32MasterKeyFromSeed(deriveSeed(mnemonicWords, passphrase).bytes)
-    val signed = signPsbt(psbt, masterKey)
+    val signed = signPsbt(psbt, masterKey, fingerprintTrustPolicy)
     val finalized = finalizePsbt(signed)
     return serializePsbt(finalized)
 }

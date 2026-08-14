@@ -108,6 +108,7 @@ dependencies {
     // analysis surface; ZXing decodes QR frames locally. No network, no cloud
     // scanner, no Play services dependency, and no cryptographic use.
     implementation(libs.zxing.core)
+    implementation("com.sparrowwallet:hummingbird:1.7.4")
     implementation(libs.androidx.camera.core)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)

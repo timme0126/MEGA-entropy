@@ -258,8 +258,7 @@ class PsbtNonWitnessUtxoWitnessCompatTest {
         assertEquals(PsbtInputScriptKind.P2WPKH, d.scriptKind)
         assertTrue(d.wouldAddSignature)
         assertEquals(1, d.keys.size)
-        assertTrue(d.keys[0].fingerprintMatchesLoadedKey)
-        assertTrue(d.keys[0].derivedPubkeyMatchesClaimed)
+        assertEquals(FingerprintMatchStatus.VERIFIED_MATCH, d.keys[0].matchStatus)
     }
 
     @Test
@@ -281,8 +280,7 @@ class PsbtNonWitnessUtxoWitnessCompatTest {
         val d = diagnostics[0]
         assertTrue(d.utxoResolved)
         assertFalse(d.wouldAddSignature)
-        assertFalse(d.keys[0].fingerprintMatchesLoadedKey)
-        assertFalse(d.keys[0].derivedPubkeyMatchesClaimed)
+        assertEquals(FingerprintMatchStatus.MISMATCH, d.keys[0].matchStatus)
         assertEquals(MASTER_FINGERPRINT_HEX, d.keys[0].fingerprintHex)
     }
 

@@ -181,6 +181,26 @@ fun PsbtReviewScreen(
                 }
             }
 
+            // Single-seed flow only (a saved vault always identifies its
+            // cosigners by verified fingerprint — see FingerprintTrustPolicy's
+            // doc for why that must stay strict). This is purely informational
+            // here: it does NOT change "This device can sign" above, which
+            // reflects only a verified fingerprint match. The actual
+            // derived-pubkey check (the one that decides whether signing can
+            // proceed) only happens, with its own explicit warning and
+            // confirmation step, on the signing screen next.
+            if (vaultCosigners == null && summary.hasUnverifiedOriginFingerprint) {
+                MegaCard(title = "Unrecorded Origin Fingerprint") {
+                    Text(
+                        text = "One or more inputs have no recorded origin fingerprint (00000000) in this PSBT. " +
+                            "MEGA will attempt to match them to this device's derived keys during signing, and will " +
+                            "ask for explicit confirmation if a match is found — the fingerprint itself can never be verified.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
             MegaCard(title = "Outputs (${summary.outputCount})") {
                 summary.outputs.forEachIndexed { index, output ->
                     Text(

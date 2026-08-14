@@ -1,5 +1,96 @@
 package org.mega.entropycore
 
+/**
+ * How a PSBT_IN_BIP32_DERIVATION entry's claimed master fingerprint relates
+ * to this device's own loaded key. The fingerprint field is advisory
+ * metadata a coordinator writes into the file — never itself proof of
+ * anything — so this is deliberately NOT a boolean: a PSBT carrying the
+ * well-known 00000000 placeholder (some coordinators emit this when they
+ * never recorded an origin fingerprint) is neither a confirmed match nor a
+ * confirmed mismatch, and must be represented as its own distinct state
+ * rather than silently folded into either — see [classifyFingerprintMatch].
+ */
+enum class FingerprintMatchStatus {
+    /** The claimed fingerprint equals this device's own. */
+    VERIFIED_MATCH,
+
+    /** The claimed fingerprint is the all-zero 00000000 placeholder, AND
+     * deriving along the PSBT's own stated path from this device's key
+     * produces EXACTLY the pubkey the PSBT claims. This is cryptographic
+     * proof this device controls the matching private key, independent of
+     * the (absent) fingerprint metadata — see [FingerprintTrustPolicy] for
+     * when this is enough to sign. */
+    UNKNOWN_FINGERPRINT_PUBKEY_MATCH,
+
+    /** The claimed fingerprint is well-formed but names a different key. */
+    MISMATCH,
+
+    /** The claimed fingerprint is not exactly 4 bytes. */
+    MALFORMED,
+}
+
+/**
+ * Governs whether a derivation classified as
+ * [FingerprintMatchStatus.UNKNOWN_FINGERPRINT_PUBKEY_MATCH] is eligible to
+ * be signed. [STRICT] — the default everywhere, and the ONLY policy the
+ * saved-vault/cosigner flow may ever use (see signPsbtForCosigner) — signs
+ * only [FingerprintMatchStatus.VERIFIED_MATCH] derivations. In a multisig
+ * vault, the fingerprint's job is identifying WHICH cosigner slot a
+ * signature belongs to, not merely "does this device hold a matching key"
+ * — the same seed can be a cosigner in multiple different vaults, each
+ * expecting a different fingerprint, so accepting an unrecorded
+ * fingerprint as "close enough" would defeat the cosigner-selection UI
+ * that exists specifically to prevent signing into the wrong vault/slot.
+ *
+ * Single-seed Advanced Mode signing may explicitly opt into
+ * [ALLOW_UNKNOWN_FINGERPRINT_WITH_KEY_MATCH] — and only after showing the
+ * user an explicit warning and getting explicit confirmation (see
+ * PsbtSignResultScreen) — because there only ONE identity question exists
+ * ("is this my key"), which the cryptographic pubkey/path/UTXO-binding/
+ * signature checks already answer independently of the (advisory,
+ * coordinator-supplied) fingerprint field.
+ */
+enum class FingerprintTrustPolicy {
+    STRICT,
+    ALLOW_UNKNOWN_FINGERPRINT_WITH_KEY_MATCH,
+}
+
+/**
+ * Classifies one PSBT_IN_BIP32_DERIVATION entry's relationship to
+ * [masterKey] — see [FingerprintMatchStatus]. Never throws: a failure to
+ * derive along [derivation]'s path (e.g. an out-of-range index) is treated
+ * as "not a match" rather than propagating, since this function's whole
+ * purpose is safe classification.
+ */
+internal fun classifyFingerprintMatch(derivation: PsbtBip32Derivation, masterKey: Bip32ExtendedPrivateKey): FingerprintMatchStatus {
+    if (derivation.masterFingerprint.size != 4) return FingerprintMatchStatus.MALFORMED
+    if (derivation.masterFingerprint.contentEquals(masterKey.fingerprint())) return FingerprintMatchStatus.VERIFIED_MATCH
+    val isUnknownPlaceholder = derivation.masterFingerprint.all { it == 0.toByte() }
+    if (isUnknownPlaceholder && derivedPubkeyMatchesClaimed(derivation, masterKey)) {
+        return FingerprintMatchStatus.UNKNOWN_FINGERPRINT_PUBKEY_MATCH
+    }
+    return FingerprintMatchStatus.MISMATCH
+}
+
+/** Internal (not private) so PsbtSigningDiagnostics.kt's read-only
+ * prediction can re-verify pubkey derivation the same way signPsbt itself
+ * does — VERIFIED_MATCH is purely a fingerprint-metadata classification
+ * ([classifyFingerprintMatch] never checks pubkey derivation for it), so a
+ * caller that needs "would this input actually get signed" must apply
+ * this check separately, exactly as signPsbt's own defense-in-depth step
+ * does right after its fingerprint gate. */
+internal fun derivedPubkeyMatchesClaimed(derivation: PsbtBip32Derivation, masterKey: Bip32ExtendedPrivateKey): Boolean = try {
+    var child = masterKey
+    for (rawIndex in derivation.path) {
+        val hardened = rawIndex >= HARDENED_OFFSET
+        val index = if (hardened) rawIndex - HARDENED_OFFSET else rawIndex
+        child = child.deriveChild(index, hardened)
+    }
+    child.compressedPublicKey().contentEquals(derivation.pubkey)
+} catch (e: Exception) {
+    false
+}
+
 /** True when [scriptPubKey] is a native P2WPKH output: OP_0 (0x00) followed
  * by a 20-byte push (0x14) of the pubkey hash — this app's single-sig
  * (BIP84) wallets always spend from this script type. Internal (not
@@ -25,7 +116,11 @@ internal fun validateSighashType(sighashType: Long?, inputIndex: Int) {
     }
 }
 
-internal fun signPsbt(psbt: Psbt, masterKey: Bip32ExtendedPrivateKey): Psbt {
+internal fun signPsbt(
+    psbt: Psbt,
+    masterKey: Bip32ExtendedPrivateKey,
+    fingerprintTrustPolicy: FingerprintTrustPolicy = FingerprintTrustPolicy.STRICT,
+): Psbt {
     val signedInputs = psbt.inputs.mapIndexed { i, inputMap ->
         // a. Never add a partial signature to an already-finalized input —
         //    finalization is terminal for a reason.
@@ -72,8 +167,18 @@ internal fun signPsbt(psbt: Psbt, masterKey: Bip32ExtendedPrivateKey): Psbt {
 
         // h. Iterate over BIP-32 derivations to find keys we control.
         for (derivation in inputMap.bip32Derivations()) {
-            // Skip if this derivation belongs to a different device/master key.
-            if (!derivation.masterFingerprint.contentEquals(masterKey.fingerprint())) continue
+            // Skip unless this derivation's fingerprint verifiably matches our
+            // key, or (single-seed flow only, and only after explicit user
+            // confirmation) it's the unrecorded-fingerprint placeholder AND
+            // our own derived pubkey exactly matches the PSBT's claim — see
+            // FingerprintMatchStatus/FingerprintTrustPolicy for the full
+            // security rationale. A MISMATCH or MALFORMED fingerprint is
+            // never eligible under any policy.
+            val fingerprintStatus = classifyFingerprintMatch(derivation, masterKey)
+            val fingerprintEligible = fingerprintStatus == FingerprintMatchStatus.VERIFIED_MATCH ||
+                (fingerprintStatus == FingerprintMatchStatus.UNKNOWN_FINGERPRINT_PUBKEY_MATCH &&
+                    fingerprintTrustPolicy == FingerprintTrustPolicy.ALLOW_UNKNOWN_FINGERPRINT_WITH_KEY_MATCH)
+            if (!fingerprintEligible) continue
 
             // Skip if this pubkey is already signed in this input.
             if (derivation.pubkey.toList() in signedPubkeys) continue

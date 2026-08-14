@@ -40,8 +40,9 @@ data class PsbtSummary(
     val isAlreadyPartiallySigned: Boolean,         // true if existingSignatureCount > 0 for any input, BEFORE this device signs anything
     val existingSignatureCount: Int,               // sum of every input's existingSignatureCount
     val requiredThreshold: PsbtThresholdInfo,
-    val deviceCanSignAnyInput: Boolean?,           // null if deviceMasterFingerprint (the function parameter) was null; otherwise true iff at least one input has a PSBT_IN_BIP32_DERIVATION whose masterFingerprint matches deviceMasterFingerprint AND doesn't already have a partial_sig for that same pubkey
+    val deviceCanSignAnyInput: Boolean?,           // null if deviceMasterFingerprint (the function parameter) was null; otherwise true iff at least one input has a PSBT_IN_BIP32_DERIVATION whose masterFingerprint VERIFIABLY matches deviceMasterFingerprint (a real fingerprint match, never the 00000000 placeholder) AND doesn't already have a partial_sig for that same pubkey — see hasUnverifiedOriginFingerprint for the separate, weaker signal
     val willFinalizeIfSigned: Boolean?,            // best-effort prediction of whether signing with deviceMasterFingerprint would bring EVERY input to its own threshold — null if deviceMasterFingerprint is null, or if any input's threshold can't be determined (see below); true only if confident every input reaches enough signatures
+    val hasUnverifiedOriginFingerprint: Boolean,   // true if ANY input has a bip32_derivation carrying the well-known 00000000 "unrecorded fingerprint" placeholder that doesn't already have a partial_sig — computed WITHOUT touching a private key, purely from raw PSBT bytes, so it does NOT mean this device can sign it (that requires deriving the candidate key, which only happens at actual signing time); it only flags the possibility exists so the review screen can say so honestly instead of silently
 ) {
     /** True when any input requests a sighash type this app's signer refuses
      * (present and != SIGHASH_ALL) — a review screen must block signing on
@@ -285,6 +286,16 @@ fun computePsbtSummary(
         null
     }
 
+    // 9b. Unverified-origin-fingerprint signal (see PsbtSummary.hasUnverifiedOriginFingerprint's
+    // own doc) — a fact about the FILE, independent of whether a device
+    // fingerprint was even supplied, so this is always computed.
+    val hasUnverifiedOriginFingerprint = psbt.inputs.any { inputMap ->
+        val existingPubkeys = inputMap.partialSigs().map { it.pubkey.toList() }.toSet()
+        inputMap.bip32Derivations().any { derivation ->
+            derivation.masterFingerprint.all { it == 0.toByte() } && derivation.pubkey.toList() !in existingPubkeys
+        }
+    }
+
     return PsbtSummary(
         network = effectiveNetwork,
         networkWasInferred = knownNetwork == null && inferredNetwork != null,
@@ -300,7 +311,8 @@ fun computePsbtSummary(
         existingSignatureCount = existingSignatureCount,
         requiredThreshold = requiredThreshold,
         deviceCanSignAnyInput = deviceCanSignAnyInput,
-        willFinalizeIfSigned = willFinalizeIfSigned
+        willFinalizeIfSigned = willFinalizeIfSigned,
+        hasUnverifiedOriginFingerprint = hasUnverifiedOriginFingerprint,
     )
 }
 

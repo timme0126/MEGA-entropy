@@ -58,6 +58,8 @@ import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
+import com.sparrowwallet.hummingbird.ResultType
+import com.sparrowwallet.hummingbird.URDecoder
 import org.mega.entropycore.BbqrPart
 import org.mega.entropycore.assembleBbqrPartsAsBytes
 import org.mega.entropycore.parseBbqrPart
@@ -115,10 +117,48 @@ private fun ScannerContent(onScanned: (ByteArray) -> Unit) {
     var cameraError by remember { mutableStateOf<String?>(null) }
     var bbqrParts by remember { mutableStateOf<Map<Int, BbqrPart>>(emptyMap()) }
     var bbqrError by remember { mutableStateOf<String?>(null) }
+    var urDecoder by remember { mutableStateOf<URDecoder?>(null) }
+    var urInProgress by remember { mutableStateOf(false) }
     var finished by remember { mutableStateOf(false) }
 
     fun handleDecodedText(text: String) {
         if (finished) return
+        if (text.trim().lowercase().startsWith("ur:")) {
+            try {
+                val decoder = urDecoder ?: URDecoder().also { urDecoder = it }
+                decoder.receivePart(text.trim().lowercase())
+                urInProgress = true
+                val result = decoder.result
+                if (result != null) {
+                    if (result.type != ResultType.SUCCESS || result.ur == null) {
+                        bbqrError = "Could not decode the UR PSBT."
+                        urDecoder = URDecoder()
+                        urInProgress = false
+                    } else if (result.ur.type != "psbt" && result.ur.type != "crypto-psbt") {
+                        // "psbt" is the current Blockchain Commons registry type (what
+                        // this app's own hummingbird library version encodes, and what
+                        // Sparrow emits); "crypto-psbt" is the older BCR-2020-006 type
+                        // some other wallets still use. Both wrap the same raw PSBT
+                        // bytes as a plain CBOR byte string, so toBytes() below works
+                        // identically for either.
+                        bbqrError = "Unsupported UR type: " + result.ur.type + ". Expected ur:psbt or ur:crypto-psbt."
+                        urDecoder = URDecoder()
+                        urInProgress = false
+                    } else {
+                        finished = true
+                        onScanned(result.ur.toBytes())
+                    }
+                } else {
+                    bbqrError = null
+                }
+            } catch (e: Exception) {
+                bbqrError = e.message ?: "Could not read this UR PSBT."
+                urDecoder = URDecoder()
+                urInProgress = false
+            }
+            return
+        }
+
         val part = parseBbqrPart(text)
         if (part == null) {
             try {
@@ -155,7 +195,7 @@ private fun ScannerContent(onScanned: (ByteArray) -> Unit) {
 
     MegaCard {
         Text(
-            text = "Point the camera at a PSBT QR code — either a single QR (small PSBTs, base64-encoded) or an animated BBQr series (larger PSBTs, e.g. from a hardware signer or another wallet).",
+            text = "Point the camera at a PSBT QR code — MEGA accepts a single base64 QR, animated BBQr, or Blockchain Commons UR (ur:psbt) series from Sparrow and compatible wallets.",
             style = MaterialTheme.typography.bodyMedium,
         )
     }
@@ -181,7 +221,13 @@ private fun ScannerContent(onScanned: (ByteArray) -> Unit) {
             )
         }
         val partsInProgress = bbqrParts.values.firstOrNull()
-        if (partsInProgress != null) {
+        if (urInProgress) {
+            Text(
+                text = "Animated UR PSBT detected — keep the camera on the series until decoding completes.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (partsInProgress != null) {
             Text(
                 text = "Scanned ${bbqrParts.size} of ${partsInProgress.total} parts — keep the camera on the animated QR code until every part is read.",
                 style = MaterialTheme.typography.bodySmall,
