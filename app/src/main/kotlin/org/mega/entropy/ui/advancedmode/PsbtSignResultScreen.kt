@@ -20,18 +20,14 @@ import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.FingerprintMatchStatus
-import org.mega.entropycore.FingerprintTrustPolicy
 import org.mega.entropycore.PsbtInputScriptKind
 import org.mega.entropycore.PsbtInputSigningDiagnostic
-import org.mega.entropycore.SignForCosignerResult
 import org.mega.entropycore.diagnosePsbtSigning
 import org.mega.entropycore.encodeBbqr
 import org.mega.entropycore.extractFinalTransactionHex
 import org.mega.entropycore.isPsbtFullyFinalized
 import org.mega.entropycore.parsePsbt
 import org.mega.entropycore.partialSigs
-import org.mega.entropycore.signAndFinalizePsbt
-import org.mega.entropycore.signPsbtForCosigner
 
 private fun hexStringToByteArray(hex: String): ByteArray {
     return hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
@@ -100,7 +96,6 @@ fun PsbtSignResultScreen(
         diagnosePsbtSigning(psbtBytes, mnemonicWords, passphrase)
     }
     val diagnostics = (diagnosticsState as? PsbtAsyncState.Success<List<PsbtInputSigningDiagnostic>>)?.value
-    val diagnosticsError = (diagnosticsState as? PsbtAsyncState.Failed)?.error
 
     // Single-seed Advanced Mode ONLY: an unknown origin fingerprint still
     // requires an explicit confirmation before any signing work starts.
@@ -109,66 +104,34 @@ fun PsbtSignResultScreen(
     var unverifiedFingerprintConfirmed by remember(psbtBytes) { mutableStateOf(false) }
     val awaitingUnverifiedFingerprintConfirmation = hasUnverifiedFingerprintOpportunity && !unverifiedFingerprintConfirmed
 
-    // The saved-vault flow remains strict and is evaluated at most once.
-    val cosignerAttemptState = if (expectedCosignerFingerprint != null && diagnostics != null) {
-        producePsbtAsync(psbtBytes, mnemonicWords, passphrase, expectedCosignerFingerprint) {
-            runCatching { signPsbtForCosigner(psbtBytes, expectedCosignerFingerprint, mnemonicWords, passphrase) }
+    // Signing starts only after diagnostics completed and, where needed, the
+    // user confirmed the unrecorded-fingerprint warning — never before,
+    // since a PSBT with additional, independently signable inputs must not
+    // partially sign without the user ever seeing that warning.
+    val readyToAttemptSigning = diagnostics != null && !awaitingUnverifiedFingerprintConfirmation
+    val signOutcomeState = if (readyToAttemptSigning) {
+        producePsbtAsync(psbtBytes, mnemonicWords, passphrase, expectedCosignerFingerprint, unverifiedFingerprintConfirmed) {
+            attemptPsbtSign(psbtBytes, mnemonicWords, passphrase, expectedCosignerFingerprint, unverifiedFingerprintConfirmed)
         }
-    } else null
-    val cosignerAttempt = (cosignerAttemptState as? PsbtAsyncState.Success<Result<SignForCosignerResult>>)?.value
-    val mismatch = cosignerAttempt?.getOrNull() as? SignForCosignerResult.FingerprintMismatch
-
-    // Single-seed signing starts only after diagnostics completed and, where
-    // needed, the user confirmed the unrecorded-fingerprint warning.
-    val singleSeedSignState = if (expectedCosignerFingerprint == null &&
-        diagnostics != null && !awaitingUnverifiedFingerprintConfirmation) {
-        val policy = if (unverifiedFingerprintConfirmed) {
-            FingerprintTrustPolicy.ALLOW_UNKNOWN_FINGERPRINT_WITH_KEY_MATCH
-        } else FingerprintTrustPolicy.STRICT
-        producePsbtAsync(psbtBytes, mnemonicWords, passphrase, unverifiedFingerprintConfirmed) {
-            runCatching { signAndFinalizePsbt(psbtBytes, mnemonicWords, passphrase, policy) }
-        }
-    } else null
-    val signResult: Result<ByteArray>? = when {
-        expectedCosignerFingerprint == null -> (singleSeedSignState as? PsbtAsyncState.Success<Result<ByteArray>>)?.value
-        cosignerAttempt == null -> null
-        cosignerAttempt.isFailure -> Result.failure(cosignerAttempt.exceptionOrNull()
-            ?: IllegalStateException("This PSBT could not be signed by this device."))
-        else -> when (val outcome = cosignerAttempt.getOrThrow()) {
-            is SignForCosignerResult.Signed -> Result.success(outcome.psbtBytes)
-            is SignForCosignerResult.FingerprintMismatch -> Result.failure(IllegalStateException("Cosigner fingerprint mismatch"))
-        }
+    } else {
+        null
     }
-    val workLoading = diagnosticsState is PsbtAsyncState.Loading ||
-        (expectedCosignerFingerprint != null && diagnostics != null && cosignerAttemptState is PsbtAsyncState.Loading) ||
-        (expectedCosignerFingerprint == null && diagnostics != null && !awaitingUnverifiedFingerprintConfirmation && singleSeedSignState is PsbtAsyncState.Loading)
-    val workError = diagnosticsError ?:
-        (cosignerAttemptState as? PsbtAsyncState.Failed)?.error ?:
-        (singleSeedSignState as? PsbtAsyncState.Failed)?.error
 
     MegaInfoScaffold(title = "Sign PSBT", onBack = onBack) {
-            if (workLoading) {
+            if (diagnosticsState is PsbtAsyncState.Loading) {
                 MegaCard(title = "Preparing PSBT") {
                     Column {
                         CircularProgressIndicator()
                         Text(
-                            text = "Verifying inputs and signing off the main thread…",
+                            text = "Analyzing PSBT…",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
                 }
-            } else if (workError != null) {
+            } else if (diagnosticsState is PsbtAsyncState.Failed) {
                 MegaCard(title = "Could Not Sign PSBT") {
                     Text(
-                        text = workError.message ?: "This PSBT could not be processed by this device.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MegaError
-                    )
-                }
-            } else if (mismatch != null) {
-                MegaCard(title = "Wrong Cosigner") {
-                    Text(
-                        text = "This saved session's key does not match the selected cosigner (expected fingerprint ${mismatch.expectedFingerprint}, this session's key is ${mismatch.actualFingerprint}). Signing has been refused.",
+                        text = diagnosticsState.error.message ?: "This PSBT could not be processed by this device.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MegaError
                     )
@@ -193,10 +156,38 @@ fun PsbtSignResultScreen(
                 }
                 MegaSecondaryButton(text = "Cancel", onClick = onBack)
                 MegaPrimaryButton(text = "Sign Anyway", onClick = { unverifiedFingerprintConfirmed = true })
-            } else if (signResult != null && signResult.isFailure) {
+            } else if (signOutcomeState == null || signOutcomeState is PsbtAsyncState.Loading) {
+                MegaCard(title = "Preparing PSBT") {
+                    Column {
+                        CircularProgressIndicator()
+                        Text(
+                            text = "Signing…",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            } else if (signOutcomeState is PsbtAsyncState.Failed) {
                 MegaCard(title = "Could Not Sign PSBT") {
                     Text(
-                        text = signResult.exceptionOrNull()?.message ?: "This PSBT could not be signed by this device.",
+                        text = signOutcomeState.error.message ?: "This PSBT could not be processed by this device.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MegaError
+                    )
+                }
+            } else if ((signOutcomeState as PsbtAsyncState.Success<PsbtSignOutcome>).value is PsbtSignOutcome.CosignerMismatch) {
+                val mismatch = signOutcomeState.value as PsbtSignOutcome.CosignerMismatch
+                MegaCard(title = "Wrong Cosigner") {
+                    Text(
+                        text = "This saved session's key does not match the selected cosigner (expected fingerprint ${mismatch.expectedFingerprint}, this session's key is ${mismatch.actualFingerprint}). Signing has been refused.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MegaError
+                    )
+                }
+            } else if (signOutcomeState.value is PsbtSignOutcome.Failed) {
+                val failed = signOutcomeState.value
+                MegaCard(title = "Could Not Sign PSBT") {
+                    Text(
+                        text = failed.message,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MegaError
                     )
@@ -211,9 +202,7 @@ fun PsbtSignResultScreen(
                     }
                 }
             } else {
-                // Provably non-null: the only case signResult is null is
-                // awaitingUnverifiedFingerprintConfirmation, already handled above.
-                val signedBytes = signResult!!.getOrThrow()
+                val signedBytes = (signOutcomeState.value as PsbtSignOutcome.Signed).psbtBytes
                 val fullyFinalized = remember(signedBytes) { isPsbtFullyFinalized(signedBytes) }
                 val beforeSignatureCount = remember(psbtBytes) { runCatching { parsePsbt(psbtBytes).inputs.sumOf { it.partialSigs().size } }.getOrDefault(0) }
                 val afterSignatureCount = remember(signedBytes) { runCatching { parsePsbt(signedBytes).inputs.sumOf { it.partialSigs().size } }.getOrDefault(0) }
