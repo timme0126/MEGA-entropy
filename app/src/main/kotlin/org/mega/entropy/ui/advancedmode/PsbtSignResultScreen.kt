@@ -2,6 +2,8 @@ package org.mega.entropy.ui.advancedmode
 
 import android.util.Base64
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -16,7 +18,6 @@ import org.mega.entropy.ui.components.MegaCopyIconButton
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
-import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.FingerprintMatchStatus
@@ -28,18 +29,16 @@ import org.mega.entropycore.extractFinalTransactionHex
 import org.mega.entropycore.isPsbtFullyFinalized
 import org.mega.entropycore.parsePsbt
 import org.mega.entropycore.partialSigs
+import org.mega.entropycore.bip32Derivations
 
 private fun hexStringToByteArray(hex: String): ByteArray {
     return hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 }
 
-/** The exact warning shown before MEGA will sign an input whose PSBT
- * fingerprint is the unrecorded (00000000) placeholder — see
- * FingerprintTrustPolicy.ALLOW_UNKNOWN_FINGERPRINT_WITH_KEY_MATCH. Never
- * describes the fingerprint itself as verified: only the derived public
- * key, path, script binding, UTXO, and signature are. */
-private const val UNVERIFIED_FINGERPRINT_WARNING = "Master fingerprint is unknown in this PSBT. MEGA matched this " +
-    "device's derived public key and path, but cannot independently verify the origin fingerprint."
+/** Informational explanation shown after signing when the PSBT carries the
+ * unrecorded (00000000) origin-fingerprint placeholder. The fingerprint
+ * itself is not treated as verified; the signing checks happen internally. */
+private const val UNVERIFIED_FINGERPRINT_WARNING = "This PSBT did not record a master fingerprint (00000000). MEGA independently matched the derived public key, path, UTXO, and signature."
 
 /**
  * Turns one [PsbtInputSigningDiagnostic] into a single safe, human-readable
@@ -89,126 +88,103 @@ fun PsbtSignResultScreen(
 ) {
     SecureScreen(enabled = !allowScreenshots)
 
-    // All BIP32 derivation, PSBT parsing, diagnostics, and signing run off the
-    // main thread. This is essential on a Pixel-class device: Compose must not
-    // be blocked while four inputs each derive and verify a candidate key.
-    val diagnosticsState = producePsbtAsync(psbtBytes, mnemonicWords, passphrase) {
-        diagnosePsbtSigning(psbtBytes, mnemonicWords, passphrase)
+    // Start signing immediately. entropy-core still performs every required
+    // fingerprint, derivation, UTXO-binding, and signature check internally.
+    // Diagnostics are a failure explanation only; they never gate signing.
+    val signOutcomeState = producePsbtAsync(psbtBytes, mnemonicWords, passphrase, expectedCosignerFingerprint) {
+        attemptPsbtSign(psbtBytes, mnemonicWords, passphrase, expectedCosignerFingerprint)
     }
-    val diagnostics = (diagnosticsState as? PsbtAsyncState.Success<List<PsbtInputSigningDiagnostic>>)?.value
-
-    // Single-seed Advanced Mode ONLY: an unknown origin fingerprint still
-    // requires an explicit confirmation before any signing work starts.
-    val hasUnverifiedFingerprintOpportunity = expectedCosignerFingerprint == null &&
-        diagnostics?.any { it.wouldAddSignatureWithUnverifiedFingerprint } == true
-    var unverifiedFingerprintConfirmed by remember(psbtBytes) { mutableStateOf(false) }
-    val awaitingUnverifiedFingerprintConfirmation = hasUnverifiedFingerprintOpportunity && !unverifiedFingerprintConfirmed
-
-    // Signing starts only after diagnostics completed and, where needed, the
-    // user confirmed the unrecorded-fingerprint warning — never before,
-    // since a PSBT with additional, independently signable inputs must not
-    // partially sign without the user ever seeing that warning.
-    val readyToAttemptSigning = diagnostics != null && !awaitingUnverifiedFingerprintConfirmation
-    val signOutcomeState = if (readyToAttemptSigning) {
-        producePsbtAsync(psbtBytes, mnemonicWords, passphrase, expectedCosignerFingerprint, unverifiedFingerprintConfirmed) {
-            attemptPsbtSign(psbtBytes, mnemonicWords, passphrase, expectedCosignerFingerprint, unverifiedFingerprintConfirmed)
+    val signedBytes = ((signOutcomeState as? PsbtAsyncState.Success<PsbtSignOutcome>)?.value as? PsbtSignOutcome.Signed)?.psbtBytes
+    val failedOutcome = ((signOutcomeState as? PsbtAsyncState.Success<PsbtSignOutcome>)?.value as? PsbtSignOutcome.Failed)
+    val diagnosticsState = if (failedOutcome != null) {
+        producePsbtAsync(psbtBytes, mnemonicWords, passphrase, "failure-diagnostics") {
+            diagnosePsbtSigning(psbtBytes, mnemonicWords, passphrase)
         }
-    } else {
-        null
+    } else null
+    val diagnostics = (diagnosticsState as? PsbtAsyncState.Success<List<PsbtInputSigningDiagnostic>>)?.value
+    val hasUnverifiedFingerprint = remember(signedBytes) {
+        signedBytes?.let { bytes ->
+            runCatching {
+                parsePsbt(bytes).inputs.any { input ->
+                    input.bip32Derivations().any { derivation -> derivation.masterFingerprint.all { it == 0.toByte() } }
+                }
+            }.getOrDefault(false)
+        } ?: false
     }
 
-    MegaInfoScaffold(title = "Sign PSBT", onBack = onBack) {
-            if (diagnosticsState is PsbtAsyncState.Loading) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var pendingSaveBytes by remember(psbtBytes) { mutableStateOf<ByteArray?>(null) }
+    val saveLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { destination ->
+        val bytes = pendingSaveBytes
+        if (destination != null && bytes != null) {
+            val saved = runCatching {
+                context.contentResolver.openOutputStream(destination)?.use { output -> output.write(bytes) } != null
+            }.getOrDefault(false)
+            if (!saved) android.widget.Toast.makeText(context, "Could not save the signed PSBT.", android.widget.Toast.LENGTH_LONG).show()
+        }
+        pendingSaveBytes = null
+    }
+
+    MegaInfoScaffold(
+        title = "Sign PSBT",
+        onBack = onBack,
+        actions = {
+            if (signedBytes != null) {
+                androidx.compose.material3.IconButton(onClick = {
+                    pendingSaveBytes = signedBytes
+                    saveLauncher.launch("mega-signed.psbt")
+                }) {
+                    androidx.compose.material3.Icon(
+                        imageVector = Icons.Filled.Save,
+                        contentDescription = "Save signed PSBT"
+                    )
+                }
+            }
+        }
+    ) {
+        when {
+            signOutcomeState is PsbtAsyncState.Loading -> {
                 MegaCard(title = "Preparing PSBT") {
                     Column {
                         CircularProgressIndicator()
-                        Text(
-                            text = "Analyzing PSBT…",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Text(text = "Signing…", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-            } else if (diagnosticsState is PsbtAsyncState.Failed) {
+            }
+            signOutcomeState is PsbtAsyncState.Failed -> {
                 MegaCard(title = "Could Not Sign PSBT") {
-                    Text(
-                        text = diagnosticsState.error.message ?: "This PSBT could not be processed by this device.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MegaError
-                    )
+                    Text(text = signOutcomeState.error.message ?: "This PSBT could not be processed by this device.", style = MaterialTheme.typography.bodyMedium, color = MegaError)
                 }
-            } else if (awaitingUnverifiedFingerprintConfirmation) {
-                // diagnostics is provably non-null here: hasUnverifiedFingerprintOpportunity
-                // (which awaitingUnverifiedFingerprintConfirmation depends on) is only ever
-                // true when diagnostics?.any {...} == true, which requires diagnostics != null.
-                MegaCard(title = "Unverified Master Fingerprint") {
-                    Text(
-                        text = UNVERIFIED_FINGERPRINT_WARNING,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MegaError
-                    )
-                }
-                MegaCard(title = "Diagnostic Detail") {
-                    Column {
-                        diagnostics.forEach { d ->
-                            MegaMonoText(describeSigningDiagnostic(d))
+            }
+            else -> {
+                val outcome = (signOutcomeState as PsbtAsyncState.Success<PsbtSignOutcome>).value
+                when (outcome) {
+                    is PsbtSignOutcome.CosignerMismatch -> {
+                        MegaCard(title = "Wrong Cosigner") {
+                            Text(text = "This saved session key does not match the selected cosigner. Signing has been refused.", style = MaterialTheme.typography.bodyMedium, color = MegaError)
                         }
                     }
-                }
-                MegaSecondaryButton(text = "Cancel", onClick = onBack)
-                MegaPrimaryButton(text = "Sign Anyway", onClick = { unverifiedFingerprintConfirmed = true })
-            } else if (signOutcomeState == null || signOutcomeState is PsbtAsyncState.Loading) {
-                MegaCard(title = "Preparing PSBT") {
-                    Column {
-                        CircularProgressIndicator()
-                        Text(
-                            text = "Signing…",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            } else if (signOutcomeState is PsbtAsyncState.Failed) {
-                MegaCard(title = "Could Not Sign PSBT") {
-                    Text(
-                        text = signOutcomeState.error.message ?: "This PSBT could not be processed by this device.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MegaError
-                    )
-                }
-            } else if ((signOutcomeState as PsbtAsyncState.Success<PsbtSignOutcome>).value is PsbtSignOutcome.CosignerMismatch) {
-                val mismatch = signOutcomeState.value as PsbtSignOutcome.CosignerMismatch
-                MegaCard(title = "Wrong Cosigner") {
-                    Text(
-                        text = "This saved session's key does not match the selected cosigner (expected fingerprint ${mismatch.expectedFingerprint}, this session's key is ${mismatch.actualFingerprint}). Signing has been refused.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MegaError
-                    )
-                }
-            } else if (signOutcomeState.value is PsbtSignOutcome.Failed) {
-                val failed = signOutcomeState.value
-                MegaCard(title = "Could Not Sign PSBT") {
-                    Text(
-                        text = failed.message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MegaError
-                    )
-                }
-                if (diagnostics != null) {
-                    MegaCard(title = "Diagnostic Detail") {
-                        Column {
-                            diagnostics.forEach { d ->
-                                MegaMonoText(describeSigningDiagnostic(d))
+                    is PsbtSignOutcome.Failed -> {
+                        MegaCard(title = "Could Not Sign PSBT") {
+                            Text(text = outcome.message, style = MaterialTheme.typography.bodyMedium, color = MegaError)
+                        }
+                        if (diagnosticsState is PsbtAsyncState.Loading) CircularProgressIndicator()
+                        if (diagnostics != null) {
+                            MegaCard(title = "Diagnostic Detail") {
+                                Column { diagnostics.forEach { d -> MegaMonoText(describeSigningDiagnostic(d)) } }
                             }
                         }
                     }
-                }
-            } else {
-                val signedBytes = (signOutcomeState.value as PsbtSignOutcome.Signed).psbtBytes
-                val fullyFinalized = remember(signedBytes) { isPsbtFullyFinalized(signedBytes) }
+                    is PsbtSignOutcome.Signed -> {
+                        val signedPsbtBytes = outcome.psbtBytes
+                val fullyFinalized = remember(signedPsbtBytes) { isPsbtFullyFinalized(signedPsbtBytes) }
                 val beforeSignatureCount = remember(psbtBytes) { runCatching { parsePsbt(psbtBytes).inputs.sumOf { it.partialSigs().size } }.getOrDefault(0) }
-                val afterSignatureCount = remember(signedBytes) { runCatching { parsePsbt(signedBytes).inputs.sumOf { it.partialSigs().size } }.getOrDefault(0) }
+                val afterSignatureCount = remember(signedPsbtBytes) { runCatching { parsePsbt(signedPsbtBytes).inputs.sumOf { it.partialSigs().size } }.getOrDefault(0) }
 
                 if (fullyFinalized) {
-                    val txHex = remember(signedBytes) { extractFinalTransactionHex(signedBytes) }
+                    val txHex = remember(signedPsbtBytes) { extractFinalTransactionHex(signedPsbtBytes) }
 
                     if (txHex == null) {
                         MegaCard {
@@ -226,7 +202,7 @@ fun PsbtSignResultScreen(
                                 color = MegaError
                             )
                         }
-                        if (unverifiedFingerprintConfirmed) {
+                        if (hasUnverifiedFingerprint) {
                             MegaCard(title = "Unverified Master Fingerprint") {
                                 Text(
                                     text = UNVERIFIED_FINGERPRINT_WARNING,
@@ -234,6 +210,14 @@ fun PsbtSignResultScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
+                        }
+
+
+                        MegaCard(title = "Broadcast QR") {
+                            MegaAnimatedQrCode(
+                                frames = remember(txHex) { encodeBbqr('T', hexStringToByteArray(txHex)) },
+                                contentDescription = "Animated QR code of the signed transaction, to scan into a broadcasting wallet"
+                            )
                         }
 
                         MegaCard(
@@ -252,13 +236,6 @@ fun PsbtSignResultScreen(
                                     MegaMonoText(line)
                                 }
                             }
-                        }
-
-                        MegaCard(title = "Broadcast QR") {
-                            MegaAnimatedQrCode(
-                                frames = remember(txHex) { encodeBbqr('T', hexStringToByteArray(txHex)) },
-                                contentDescription = "Animated QR code of the signed transaction, to scan into a broadcasting wallet"
-                            )
                         }
 
                         MegaPrimaryButton(text = "Done", onClick = onBack)
@@ -287,7 +264,7 @@ fun PsbtSignResultScreen(
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
-                    if (unverifiedFingerprintConfirmed) {
+                    if (hasUnverifiedFingerprint) {
                         MegaCard(title = "Unverified Master Fingerprint") {
                             Text(
                                 text = UNVERIFIED_FINGERPRINT_WARNING,
@@ -303,19 +280,23 @@ fun PsbtSignResultScreen(
                             {
                                 MegaCopyIconButton(
                                     contentDescription = "Copy PSBT as base64",
-                                    getTextToCopy = { Base64.encodeToString(signedBytes, Base64.NO_WRAP) }
+                                    getTextToCopy = { Base64.encodeToString(signedPsbtBytes, Base64.NO_WRAP) }
                                 )
                             }
                         } else null
                     ) {
                         MegaAnimatedQrCode(
-                            frames = remember(signedBytes) { encodeBbqr('P', signedBytes) },
+                            frames = remember(signedPsbtBytes) { encodeBbqr('P', signedPsbtBytes) },
                             contentDescription = "Animated QR code of the partially-signed PSBT, to scan into the next cosigner's wallet"
                         )
                     }
+
 
                     MegaPrimaryButton(text = "Done", onClick = onBack)
                 }
             }
         }
+}
+}
+}
 }

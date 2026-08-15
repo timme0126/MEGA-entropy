@@ -6,6 +6,7 @@ Notable changes to MEGA, most recent first. The current beta build is `v0.1.10` 
 
 - Moved PSBT review, diagnostics, and signing off the Compose main thread with cancellable, single-execution workers.
 - Fixed RFC6979 `bits2octets` handling for the secp256k1 boundary where a SHA-256 hash is at or above the curve order.
+- Streamlined PSBT signing so fingerprint diagnostics no longer gate the signing flow; the 00000000 origin-fingerprint condition is shown informationally after signing. Added a top-bar Save action for signed PSBT files and placed signed transaction hex below the broadcast QR.
 
 ## [0.1.10] — 2026-08-13
 
