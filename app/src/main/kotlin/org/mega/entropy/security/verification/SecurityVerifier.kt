@@ -47,21 +47,21 @@ object SecurityVerifier {
     }
 
     private fun deviceChecks(context: Context): List<SecurityCheck> = listOf(
-        globalSetting(context, "airplane", "Airplane Mode", Settings.Global.AIRPLANE_MODE_ON),
-        runCatching { context.getSystemService(WifiManager::class.java)?.let { radio("wifi", "Wi-Fi", it.isWifiEnabled) } ?: unavailable("wifi", "Wi-Fi") }.getOrElse { unavailable("wifi", "Wi-Fi") },
-        runCatching { context.getSystemService(TelephonyManager::class.java)?.let { radio("mobile", "Mobile data", it.isDataEnabled) } ?: unavailable("mobile", "Mobile data") }.getOrElse { unavailable("mobile", "Mobile data") },
-        runCatching { BluetoothAdapter.getDefaultAdapter()?.let { radio("bluetooth", "Bluetooth", it.isEnabled) } ?: pass("bluetooth", "Bluetooth", "No Bluetooth adapter present.") }.getOrElse { unavailable("bluetooth", "Bluetooth") },
-        runCatching { NfcAdapter.getDefaultAdapter(context)?.let { radio("nfc", "NFC", it.isEnabled) } ?: pass("nfc", "NFC", "No NFC adapter present.") }.getOrElse { unavailable("nfc", "NFC") },
-        runCatching { context.getSystemService(LocationManager::class.java)?.let { radio("location", "Location services", it.isLocationEnabled) } ?: unavailable("location", "Location services") }.getOrElse { unavailable("location", "Location services") },
+        globalSetting(context, "airplane", "Airplane Mode", Settings.Global.AIRPLANE_MODE_ON, Settings.ACTION_AIRPLANE_MODE_SETTINGS),
+        runCatching { context.getSystemService(WifiManager::class.java)?.let { radio("wifi", "Wi-Fi", it.isWifiEnabled, Settings.ACTION_WIFI_SETTINGS) } ?: unavailable("wifi", "Wi-Fi") }.getOrElse { unavailable("wifi", "Wi-Fi") },
+        runCatching { context.getSystemService(TelephonyManager::class.java)?.let { radio("mobile", "Mobile data", it.isDataEnabled, Settings.ACTION_WIRELESS_SETTINGS) } ?: unavailable("mobile", "Mobile data") }.getOrElse { unavailable("mobile", "Mobile data") },
+        runCatching { BluetoothAdapter.getDefaultAdapter()?.let { radio("bluetooth", "Bluetooth", it.isEnabled, Settings.ACTION_BLUETOOTH_SETTINGS) } ?: pass("bluetooth", "Bluetooth", "No Bluetooth adapter present.") }.getOrElse { unavailable("bluetooth", "Bluetooth") },
+        runCatching { NfcAdapter.getDefaultAdapter(context)?.let { radio("nfc", "NFC", it.isEnabled, Settings.ACTION_NFC_SETTINGS) } ?: pass("nfc", "NFC", "No NFC adapter present.") }.getOrElse { unavailable("nfc", "NFC") },
+        runCatching { context.getSystemService(LocationManager::class.java)?.let { radio("location", "Location services", it.isLocationEnabled, Settings.ACTION_LOCATION_SOURCE_SETTINGS) } ?: unavailable("location", "Location services") }.getOrElse { unavailable("location", "Location services") },
         unavailable("nearby_capability", "Nearby Devices capability", "Unable to verify automatically without invasive permissions or hidden APIs."),
-        runCatching { context.getSystemService(ConnectivityManager::class.java)?.let { if (it.activeNetwork == null) pass("active_network", "Active network", "NONE detected.") else warning("active_network", "Active network", "A network path is present; disable connectivity before sensitive work.") } ?: unavailable("active_network", "Active network") }.getOrElse { unavailable("active_network", "Active network") },
-        globalSetting(context, "adb", "USB debugging / ADB", Settings.Global.ADB_ENABLED),
-        globalSetting(context, "developer_options", "Developer options", Settings.Global.DEVELOPMENT_SETTINGS_ENABLED),
+        runCatching { context.getSystemService(ConnectivityManager::class.java)?.let { if (it.activeNetwork == null) pass("active_network", "Active network", "NONE detected.") else warning("active_network", "Active network", "A network path is present; disable connectivity before sensitive work.", Settings.ACTION_WIRELESS_SETTINGS) } ?: unavailable("active_network", "Active network") }.getOrElse { unavailable("active_network", "Active network") },
+        globalSetting(context, "adb", "USB debugging / ADB", Settings.Global.ADB_ENABLED, Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS),
+        globalSetting(context, "developer_options", "Developer options", Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS),
     )
 
-    private fun globalSetting(context: Context, id: String, title: String, key: String) = runCatching { when (Settings.Global.getInt(context.contentResolver, key, -1)) { 0 -> pass(id, title, "OFF."); 1 -> warning(id, title, "ON — review before sensitive work."); else -> unavailable(id, title) } }.getOrElse { unavailable(id, title) }
-    private fun radio(id: String, title: String, enabled: Boolean) = if (enabled) warning(id, title, "ON — review before sensitive work.") else pass(id, title, "OFF.")
-    private fun pass(id: String, title: String, detail: String) = SecurityCheck(id, title, SecurityCheckStatus.PASS, detail, true)
-    private fun warning(id: String, title: String, detail: String) = SecurityCheck(id, title, SecurityCheckStatus.WARNING, detail, true)
-    private fun unavailable(id: String, title: String, detail: String = "Unable to verify automatically.") = SecurityCheck(id, title, SecurityCheckStatus.UNAVAILABLE, detail, false)
+    private fun globalSetting(context: Context, id: String, title: String, key: String, settingsAction: String? = null) = runCatching { when (Settings.Global.getInt(context.contentResolver, key, -1)) { 0 -> pass(id, title, "OFF."); 1 -> warning(id, title, "ON — review before sensitive work.", settingsAction); else -> unavailable(id, title, "Unable to verify automatically.", settingsAction) } }.getOrElse { unavailable(id, title, settingsAction = settingsAction) }
+    private fun radio(id: String, title: String, enabled: Boolean, settingsAction: String? = null) = if (enabled) warning(id, title, "ON — review before sensitive work.", settingsAction) else pass(id, title, "OFF.")
+    private fun pass(id: String, title: String, detail: String, settingsAction: String? = null) = SecurityCheck(id, title, SecurityCheckStatus.PASS, detail, true, settingsAction)
+    private fun warning(id: String, title: String, detail: String, settingsAction: String? = null) = SecurityCheck(id, title, SecurityCheckStatus.WARNING, detail, true, settingsAction)
+    private fun unavailable(id: String, title: String, detail: String = "Unable to verify automatically.", settingsAction: String? = null) = SecurityCheck(id, title, SecurityCheckStatus.UNAVAILABLE, detail, false, settingsAction)
 }

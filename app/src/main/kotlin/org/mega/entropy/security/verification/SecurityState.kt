@@ -2,7 +2,7 @@ package org.mega.entropy.security.verification
 
 enum class SecurityCheckStatus { PASS, WARNING, UNAVAILABLE, FAIL }
 
-data class SecurityCheck(val id: String, val title: String, val status: SecurityCheckStatus, val detail: String, val authoritative: Boolean)
+data class SecurityCheck(val id: String, val title: String, val status: SecurityCheckStatus, val detail: String, val authoritative: Boolean, val settingsAction: String? = null)
 enum class SecurityOverallStatus { VERIFIED, ACTION_REQUIRED, SOME_UNVERIFIED }
 enum class SecurityEnvironmentProfile(val label: String, val guidance: String) {
     DEDICATED_GRAPHENEOS("Dedicated offline GrapheneOS device", "Preferred configuration, but this selection is user-supplied and not automatically verified."),
