@@ -30,6 +30,7 @@ fun AdvancedModeEntryScreen(
     onImportFromSavedSession: () -> Unit,
     onImportViaSeedQr: () -> Unit,
     onMultisigVaults: () -> Unit,
+    onSecurityVerification: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
 
@@ -56,5 +57,6 @@ fun AdvancedModeEntryScreen(
         // vaults list if any exist, or straight into setup otherwise — see
         // MegaNavGraph's enterMultisigVaultsEntry.
         MegaPrimaryButton(text = "Multi-Signature Vaults", onClick = onMultisigVaults)
+        MegaPrimaryButton(text = "Security Check (Android)", onClick = onSecurityVerification)
     }
 }

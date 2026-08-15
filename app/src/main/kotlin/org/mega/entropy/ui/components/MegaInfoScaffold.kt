@@ -18,6 +18,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
@@ -33,8 +35,14 @@ fun MegaInfoScaffold(
     title: String,
     onBack: () -> Unit,
     actions: @Composable () -> Unit = {},
+    scrollToTopRequest: Int = 0,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
+    val scrollState = rememberScrollState()
+    LaunchedEffect(scrollToTopRequest) {
+        if (scrollToTopRequest > 0) scrollState.animateScrollTo(0)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -55,7 +63,7 @@ fun MegaInfoScaffold(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 // Inside the scroll, not outside: this extends the
                 // scrollable content's height by the keyboard's height
                 // while it's open, so fields (and anything below them,

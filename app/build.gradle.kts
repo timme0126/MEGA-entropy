@@ -172,6 +172,37 @@ tasks.register("securityAudit") {
     }
 }
 
+
+// Verify the manifests produced by the Android manifest merger, not only the source manifest.
+tasks.register("verifyMergedManifestPermissions") {
+    group = "verification"
+    description = "Fails if a merged debug or release manifest introduces INTERNET or other prohibited permissions."
+    dependsOn("processDebugManifest", "processReleaseManifest")
+    doLast {
+        val merged = layout.buildDirectory.get().asFile.walkTopDown().filter { it.isFile && it.path.contains("intermediates/merged_manifests") && it.name == "AndroidManifest.xml" }.toList()
+        if (merged.isEmpty()) throw GradleException("No merged manifests found")
+        val violations = merged.flatMap { file -> forbiddenManifestPermissions.filter { permission -> Regex("<uses-permission[^>]*android:name[^>]*" + Regex.escape(permission)).containsMatchIn(file.readText()) }.map { permission -> file.path + ": " + permission } }
+        if (violations.isNotEmpty()) throw GradleException("Merged manifest security check FAILED:\n" + violations.joinToString("\n"))
+        println("Merged manifest security check PASSED:  manifests checked.")
+    }
+}
+
+tasks.named("securityAudit") { dependsOn("verifyMergedManifestPermissions") }
+
+tasks.register("dependencyAudit") {
+    group = "verification"
+    description = "Fails if runtime dependencies match prohibited networking, telemetry, advertising, or cloud SDK patterns."
+    doLast {
+        val forbidden = listOf("okhttp", "retrofit", "ktor-client", "firebase", "crashlytics", "sentry", "analytics", "advertising", "ads", "play-services", "webview")
+        val artifacts = configurations.getByName("releaseRuntimeClasspath").resolvedConfiguration.resolvedArtifacts.map { it.moduleVersion.id.toString() }
+        val bad = artifacts.filter { artifact -> forbidden.any { pattern -> artifact.lowercase().contains(pattern) } }
+        if (bad.isNotEmpty()) throw GradleException("Dependency security check FAILED:\n" + bad.joinToString("\n"))
+        println("Dependency security check PASSED:  runtime artifacts checked.")
+    }
+}
+
+tasks.named("securityAudit") { dependsOn("dependencyAudit") }
+
 tasks.named("check") {
     dependsOn("securityAudit")
 }

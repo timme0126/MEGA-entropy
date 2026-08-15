@@ -74,6 +74,7 @@ import org.mega.entropy.ui.savedsessiondetail.SavedSessionDetailScreen
 import org.mega.entropy.ui.savedsessions.SavedSessionsScreen
 import org.mega.entropy.ui.savesession.SaveSessionScreen
 import org.mega.entropy.ui.security.SecurityModelScreen
+import org.mega.entropy.ui.security.SecurityVerificationScreen
 import org.mega.entropy.ui.splitgroups.SplitGroupsScreen
 import org.mega.entropy.ui.welcome.WelcomeScreen
 import org.mega.entropy.ui.words.WordDerivationScreen
@@ -174,7 +175,6 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     var savedVaultPsbtSourceLabel by remember { mutableStateOf("") }
     var savedVaultPsbtPassphrase by remember { mutableStateOf("") }
     var savedVaultPsbtScannedBytes by remember { mutableStateOf<ByteArray?>(null) }
-
     // Called from Back at any step of the saved-vault PSBT-sign flow, and
     // from its terminal Done button — eagerly drops every sensitive value
     // this flow loaded (candidate seed words, passphrase, scanned PSBT
@@ -477,6 +477,12 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         composable(MegaDestinations.SECURITY_MODEL) {
             SecurityModelScreen(onBack = { navController.popBackStack() })
         }
+        composable(MegaDestinations.SECURITY_VERIFICATION) {
+            SecurityVerificationScreen(
+                onBack = { navController.popBackStack() },
+                onContinue = { navController.popBackStack() },
+            )
+        }
         composable(MegaDestinations.PRIVACY) {
             PrivacyScreen(onBack = { navController.popBackStack() })
         }
@@ -626,6 +632,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onMultisigVaults = {
                     coroutineScope.launch { enterMultisigVaultsEntry() }
                 },
+                onSecurityVerification = { navController.navigate(MegaDestinations.SECURITY_VERIFICATION) },
             )
         }
         composable(MegaDestinations.ADVANCED_MODE_MANUAL_ENTRY) {

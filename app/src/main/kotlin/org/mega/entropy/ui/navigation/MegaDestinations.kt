@@ -33,6 +33,7 @@ object MegaDestinations {
     fun savedSessionDetailRoute(sessionId: String) = "saved_session_detail/$sessionId"
     const val HOW_IT_WORKS = "how_it_works"
     const val SECURITY_MODEL = "security_model"
+    const val SECURITY_VERIFICATION = "security_verification"
     const val PRIVACY = "privacy"
     const val ABOUT = "about"
     const val PIN_ENTRY = "pin_entry"
