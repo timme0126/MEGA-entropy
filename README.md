@@ -18,7 +18,7 @@ Verify the primary release APK before installing:
 
 ```bash
 sha256sum mega-beta-v0.1.10.apk
-# 6316eaf36ade9425c77251f1cf4501461519df8f51bb9446af322a2214332ea0
+# 0a005ad22ccf59aebbd642b91d67283328333ee696085b27f898b6704c7923e6
 ```
 
 This primary build is a **release-type, non-debuggable APK signed with the
