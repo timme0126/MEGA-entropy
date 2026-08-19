@@ -854,7 +854,6 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         composable(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX) {
             val words = advancedModeWords
             val originalPsbtBytes = scannedPsbtBytes
-            val state by structureTxViewModel.uiState.collectAsState()
             if (words != null && originalPsbtBytes != null) {
                 // Same "cancel/back means leave nothing behind" reasoning as
                 // onReviewCancelled above — Back here must not carry a
@@ -869,21 +868,6 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                         navController.popBackStack()
                     }
                 }
-                val builtBytes = state.builtPsbtBytes
-                if (builtBytes != null) {
-                    // Built successfully — overwrite the ORIGINAL scanned
-                    // PSBT (its outputs are discarded entirely; only its
-                    // harvested inputs mattered) and hand off to the EXACT
-                    // SAME review/sign-result screens the ordinary scanned-
-                    // PSBT flow uses, then consume the built bytes so
-                    // recomposition (e.g. a configuration change) doesn't
-                    // re-navigate.
-                    LaunchedEffect(builtBytes) {
-                        scannedPsbtBytes = builtBytes
-                        structureTxViewModel.consumeBuiltPsbt()
-                        navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_REVIEW)
-                    }
-                }
                 StructureTransactionScreen(
                     viewModel = structureTxViewModel,
                     originalPsbtBytes = originalPsbtBytes,
@@ -892,6 +876,18 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     allowScreenshots = allowScreenshots,
                     onBack = { onStructureTxBack() },
                     onScanDestinationXpub = { navController.navigate(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX_SCAN) },
+                    onStructured = { builtBytes ->
+                        // The user has already reviewed the index/amount
+                        // preview on StructureTransactionScreen and tapped
+                        // "Continue to Review" — overwrite the ORIGINAL
+                        // scanned PSBT (its outputs were discarded entirely;
+                        // only its harvested inputs mattered) and hand off
+                        // to the EXACT SAME review/sign-result screens the
+                        // ordinary scanned-PSBT flow uses.
+                        scannedPsbtBytes = builtBytes
+                        structureTxViewModel.consumeBuiltPsbt()
+                        navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_REVIEW)
+                    },
                 )
             } else {
                 LaunchedEffect(Unit) {

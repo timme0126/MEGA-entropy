@@ -19,6 +19,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import org.mega.entropy.ui.advancedmode.PsbtAsyncState
@@ -35,6 +36,8 @@ import org.mega.entropycore.HarvestedPsbtInputs
 import org.mega.entropycore.WalletNetwork
 import org.mega.entropycore.harvestOwnedInputsForStructuring
 
+private fun formatBtc(sats: Long): String = "%.8f".format(sats / 100_000_000.0)
+
 /**
  * "Structure a Transaction" — the second half of "Sign PSBT" when its
  * "Structure this transaction" checkbox was checked on the Hub. The PSBT
@@ -44,8 +47,12 @@ import org.mega.entropycore.harvestOwnedInputsForStructuring
  * never signed as-is: its real input(s) are harvested here
  * (harvestOwnedInputsForStructuring — no manual txid/vout/amount entry),
  * its original outputs are discarded, and new split outputs are built
- * instead. The result then flows into the SAME review → sign → result
- * screens the ordinary "Sign PSBT" flow uses.
+ * instead, ending with the FULL leftover balance always going to the
+ * next sequential destination index (see StructureTransactionViewModel's
+ * own doc — no separate change address). Once built, every output's
+ * index/amount is shown here for one explicit confirmation before the
+ * result flows into the SAME review → sign → result screens the ordinary
+ * "Sign PSBT" flow uses.
  */
 @Composable
 fun StructureTransactionScreen(
@@ -56,6 +63,7 @@ fun StructureTransactionScreen(
     allowScreenshots: Boolean,
     onBack: () -> Unit,
     onScanDestinationXpub: () -> Unit,
+    onStructured: (ByteArray) -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
     val state by viewModel.uiState.collectAsState()
@@ -74,7 +82,40 @@ fun StructureTransactionScreen(
     MegaInfoScaffold(title = "Structure a Transaction", onBack = onBack) {
         MegaPassphraseCard(passphrase)
 
+        val builtBytes = state.builtPsbtBytes
         when {
+            builtBytes != null -> {
+                // Built — require an explicit look at exactly what will be
+                // signed (every index and amount, including the leftover)
+                // before handing off to review/sign, rather than silently
+                // auto-advancing.
+                MegaCard(title = "Structured — ${state.outputPreview.size} output(s)") {
+                    Text(
+                        "Review every index and amount below against your destination wallet before continuing.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                state.outputPreview.forEach { output ->
+                    MegaCard {
+                        Text(
+                            text = if (output.isRemainder) {
+                                "Remaining balance — index ${output.derivationIndex}"
+                            } else {
+                                "Split output — index ${output.derivationIndex}"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        MegaMonoText("${formatBtc(output.amountSats)} BTC")
+                    }
+                }
+                MegaPrimaryButton(text = "Continue to Review", onClick = { onStructured(builtBytes) })
+                MegaSecondaryButton(
+                    text = "Back to Edit",
+                    onClick = { viewModel.consumeBuiltPsbt() },
+                )
+            }
             harvestResult == null -> {
                 MegaCard(title = "Reading Scanned Transaction") {
                     CircularProgressIndicator()
@@ -95,12 +136,14 @@ fun StructureTransactionScreen(
                 val harvested = harvestResult.getOrThrow()
                 MegaCard(title = "Source (from scanned transaction)") {
                     Text(
-                        "${harvested.inputs.size} input(s) found, totaling ${"%.8f".format(harvested.totalAmountSats / 100_000_000.0)} BTC.",
+                        "${harvested.inputs.size} input(s) found, totaling ${formatBtc(harvested.totalAmountSats)} BTC.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     MegaMonoText("Account ${harvested.account} · ${if (harvested.network == WalletNetwork.MAINNET) "Mainnet" else "Testnet"}")
                     Text(
-                        "This transaction's own outputs will be discarded and replaced by the split below.",
+                        "This transaction's own outputs will be discarded and replaced by the split below. " +
+                            "Any leftover after the largest possible number of equal-sized outputs is added as one " +
+                            "more output at the next index — nothing is left behind as change.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -141,17 +184,8 @@ fun StructureTransactionScreen(
                     OutlinedTextField(
                         value = state.startReceiveIndex,
                         onValueChange = viewModel::setStartReceiveIndex,
-                        label = { Text("Starting receive-address index for the split outputs") },
-                        supportingText = { Text("E.g. 0 fills indices 0..N-1; 9 fills 10..N+9, skipping 0-9") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = state.changeIndex,
-                        onValueChange = viewModel::setChangeIndex,
-                        label = { Text("Change-address index") },
-                        supportingText = { Text("Use the next unused CHANGE index shown under Addresses in Sparrow") },
+                        label = { Text("Starting receive-address index") },
+                        supportingText = { Text("E.g. 0 fills indices 0..N; 9 fills 10..N+9, skipping 0-9. The final index also gets any leftover balance.") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
@@ -191,10 +225,20 @@ fun StructureTransactionScreen(
                     }
                 }
 
-                MegaPrimaryButton(
-                    text = "Structure Transaction",
-                    onClick = { viewModel.structureTransaction(originalPsbtBytes, mnemonicWords, passphrase) },
-                )
+                if (state.isBuilding) {
+                    MegaCard(title = "Structuring Transaction") {
+                        CircularProgressIndicator()
+                        Text(
+                            "Deriving addresses for every output — this can take a moment for a large split.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                } else {
+                    MegaPrimaryButton(
+                        text = "Structure Transaction",
+                        onClick = { viewModel.structureTransaction(originalPsbtBytes, mnemonicWords, passphrase) },
+                    )
+                }
                 MegaSecondaryButton(text = "Cancel", onClick = onBack)
             }
         }
