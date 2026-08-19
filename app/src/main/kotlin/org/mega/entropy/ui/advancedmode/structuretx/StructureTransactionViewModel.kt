@@ -46,6 +46,11 @@ enum class RemainderDestination {
 data class StructuredOutputPreview(
     val derivationIndex: Int,
     val amountSats: Long,
+    /** The actual derived address for this output — computed and shown
+     * here, not just its index, so it's directly checkable against
+     * Sparrow (or wherever the change/destination address is expected to
+     * land) before continuing to review. */
+    val address: String,
     /** True only for the trailing leftover-clearing output, whichever
      * form it took — see [RemainderDestination]. */
     val isRemainder: Boolean,
@@ -242,14 +247,14 @@ class StructureTransactionViewModel : ViewModel() {
                 null
             }
             PsbtOutputPlan(amountSats = amount, scriptPubKey = derived.scriptPubKey, changeDerivation = changeDerivation) to
-                StructuredOutputPreview(derivationIndex = index, amountSats = amount, isRemainder = isRemainder)
+                StructuredOutputPreview(derivationIndex = index, amountSats = amount, address = derived.address, isRemainder = isRemainder)
         }
 
         val sourceChangeOutputWithPreview = if (hasRemainder && !sweepsRemainder) {
             val changeIndex = state.changeIndex.toIntOrNull() ?: throw IllegalArgumentException("Enter a valid change-address index.")
             val change = deriveWalletAddress(mnemonicWords, passphrase, network, account, chain = 1, index = changeIndex)
             PsbtOutputPlan(amountSats = remainderSats, scriptPubKey = change.scriptPubKey, changeDerivation = change.derivation) to
-                StructuredOutputPreview(derivationIndex = changeIndex, amountSats = remainderSats, isRemainder = true)
+                StructuredOutputPreview(derivationIndex = changeIndex, amountSats = remainderSats, address = change.address, isRemainder = true)
         } else {
             null
         }

@@ -90,6 +90,24 @@ private data class PendingAdvancedModeSave(
     val childSeedInfo: String = "",
 )
 
+/**
+ * Deterministically lands on ADVANCED_MODE_HUB, however deep the current
+ * back stack is below it — after Sign PSBT or Structure a Transaction,
+ * that can be several screens deep (scan, structure params, review, sign
+ * result). Pops any existing HUB entry and everything above it, then
+ * pushes one fresh entry, rather than relying on
+ * popBackStack(route, inclusive) with a single-pop fallback if the route
+ * match doesn't behave as expected — the fallback's "pop just one" can
+ * land on whatever the immediately-preceding screen happens to be, not
+ * necessarily HUB.
+ */
+private fun NavHostController.returnToAdvancedModeHub() {
+    navigate(MegaDestinations.ADVANCED_MODE_HUB) {
+        popUpTo(MegaDestinations.ADVANCED_MODE_HUB) { inclusive = true }
+        launchSingleTop = true
+    }
+}
+
 @Composable
 fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     // Both Activity-scoped (no back-stack-entry override), so they survive
@@ -704,10 +722,15 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                         advancedModeWalletPassphrase = passphrase
                         navController.navigate(MegaDestinations.ADVANCED_MODE_WALLET)
                     },
-                    onSignPsbt = { passphrase, structureTransaction ->
+                    onSignPsbt = { passphrase ->
                         advancedModePsbtPassphrase = passphrase
-                        advancedModeStructureAfterScan = structureTransaction
-                        if (structureTransaction) structureTxViewModel.reset()
+                        advancedModeStructureAfterScan = false
+                        navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_SCAN)
+                    },
+                    onStructureTransaction = { passphrase ->
+                        advancedModePsbtPassphrase = passphrase
+                        advancedModeStructureAfterScan = true
+                        structureTxViewModel.reset()
                         navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_SCAN)
                     },
                     onSaveAsSession = { label ->
@@ -800,9 +823,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     scannedPsbtBytes = null
                     advancedModePsbtPassphrase = ""
                     advancedModeStructureAfterScan = false
-                    if (!navController.popBackStack(MegaDestinations.ADVANCED_MODE_HUB, inclusive = false)) {
-                        navController.popBackStack()
-                    }
+                    navController.returnToAdvancedModeHub()
                 }
                 PsbtReviewScreen(
                     psbtBytes = psbtBytes,
@@ -833,9 +854,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     scannedPsbtBytes = null
                     advancedModePsbtPassphrase = ""
                     advancedModeStructureAfterScan = false
-                    if (!navController.popBackStack(MegaDestinations.ADVANCED_MODE_HUB, inclusive = false)) {
-                        navController.popBackStack()
-                    }
+                    navController.returnToAdvancedModeHub()
                 }
                 PsbtSignResultScreen(
                     psbtBytes = psbtBytes,
@@ -864,9 +883,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     advancedModePsbtPassphrase = ""
                     advancedModeStructureAfterScan = false
                     structureTxViewModel.reset()
-                    if (!navController.popBackStack(MegaDestinations.ADVANCED_MODE_HUB, inclusive = false)) {
-                        navController.popBackStack()
-                    }
+                    navController.returnToAdvancedModeHub()
                 }
                 StructureTransactionScreen(
                     viewModel = structureTxViewModel,

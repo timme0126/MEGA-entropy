@@ -110,6 +110,7 @@ fun StructureTransactionScreen(
                             fontWeight = FontWeight.SemiBold,
                         )
                         MegaMonoText("${formatBtc(output.amountSats)} BTC")
+                        MegaMonoText(output.address)
                     }
                 }
                 MegaPrimaryButton(text = "Continue to Review", onClick = { onStructured(builtBytes) })

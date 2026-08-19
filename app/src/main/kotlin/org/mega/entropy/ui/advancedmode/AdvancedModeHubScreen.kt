@@ -4,17 +4,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,17 +64,19 @@ fun AdvancedModeHubScreen(
     onBack: () -> Unit,
     onBip85: (passphrase: String) -> Unit,
     onWalletKeys: (passphrase: String) -> Unit,
-    // [structureTransaction] reflects the "Structure this transaction"
-    // checkbox at the moment Sign PSBT is tapped: false is the ordinary
-    // scan → review → sign flow (unchanged); true means the scanned PSBT
-    // is treated as a source of real, already-chain-known inputs to
-    // restructure with new split outputs instead of signing as-is — see
-    // StructureTransactionScreen for why this is the only practical way
-    // to build a split transaction without MEGA needing blockchain access
-    // itself (the user builds an ordinary transaction in Sparrow first,
-    // which already knows the exact UTXOs; MEGA harvests them from the
-    // scan rather than asking the user to type txid/vout/amount by hand).
-    onSignPsbt: (passphrase: String, structureTransaction: Boolean) -> Unit,
+    // Ordinary scan → review → sign flow: signs the PSBT exactly as
+    // scanned.
+    onSignPsbt: (passphrase: String) -> Unit,
+    // A separate entry point rather than a checkbox modifying Sign PSBT's
+    // behavior — the scanned PSBT is treated as a source of real, already
+    // chain-known inputs to restructure with new split outputs instead of
+    // signing as-is. See StructureTransactionScreen for why scanning is
+    // still how this starts: it's the only practical way to build a split
+    // transaction without MEGA needing blockchain access itself (the user
+    // builds an ordinary transaction in Sparrow first, which already
+    // knows the exact UTXOs; MEGA harvests them from the scan rather than
+    // asking the user to type txid/vout/amount by hand).
+    onStructureTransaction: (passphrase: String) -> Unit,
     // Only the words are ever saved — never the passphrase typed below,
     // matching every other saved session in the app. label comes from the
     // dialog opened by the top-right save icon.
@@ -91,7 +90,6 @@ fun AdvancedModeHubScreen(
     var revealedSeed by remember { mutableStateOf<Bip39Seed?>(null) }
     var confirmingSave by remember { mutableStateOf(false) }
     var wordsRevealed by remember { mutableStateOf(false) }
-    var structureTransaction by remember { mutableStateOf(false) }
 
     MegaInfoScaffold(
         title = "Advanced Mode",
@@ -197,14 +195,8 @@ fun AdvancedModeHubScreen(
 
         MegaPrimaryButton(text = "Derive Wallet Public Keys", onClick = { onWalletKeys(passphrase) })
         MegaPrimaryButton(text = "Derive BIP85 Child Mnemonic", onClick = { onBip85(passphrase) })
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = structureTransaction, onCheckedChange = { structureTransaction = it })
-            Text(
-                "Structure this transaction (split into equal UTXOs) before signing",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        MegaPrimaryButton(text = "Sign PSBT", onClick = { onSignPsbt(passphrase, structureTransaction) })
+        MegaPrimaryButton(text = "Sign PSBT", onClick = { onSignPsbt(passphrase) })
+        MegaPrimaryButton(text = "Structure a Transaction", onClick = { onStructureTransaction(passphrase) })
 
         val seed = revealedSeed
         if (seed == null) {
