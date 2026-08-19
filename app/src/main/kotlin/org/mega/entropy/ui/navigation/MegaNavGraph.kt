@@ -150,12 +150,14 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     // left via its own Done button.
     var advancedModePsbtPassphrase by remember { mutableStateOf("") }
     var scannedPsbtBytes by remember { mutableStateOf<ByteArray?>(null) }
-    // Same role as advancedModePsbtPassphrase, for ADVANCED_MODE_STRUCTURE_TX
-    // on its way to ADVANCED_MODE_PSBT_REVIEW / ADVANCED_MODE_PSBT_SIGN_RESULT
-    // — a freshly-built PSBT is handed to those same two screens via
-    // scannedPsbtBytes above, so no separate carrier is needed for the bytes
-    // themselves, only for the passphrase used to build (and later sign) it.
-    var advancedModeStructureTxPassphrase by remember { mutableStateOf("") }
+    // Set from the Hub's "Structure this transaction" checkbox at the
+    // moment Sign PSBT is tapped — read once the scan completes to decide
+    // whether to route to ADVANCED_MODE_STRUCTURE_TX (harvest the scanned
+    // PSBT's real inputs and rebuild its outputs) or straight to
+    // ADVANCED_MODE_PSBT_REVIEW as before. Uses advancedModePsbtPassphrase
+    // above for both building and (later) signing — one flow, one
+    // passphrase, no separate carrier needed.
+    var advancedModeStructureAfterScan by remember { mutableStateOf(false) }
     // Words (plus the source session's label) on their way from
     // ADVANCED_MODE_MULTISIG_COSIGNER_PICKER to
     // ADVANCED_MODE_MULTISIG_DERIVE_COSIGNER — a separate, narrowly-scoped
@@ -702,14 +704,11 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                         advancedModeWalletPassphrase = passphrase
                         navController.navigate(MegaDestinations.ADVANCED_MODE_WALLET)
                     },
-                    onSignPsbt = { passphrase ->
+                    onSignPsbt = { passphrase, structureTransaction ->
                         advancedModePsbtPassphrase = passphrase
+                        advancedModeStructureAfterScan = structureTransaction
+                        if (structureTransaction) structureTxViewModel.reset()
                         navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_SCAN)
-                    },
-                    onStructureTransaction = { passphrase ->
-                        advancedModeStructureTxPassphrase = passphrase
-                        structureTxViewModel.reset()
-                        navController.navigate(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX)
                     },
                     onSaveAsSession = { label ->
                         coroutineScope.launch { saveAdvancedModeSession(words, label) }
@@ -776,9 +775,17 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onScanned = { bytes ->
                     // Scanning alone must never sign anything — this always
                     // lands on the review/confirmation step next, never
-                    // directly on the screen that actually signs.
+                    // directly on the screen that actually signs. When the
+                    // Hub's "Structure this transaction" checkbox was
+                    // checked, the scanned PSBT is treated as a source of
+                    // real inputs to restructure (ADVANCED_MODE_STRUCTURE_TX)
+                    // rather than something to review/sign as-is.
                     scannedPsbtBytes = bytes
-                    navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_REVIEW)
+                    if (advancedModeStructureAfterScan) {
+                        navController.navigate(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX)
+                    } else {
+                        navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_REVIEW)
+                    }
                 },
             )
         }
@@ -792,6 +799,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 fun onReviewCancelled() {
                     scannedPsbtBytes = null
                     advancedModePsbtPassphrase = ""
+                    advancedModeStructureAfterScan = false
                     if (!navController.popBackStack(MegaDestinations.ADVANCED_MODE_HUB, inclusive = false)) {
                         navController.popBackStack()
                     }
@@ -824,6 +832,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 fun onDone() {
                     scannedPsbtBytes = null
                     advancedModePsbtPassphrase = ""
+                    advancedModeStructureAfterScan = false
                     if (!navController.popBackStack(MegaDestinations.ADVANCED_MODE_HUB, inclusive = false)) {
                         navController.popBackStack()
                     }
@@ -844,33 +853,42 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         }
         composable(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX) {
             val words = advancedModeWords
+            val originalPsbtBytes = scannedPsbtBytes
             val state by structureTxViewModel.uiState.collectAsState()
-            if (words != null) {
+            if (words != null && originalPsbtBytes != null) {
                 // Same "cancel/back means leave nothing behind" reasoning as
                 // onReviewCancelled above — Back here must not carry a
-                // half-filled form back to the Hub.
+                // half-filled form (or the original scanned PSBT) back to
+                // the Hub.
                 fun onStructureTxBack() {
-                    advancedModeStructureTxPassphrase = ""
+                    scannedPsbtBytes = null
+                    advancedModePsbtPassphrase = ""
+                    advancedModeStructureAfterScan = false
                     structureTxViewModel.reset()
-                    navController.popBackStack()
+                    if (!navController.popBackStack(MegaDestinations.ADVANCED_MODE_HUB, inclusive = false)) {
+                        navController.popBackStack()
+                    }
                 }
                 val builtBytes = state.builtPsbtBytes
                 if (builtBytes != null) {
-                    // Built successfully — hand off to the EXACT SAME review/
-                    // sign-result screens the scanned-PSBT flow uses, then
-                    // consume the built bytes so recomposition (e.g. a
-                    // configuration change) doesn't re-navigate.
+                    // Built successfully — overwrite the ORIGINAL scanned
+                    // PSBT (its outputs are discarded entirely; only its
+                    // harvested inputs mattered) and hand off to the EXACT
+                    // SAME review/sign-result screens the ordinary scanned-
+                    // PSBT flow uses, then consume the built bytes so
+                    // recomposition (e.g. a configuration change) doesn't
+                    // re-navigate.
                     LaunchedEffect(builtBytes) {
                         scannedPsbtBytes = builtBytes
-                        advancedModePsbtPassphrase = advancedModeStructureTxPassphrase
                         structureTxViewModel.consumeBuiltPsbt()
                         navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_REVIEW)
                     }
                 }
                 StructureTransactionScreen(
                     viewModel = structureTxViewModel,
+                    originalPsbtBytes = originalPsbtBytes,
                     mnemonicWords = words,
-                    passphrase = advancedModeStructureTxPassphrase,
+                    passphrase = advancedModePsbtPassphrase,
                     allowScreenshots = allowScreenshots,
                     onBack = { onStructureTxBack() },
                     onScanDestinationXpub = { navController.navigate(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX_SCAN) },

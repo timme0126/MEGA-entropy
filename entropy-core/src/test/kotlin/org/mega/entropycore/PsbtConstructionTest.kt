@@ -252,5 +252,95 @@ class PsbtConstructionTest {
         assertTrue(Math.abs(summary.estimatedFeeRateSatsPerVByte!! - targetFeeRate) < 0.05)
     }
 
+    // -------------------------------------------------------------------
+    // harvestOwnedInputsForStructuring / restructurePsbt — the primary
+    // "Structure a Transaction" path: scan an ordinary PSBT a real
+    // watch-only wallet (Sparrow) built, harvest its real input(s), then
+    // replace its outputs entirely.
+    // -------------------------------------------------------------------
+
+    /** A PSBT shaped exactly like what scanning a Sparrow-built transaction
+     * would produce: one real P2WPKH input (witness_utxo + bip32_derivation
+     * for the test seed) and one arbitrary output Sparrow chose — built via
+     * the already-verified buildUnsignedPsbt rather than hand-assembled, so
+     * this fixture is itself known-good. */
+    private fun sparrowLikeFixturePsbt(): ByteArray {
+        val source = deriveWalletAddress(TEST_WORDS, TEST_PASSPHRASE, WalletNetwork.MAINNET, account = 0, chain = 0, index = 0)
+        return buildUnsignedPsbt(
+            inputs = listOf(
+                PsbtInputPlan(
+                    txid = "aa".repeat(32),
+                    vout = 1L,
+                    amountSats = 500_000L,
+                    scriptPubKey = source.scriptPubKey,
+                    derivation = source.derivation,
+                ),
+            ),
+            outputs = listOf(PsbtOutputPlan(amountSats = 499_000L, scriptPubKey = ByteArray(22) { 0 })),
+            rbf = false,
+        )
+    }
+
+    @Test
+    fun `harvestOwnedInputsForStructuring extracts the real input and infers account and network`() {
+        val fixture = sparrowLikeFixturePsbt()
+        val harvested = harvestOwnedInputsForStructuring(fixture, TEST_WORDS, TEST_PASSPHRASE)
+
+        assertEquals(1, harvested.inputs.size)
+        assertEquals(500_000L, harvested.inputs.single().amountSats)
+        assertEquals(SCRIPT_PUBKEY_HEX, harvested.inputs.single().scriptPubKey.toHex())
+        assertEquals(EXPECTED_PUBKEY_HEX, harvested.inputs.single().derivation.pubkey.toHex())
+        assertEquals(WalletNetwork.MAINNET, harvested.network)
+        assertEquals(0, harvested.account)
+        assertEquals(500_000L, harvested.totalAmountSats)
+        // txid/vout carried forward unchanged from the scanned PSBT.
+        assertEquals(1L, harvested.inputs.single().txIn.previousVout)
+        assertTrue(harvested.inputs.single().txIn.previousTxid.contentEquals("aa".repeat(32).let { s -> s.chunked(2).map { it.toInt(16).toByte() }.toByteArray() }.reversedArray()))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `harvestOwnedInputsForStructuring rejects a PSBT whose input belongs to a different seed`() {
+        // A different, valid, well-known BIP39 test mnemonic (from the
+        // official BIP39 reference test vectors) — a seed this fixture was
+        // NOT built for, so no bip32_derivation entry matches its fingerprint.
+        val otherWords = "legal winner thank year wave sausage worth useful legal winner thank yellow".split(" ")
+        harvestOwnedInputsForStructuring(sparrowLikeFixturePsbt(), otherWords, TEST_PASSPHRASE)
+    }
+
+    @Test
+    fun `restructurePsbt replaces the outputs and signs to a valid finalized transaction`() {
+        val fixture = sparrowLikeFixturePsbt()
+        val harvested = harvestOwnedInputsForStructuring(fixture, TEST_WORDS, TEST_PASSPHRASE)
+
+        val newDestination = deriveWalletAddress(TEST_WORDS, TEST_PASSPHRASE, WalletNetwork.MAINNET, account = 0, chain = 0, index = 5)
+        val restructuredBytes = restructurePsbt(
+            harvested,
+            outputs = listOf(PsbtOutputPlan(amountSats = 450_000L, scriptPubKey = newDestination.scriptPubKey)),
+            rbf = true,
+        )
+
+        // Same input as the original scan (Sparrow's chosen UTXO), but a
+        // completely different output than what Sparrow originally proposed.
+        val restructuredTx = parsePsbt(restructuredBytes).unsignedTx
+        assertEquals(1, restructuredTx.outputs.size)
+        assertEquals(450_000L, restructuredTx.outputs.single().valueSats)
+        assertTrue(restructuredTx.outputs.single().scriptPubKey.contentEquals(newDestination.scriptPubKey))
+        assertEquals(0xFFFFFFFDL, restructuredTx.inputs.single().sequence) // rbf = true
+        assertTrue(restructuredTx.inputs.single().previousTxid.contentEquals(parsePsbt(fixture).unsignedTx.inputs.single().previousTxid))
+
+        val signed = signAndFinalizePsbt(restructuredBytes, TEST_WORDS, TEST_PASSPHRASE)
+        assertTrue(isPsbtFullyFinalized(signed))
+        assertTrue(extractFinalTransactionHex(signed) != null)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `restructurePsbt rejects a harvested input list with a duplicate outpoint`() {
+        val fixture = sparrowLikeFixturePsbt()
+        val harvested = harvestOwnedInputsForStructuring(fixture, TEST_WORDS, TEST_PASSPHRASE)
+        val duplicated = harvested.copy(inputs = harvested.inputs + harvested.inputs)
+
+        restructurePsbt(duplicated, listOf(PsbtOutputPlan(amountSats = 100L, scriptPubKey = ByteArray(22) { 0 })), rbf = false)
+    }
+
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it.toInt() and 0xFF) }
 }
