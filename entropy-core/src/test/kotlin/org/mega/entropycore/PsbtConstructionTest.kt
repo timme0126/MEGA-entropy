@@ -292,6 +292,7 @@ class PsbtConstructionTest {
         assertEquals(EXPECTED_PUBKEY_HEX, harvested.inputs.single().derivation.pubkey.toHex())
         assertEquals(WalletNetwork.MAINNET, harvested.network)
         assertEquals(0, harvested.account)
+        assertTrue(!harvested.hasUnverifiedOriginFingerprint)
         assertEquals(500_000L, harvested.totalAmountSats)
         // txid/vout carried forward unchanged from the scanned PSBT.
         assertEquals(1L, harvested.inputs.single().txIn.previousVout)
@@ -305,6 +306,37 @@ class PsbtConstructionTest {
         // NOT built for, so no bip32_derivation entry matches its fingerprint.
         val otherWords = "legal winner thank year wave sausage worth useful legal winner thank yellow".split(" ")
         harvestOwnedInputsForStructuring(sparrowLikeFixturePsbt(), otherWords, TEST_PASSPHRASE)
+    }
+
+    @Test
+    fun `harvestOwnedInputsForStructuring accepts an unrecorded (00000000) origin fingerprint when the derived pubkey matches`() {
+        // Some watch-only imports (e.g. a bare xpub pasted without its
+        // [fingerprint/path] origin) never record a real master
+        // fingerprint — Sparrow then writes the 00000000 placeholder
+        // instead. This must still be accepted: the pubkey/path are the
+        // real, correct ones for this seed, so derivedPubkeyMatchesClaimed
+        // proves ownership independently of the (missing) fingerprint.
+        val source = deriveWalletAddress(TEST_WORDS, TEST_PASSPHRASE, WalletNetwork.MAINNET, account = 0, chain = 0, index = 0)
+        val placeholderDerivation = source.derivation.copy(masterFingerprint = ByteArray(4))
+        val fixture = buildUnsignedPsbt(
+            inputs = listOf(
+                PsbtInputPlan(
+                    txid = "bb".repeat(32),
+                    vout = 0L,
+                    amountSats = 250_000L,
+                    scriptPubKey = source.scriptPubKey,
+                    derivation = placeholderDerivation,
+                ),
+            ),
+            outputs = listOf(PsbtOutputPlan(amountSats = 249_000L, scriptPubKey = ByteArray(22) { 0 })),
+            rbf = false,
+        )
+
+        val harvested = harvestOwnedInputsForStructuring(fixture, TEST_WORDS, TEST_PASSPHRASE)
+
+        assertEquals(1, harvested.inputs.size)
+        assertEquals(EXPECTED_PUBKEY_HEX, harvested.inputs.single().derivation.pubkey.toHex())
+        assertTrue(harvested.hasUnverifiedOriginFingerprint)
     }
 
     @Test

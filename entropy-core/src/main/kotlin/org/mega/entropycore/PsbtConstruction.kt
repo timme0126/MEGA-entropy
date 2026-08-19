@@ -281,6 +281,12 @@ data class HarvestedPsbtInputs(
     val inputs: List<HarvestedPsbtInput>,
     val network: WalletNetwork,
     val account: Int,
+    /** True if ANY input matched this device's key only via the unrecorded
+     * (00000000) origin-fingerprint placeholder plus a verified derived-
+     * pubkey match — see [harvestOwnedInputsForStructuring]'s own doc. The
+     * caller should surface this, the same way PsbtSignResultScreen's
+     * "Unverified Master Fingerprint" notice does for plain signing. */
+    val hasUnverifiedOriginFingerprint: Boolean,
 ) {
     val totalAmountSats: Long get() = checkedSumSats(inputs.map { it.amountSats }, "Total harvested input amount")
 }
@@ -294,23 +300,32 @@ data class HarvestedPsbtInputs(
  * real inputs here, then replace its outputs with a split/consolidation
  * plan instead of signing what Sparrow originally proposed.
  *
- * Deliberately STRICT — unlike [FingerprintTrustPolicy.ALLOW_UNKNOWN_FINGERPRINT_WITH_KEY_MATCH],
- * which single-seed PSBT *signing* may opt into, every input here must
- * carry a real (non-placeholder) master fingerprint verifiably matching
- * this device's own, cross-checked against the actual derived public key
- * along the claimed path (the fingerprint alone is advisory metadata a
- * coordinator writes, never itself proof — same reasoning as
- * [derivedPubkeyMatchesClaimed]'s other caller, signPsbt). Restructuring
- * silently discards the original outputs entirely, a higher-stakes
- * operation than plain signing, so it doesn't get the relaxed policy.
+ * Accepts the SAME two forms of proof plain PSBT signing does (see
+ * [classifyFingerprintMatch]): a real master fingerprint verifiably
+ * matching this device's own ([FingerprintMatchStatus.VERIFIED_MATCH]),
+ * OR the unrecorded (00000000) placeholder fingerprint PLUS a verified
+ * derived-pubkey match along the claimed path
+ * ([FingerprintMatchStatus.UNKNOWN_FINGERPRINT_PUBKEY_MATCH]) — some
+ * watch-only imports (e.g. a bare xpub pasted without its `[fingerprint/
+ * path]` origin) never get a real fingerprint recorded, and refusing
+ * those outright would refuse the device's own funds. Either way,
+ * [derivedPubkeyMatchesClaimed] is re-checked explicitly as defense in
+ * depth — a VERIFIED_MATCH classification is fingerprint metadata alone,
+ * not itself proof (the same reasoning [derivedPubkeyMatchesClaimed]'s
+ * other caller, signPsbt, already applies). Unlike plain signing, this
+ * relaxation is NOT gated behind an explicit per-signing-attempt
+ * confirmation — [HarvestedPsbtInputs.hasUnverifiedOriginFingerprint]
+ * tells the caller when it was used, to surface informationally, matching
+ * how PsbtSignResultScreen already handles the exact same case for the
+ * ordinary sign flow.
  *
  * Throws [IllegalArgumentException] if: the PSBT has no inputs; any input
- * lacks a resolvable UTXO or a derivation matching this device by both
- * fingerprint AND derived pubkey (mixed-ownership PSBTs — some inputs
- * this device owns, some it doesn't — are refused outright rather than
- * silently dropping the ones it can't sign); or the matched inputs don't
- * all share one account and network (spending across accounts in a
- * single structured transaction is refused rather than guessed at).
+ * lacks a resolvable UTXO or a derivation matching this device by either
+ * accepted form (mixed-ownership PSBTs — some inputs this device owns,
+ * some it doesn't — are refused outright rather than silently dropping
+ * the ones it can't sign); or the matched inputs don't all share one
+ * account and network (spending across accounts in a single structured
+ * transaction is refused rather than guessed at).
  */
 fun harvestOwnedInputsForStructuring(psbtBytes: ByteArray, mnemonicWords: List<String>, passphrase: String): HarvestedPsbtInputs {
     val psbt = parsePsbt(psbtBytes)
@@ -319,21 +334,23 @@ fun harvestOwnedInputsForStructuring(psbtBytes: ByteArray, mnemonicWords: List<S
     val masterKey = bip32MasterKeyFromSeed(deriveSeed(mnemonicWords, passphrase).bytes)
     val myFingerprint = masterKey.fingerprint()
 
+    var sawUnverifiedOriginFingerprint = false
     val harvested = psbt.unsignedTx.inputs.mapIndexed { index, txIn ->
         val inputMap = psbt.inputs[index]
         val utxo = resolveInputUtxo(psbt.unsignedTx, index, inputMap)
             ?: throw IllegalArgumentException(
                 "Input ${index + 1} has no witness_utxo/non_witness_utxo — MEGA cannot determine its amount or script.",
             )
-        val derivation = inputMap.bip32Derivations().find { it.masterFingerprint.contentEquals(myFingerprint) }
-            ?: throw IllegalArgumentException(
-                "Input ${index + 1} has no BIP32 derivation matching this device's key (${myFingerprint.toHex()}) — " +
-                    "every input must belong to the loaded seed for MEGA to restructure this transaction.",
-            )
-        if (!derivedPubkeyMatchesClaimed(derivation, masterKey)) {
-            throw IllegalArgumentException(
-                "Input ${index + 1}'s claimed public key does not match this device's derived key along its stated path.",
-            )
+        val derivation = inputMap.bip32Derivations().find { candidate ->
+            val status = classifyFingerprintMatch(candidate, masterKey)
+            (status == FingerprintMatchStatus.VERIFIED_MATCH || status == FingerprintMatchStatus.UNKNOWN_FINGERPRINT_PUBKEY_MATCH) &&
+                derivedPubkeyMatchesClaimed(candidate, masterKey)
+        } ?: throw IllegalArgumentException(
+            "Input ${index + 1} has no BIP32 derivation matching this device's key (${myFingerprint.toHex()}) — " +
+                "every input must belong to the loaded seed for MEGA to restructure this transaction.",
+        )
+        if (derivation.masterFingerprint.all { it == 0.toByte() }) {
+            sawUnverifiedOriginFingerprint = true
         }
         HarvestedPsbtInput(txIn, utxo.valueSats, utxo.scriptPubKey, derivation)
     }
@@ -357,7 +374,7 @@ fun harvestOwnedInputsForStructuring(psbtBytes: ByteArray, mnemonicWords: List<S
     }.toSet()
     require(accounts.size == 1) { "This transaction's inputs span more than one account — cannot restructure it." }
 
-    return HarvestedPsbtInputs(harvested, networks.single(), accounts.single())
+    return HarvestedPsbtInputs(harvested, networks.single(), accounts.single(), sawUnverifiedOriginFingerprint)
 }
 
 /**

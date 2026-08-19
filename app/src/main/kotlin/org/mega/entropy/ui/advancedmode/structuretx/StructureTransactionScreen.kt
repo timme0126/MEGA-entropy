@@ -106,6 +106,17 @@ fun StructureTransactionScreen(
                     )
                 }
 
+                if (harvested.hasUnverifiedOriginFingerprint) {
+                    MegaCard(title = "Unverified Master Fingerprint") {
+                        Text(
+                            "One or more inputs did not record a master fingerprint (00000000) — MEGA " +
+                                "independently matched the derived public key and path instead.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
                 MegaCard(title = "Split") {
                     OutlinedTextField(
                         value = state.splitAmountBtc,
