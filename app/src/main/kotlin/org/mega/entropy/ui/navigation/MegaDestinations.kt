@@ -36,6 +36,27 @@ object MegaDestinations {
     const val SECURITY_VERIFICATION = "security_verification"
     const val PRIVACY = "privacy"
     const val ABOUT = "about"
+    const val ASSISTANT = "assistant"
+    const val INHERITANCE_PLANNING = "inheritance_planning"
+    const val INHERITANCE_ASSISTANT_CHAT = "inheritance_assistant_chat"
+    const val INHERITANCE_DETAILS = "inheritance_details"
+    const val INHERITANCE_PACKAGE = "inheritance_package"
+    const val INHERITANCE_RECOVERY_MODE = "inheritance_recovery_mode"
+    const val INHERITANCE_REVIEW = "inheritance_review"
+    const val INHERITANCE_REHEARSAL = "inheritance_rehearsal"
+    const val INHERITANCE_PUBLIC_HANDOFF = "inheritance_public_handoff"
+    const val INHERITANCE_DASHBOARD = "inheritance_dashboard"
+    const val INHERITANCE_WIZARD_IDENTITY = "inheritance_wizard_identity"
+    const val INHERITANCE_WIZARD_SITUATIONS = "inheritance_wizard_situations"
+    const val INHERITANCE_WIZARD_ASSETS = "inheritance_wizard_assets"
+    const val INHERITANCE_WIZARD_BITCOIN_ARCHITECTURE_ARG = "assetId"
+    const val INHERITANCE_WIZARD_BITCOIN_ARCHITECTURE = "inheritance_wizard_bitcoin_architecture/{$INHERITANCE_WIZARD_BITCOIN_ARCHITECTURE_ARG}"
+    fun inheritanceWizardBitcoinArchitectureRoute(assetId: String) = "inheritance_wizard_bitcoin_architecture/$assetId"
+    const val INHERITANCE_WIZARD_PEOPLE = "inheritance_wizard_people"
+    const val INHERITANCE_WIZARD_ADVISER = "inheritance_wizard_adviser"
+    const val INHERITANCE_WIZARD_COMPONENTS = "inheritance_wizard_components"
+    const val INHERITANCE_WIZARD_STEPS = "inheritance_wizard_steps"
+    const val INHERITANCE_ESTATE_ALIGNMENT = "inheritance_estate_alignment"
     const val PIN_ENTRY = "pin_entry"
     const val PIN_SETUP = "pin_setup"
     const val PIN_DURESS_SETUP = "pin_duress_setup"
@@ -110,6 +131,24 @@ object MegaDestinations {
      * scanned PSBT and returns to ADVANCED_MODE_HUB, nothing signed. */
     const val ADVANCED_MODE_PSBT_REVIEW = "advanced_mode_psbt_review"
     const val ADVANCED_MODE_PSBT_SIGN_RESULT = "advanced_mode_psbt_sign_result"
+
+    /** "Structure a Transaction" — reachable from ADVANCED_MODE_HUB,
+     * alongside ADVANCED_MODE_PSBT_SCAN: builds (rather than merely
+     * signs) a UTXO-split transaction from manually-entered source UTXOs,
+     * using the already-loaded mnemonic/passphrase. See
+     * StructureTransactionViewModel for the form state (scoped here, not
+     * `remember`ed inside the screen, so it survives the trip out to
+     * ADVANCED_MODE_STRUCTURE_TX_SCAN and back). Once built, the
+     * resulting unsigned PSBT is handed to the SAME
+     * ADVANCED_MODE_PSBT_REVIEW / ADVANCED_MODE_PSBT_SIGN_RESULT screens
+     * the scanned-PSBT flow above uses — no separate review/result routes
+     * needed. */
+    const val ADVANCED_MODE_STRUCTURE_TX = "advanced_mode_structure_tx"
+    /** Camera QR scanner for the Destination Wallet's xpub — reuses
+     * AdvancedModeMultisigScannerScreen unchanged (it already just hands
+     * back arbitrary scanned text), with its own route/state so it
+     * doesn't interfere with ADVANCED_MODE_MULTISIG_SCANNER's. */
+    const val ADVANCED_MODE_STRUCTURE_TX_SCAN = "advanced_mode_structure_tx_scan"
 
     /** "Sign PSBT" for an EXISTING SAVED multisig vault — reachable from
      * SAVED_MULTISIG_VAULT_DETAIL. Distinct from the single-seed

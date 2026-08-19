@@ -172,32 +172,13 @@ fun computePsbtSummary(
     // know the exact witness weight. We calculate it honestly and label it
     // as such so the user understands it's a projection, not a guarantee.
     val estimatedFeeRateSatsPerVByte = feeSats?.takeIf { it >= 0 }?.let { fee ->
-        // Base weight: unsigned transaction bytes * 4 (standard weight unit conversion)
-        val baseWeightUnits = serializeTransaction(psbt.unsignedTx).size * 4
-
-        // Witness weight estimate:
-        // For each input, we estimate the witness size based on the threshold.
-        // Multisig inputs use their parsed threshold * 72 bytes (typical DER sig + sighash).
-        // Non-multisig or unparseable inputs default to 1 * 72 bytes.
-        // Witness data gets a 4x discount in weight, but since we're summing
-        // witness bytes directly into weight units (1 byte witness = 1 weight unit),
-        // we just add them to the base weight.
-        // Iterates psbt.inputs directly by position — NOT via
-        // inputSummaries.indexOf(inputSummary), which would silently
-        // mismatch whenever two inputs happen to produce equal
-        // PsbtInputSummary values (a real risk: e.g. two inputs that both
-        // have amountSats=null, existingSignatureCount=0, cosignerCount=null
-        // are indistinguishable by value, and indexOf would return the
-        // first match for both, double-counting one input's witness
-        // script and skipping the other's).
-        val estimatedWitnessBytes = psbt.inputs.sumOf { inputMap ->
-            val ws = inputMap.witnessScript()
-            val threshold = ws?.let { parseBareMultisigWitnessScript(it)?.first } ?: 1
-            threshold * 72
-        }
-
-        val estimatedWeightUnits = baseWeightUnits + estimatedWitnessBytes
-        val estimatedVBytes = (estimatedWeightUnits + 3) / 4.0
+        // Shared with PsbtConstruction.kt's pre-signing split-fee planner
+        // (estimateSplitTransactionFeeSats) — see estimateTransactionVBytes's
+        // own doc comment for the full weight-estimate rationale. Factored
+        // out so the fee/vsize number the split planner TARGETS and the
+        // number this review screen DISPLAYS for the transaction it actually
+        // built can never silently disagree.
+        val estimatedVBytes = estimateTransactionVBytes(psbt.unsignedTx, psbt.inputs)
 
         // Defensive: avoid division by zero or infinity for malformed/empty txs
         if (estimatedVBytes > 0.0) fee.toDouble() / estimatedVBytes else null
@@ -373,3 +354,38 @@ private fun PsbtBip32Derivation.matchesFingerprint(hex: String): Boolean =
 
 /** Converts a byte array to a lowercase hex string for safe comparison. */
 private fun ByteArray.toLowerHex(): String = joinToString("") { "%02x".format(it) }
+
+/**
+ * Estimates the virtual size (vBytes) of [unsignedTx] once every input in
+ * [inputMaps] (same order, same length — one PsbtMap per input) is
+ * signed. This is explicitly an ESTIMATE, used both here (post-hoc, on an
+ * already-built PSBT) and by PsbtConstruction.kt's
+ * estimateSplitTransactionFeeSats (pre-signing, while planning how many
+ * split outputs fit) — factored into one function so those two numbers
+ * can never silently disagree with each other.
+ *
+ * Base weight is the unsigned (witness-free) transaction's serialized
+ * byte length * 4 (the standard weight-unit conversion). Witness weight
+ * is estimated per input from its threshold — a multisig input's parsed
+ * bare-multisig witness_script threshold * 72 bytes (typical DER
+ * signature + sighash byte), or 1 * 72 bytes for a plain P2WPKH input (no
+ * witness_script) or one whose script isn't a parseable bare-multisig
+ * shape. Witness bytes get a 4x discount in real BIP141 weight, but since
+ * we're summing them directly into weight units (1 witness byte = 1
+ * weight unit here), they're simply added to the base weight as-is.
+ */
+internal fun estimateTransactionVBytes(unsignedTx: Transaction, inputMaps: List<PsbtMap>): Double {
+    val baseWeightUnits = serializeTransaction(unsignedTx).size * 4
+    // Iterates inputMaps directly by position, not by re-deriving a
+    // PsbtInputSummary and matching on it — a match-by-value would
+    // silently mismatch whenever two inputs happen to produce equal
+    // summaries (e.g. two inputs both missing a witness_utxo), double-
+    // counting one input's witness script and skipping the other's.
+    val estimatedWitnessBytes = inputMaps.sumOf { inputMap ->
+        val ws = inputMap.witnessScript()
+        val threshold = ws?.let { parseBareMultisigWitnessScript(it)?.first } ?: 1
+        threshold * 72
+    }
+    val estimatedWeightUnits = baseWeightUnits + estimatedWitnessBytes
+    return (estimatedWeightUnits + 3) / 4.0
+}

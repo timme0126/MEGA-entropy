@@ -42,6 +42,8 @@ import org.mega.entropy.ui.advancedmode.PsbtReviewScreen
 import org.mega.entropy.ui.advancedmode.PsbtScanScreen
 import org.mega.entropy.ui.advancedmode.PsbtSignResultScreen
 import org.mega.entropy.ui.advancedmode.SeedQrScanScreen
+import org.mega.entropy.ui.advancedmode.structuretx.StructureTransactionScreen
+import org.mega.entropy.ui.advancedmode.structuretx.StructureTransactionViewModel
 import org.mega.entropy.ui.advancedmode.multisig.AdvancedModeMultisigDeriveCosignerScreen
 import org.mega.entropy.ui.advancedmode.multisig.AdvancedModeMultisigScannerScreen
 import org.mega.entropy.ui.advancedmode.multisig.AdvancedModeMultisigVaultScreen
@@ -98,6 +100,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     val appLockViewModel: AppLockViewModel = viewModel()
     val diceSessionViewModel: DiceSessionViewModel = viewModel()
     val multisigVaultViewModel: MultisigVaultViewModel = viewModel()
+    val structureTxViewModel: StructureTransactionViewModel = viewModel()
     val context = LocalContext.current
     val pinManager = remember { PinManager(context.filesDir) }
     val repository = remember { SessionRepository(context) }
@@ -147,6 +150,12 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     // left via its own Done button.
     var advancedModePsbtPassphrase by remember { mutableStateOf("") }
     var scannedPsbtBytes by remember { mutableStateOf<ByteArray?>(null) }
+    // Same role as advancedModePsbtPassphrase, for ADVANCED_MODE_STRUCTURE_TX
+    // on its way to ADVANCED_MODE_PSBT_REVIEW / ADVANCED_MODE_PSBT_SIGN_RESULT
+    // — a freshly-built PSBT is handed to those same two screens via
+    // scannedPsbtBytes above, so no separate carrier is needed for the bytes
+    // themselves, only for the passphrase used to build (and later sign) it.
+    var advancedModeStructureTxPassphrase by remember { mutableStateOf("") }
     // Words (plus the source session's label) on their way from
     // ADVANCED_MODE_MULTISIG_COSIGNER_PICKER to
     // ADVANCED_MODE_MULTISIG_DERIVE_COSIGNER — a separate, narrowly-scoped
@@ -697,6 +706,11 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                         advancedModePsbtPassphrase = passphrase
                         navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_SCAN)
                     },
+                    onStructureTransaction = { passphrase ->
+                        advancedModeStructureTxPassphrase = passphrase
+                        structureTxViewModel.reset()
+                        navController.navigate(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX)
+                    },
                     onSaveAsSession = { label ->
                         coroutineScope.launch { saveAdvancedModeSession(words, label) }
                     },
@@ -827,6 +841,55 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     navController.popBackStack()
                 }
             }
+        }
+        composable(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX) {
+            val words = advancedModeWords
+            val state by structureTxViewModel.uiState.collectAsState()
+            if (words != null) {
+                // Same "cancel/back means leave nothing behind" reasoning as
+                // onReviewCancelled above — Back here must not carry a
+                // half-filled form back to the Hub.
+                fun onStructureTxBack() {
+                    advancedModeStructureTxPassphrase = ""
+                    structureTxViewModel.reset()
+                    navController.popBackStack()
+                }
+                val builtBytes = state.builtPsbtBytes
+                if (builtBytes != null) {
+                    // Built successfully — hand off to the EXACT SAME review/
+                    // sign-result screens the scanned-PSBT flow uses, then
+                    // consume the built bytes so recomposition (e.g. a
+                    // configuration change) doesn't re-navigate.
+                    LaunchedEffect(builtBytes) {
+                        scannedPsbtBytes = builtBytes
+                        advancedModePsbtPassphrase = advancedModeStructureTxPassphrase
+                        structureTxViewModel.consumeBuiltPsbt()
+                        navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_REVIEW)
+                    }
+                }
+                StructureTransactionScreen(
+                    viewModel = structureTxViewModel,
+                    mnemonicWords = words,
+                    passphrase = advancedModeStructureTxPassphrase,
+                    allowScreenshots = allowScreenshots,
+                    onBack = { onStructureTxBack() },
+                    onScanDestinationXpub = { navController.navigate(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX_SCAN) },
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.popBackStack()
+                }
+            }
+        }
+        composable(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX_SCAN) {
+            AdvancedModeMultisigScannerScreen(
+                allowScreenshots = allowScreenshots,
+                onBack = { navController.popBackStack() },
+                onScanned = { text ->
+                    structureTxViewModel.onXpubScanned(text)
+                    navController.popBackStack()
+                },
+            )
         }
         composable(MegaDestinations.ADVANCED_MODE_MULTISIG_VAULT) {
             val uiState by multisigVaultViewModel.uiState.collectAsState()
