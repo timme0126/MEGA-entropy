@@ -99,10 +99,12 @@ fun StructureTransactionScreen(
                 state.outputPreview.forEach { output ->
                     MegaCard {
                         Text(
-                            text = if (output.isRemainder) {
-                                "Remaining balance — index ${output.derivationIndex}"
-                            } else {
-                                "Split output — index ${output.derivationIndex}"
+                            text = when {
+                                output.isRemainder && state.remainderDestination == RemainderDestination.SOURCE_CHANGE_ADDRESS ->
+                                    "Remaining balance — change back to Source Wallet, index ${output.derivationIndex}"
+                                output.isRemainder ->
+                                    "Remaining balance — index ${output.derivationIndex}"
+                                else -> "Split output — index ${output.derivationIndex}"
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
@@ -141,9 +143,7 @@ fun StructureTransactionScreen(
                     )
                     MegaMonoText("Account ${harvested.account} · ${if (harvested.network == WalletNetwork.MAINNET) "Mainnet" else "Testnet"}")
                     Text(
-                        "This transaction's own outputs will be discarded and replaced by the split below. " +
-                            "Any leftover after the largest possible number of equal-sized outputs is added as one " +
-                            "more output at the next index — nothing is left behind as change.",
+                        "This transaction's own outputs will be discarded and replaced by the split below.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -185,11 +185,42 @@ fun StructureTransactionScreen(
                         value = state.startReceiveIndex,
                         onValueChange = viewModel::setStartReceiveIndex,
                         label = { Text("Starting receive-address index") },
-                        supportingText = { Text("E.g. 0 fills indices 0..N; 9 fills 10..N+9, skipping 0-9. The final index also gets any leftover balance.") },
+                        supportingText = { Text("E.g. 0 fills indices 0..N; 9 fills 10..N+9, skipping 0-9") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                     )
+                }
+
+                MegaCard(title = "Remaining Balance") {
+                    Text(
+                        "Where should any leftover go, after the largest possible number of equal-sized outputs?",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    RadioRow(
+                        "Next destination address (sweep — fully clears the source wallet)",
+                        state.remainderDestination == RemainderDestination.SWEEP_TO_NEXT_DESTINATION_INDEX,
+                    ) {
+                        viewModel.setRemainderDestination(RemainderDestination.SWEEP_TO_NEXT_DESTINATION_INDEX)
+                    }
+                    RadioRow(
+                        "Change address in the Source Wallet",
+                        state.remainderDestination == RemainderDestination.SOURCE_CHANGE_ADDRESS,
+                    ) {
+                        viewModel.setRemainderDestination(RemainderDestination.SOURCE_CHANGE_ADDRESS)
+                    }
+                    if (state.remainderDestination == RemainderDestination.SOURCE_CHANGE_ADDRESS) {
+                        OutlinedTextField(
+                            value = state.changeIndex,
+                            onValueChange = viewModel::setChangeIndex,
+                            label = { Text("Change-address index") },
+                            supportingText = { Text("Use the next unused CHANGE index shown under Addresses in Sparrow") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
 
                 MegaCard(title = "Destination Wallet") {

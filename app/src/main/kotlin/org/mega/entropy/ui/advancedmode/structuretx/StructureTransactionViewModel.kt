@@ -23,6 +23,22 @@ private const val DUST_SATS = 546L
 
 enum class DestinationWalletChoice { SAME_AS_SOURCE, ANOTHER_WALLET }
 
+/** Where any leftover after the largest possible number of equal-sized
+ * split outputs goes. */
+enum class RemainderDestination {
+    /** The leftover becomes one more output at the NEXT sequential index
+     * in the destination chain (self or another wallet) — fully clears
+     * the source wallet's balance, nothing left behind in it. */
+    SWEEP_TO_NEXT_DESTINATION_INDEX,
+
+    /** The leftover goes back to an explicit change-address index in the
+     * SOURCE wallet's own internal chain, exactly like an ordinary
+     * Bitcoin transaction's change output — regardless of whether the
+     * split destination is the source wallet itself or a different one,
+     * since only the source wallet's key can ever be proven to own it. */
+    SOURCE_CHANGE_ADDRESS,
+}
+
 /** One output MEGA is about to (or just did) create, shown to the user
  * BEFORE handing off to the review/sign screens — so a starting-index
  * mistake or an unexpectedly-placed remainder is visible and checkable
@@ -30,10 +46,8 @@ enum class DestinationWalletChoice { SAME_AS_SOURCE, ANOTHER_WALLET }
 data class StructuredOutputPreview(
     val derivationIndex: Int,
     val amountSats: Long,
-    /** True only for the trailing leftover-clearing output — see
-     * [StructureTransactionViewModel]'s own doc for why this always goes
-     * to the NEXT sequential destination index rather than a separate
-     * change address. */
+    /** True only for the trailing leftover-clearing output, whichever
+     * form it took — see [RemainderDestination]. */
     val isRemainder: Boolean,
 )
 
@@ -44,6 +58,8 @@ data class StructureTransactionUiState(
     val startReceiveIndex: String = "0",
     val destinationChoice: DestinationWalletChoice = DestinationWalletChoice.SAME_AS_SOURCE,
     val destinationXpub: String = "",
+    val remainderDestination: RemainderDestination = RemainderDestination.SWEEP_TO_NEXT_DESTINATION_INDEX,
+    val changeIndex: String = "0",
     val error: String? = null,
     /** True while [structureTransaction]'s work (harvesting + deriving
      * every output's address, potentially dozens of BIP32 derivations) is
@@ -81,16 +97,15 @@ data class StructureTransactionUiState(
  * deriveAddressFromExtendedPublicKey, estimateSplitTransactionFeeSats,
  * restructurePsbt).
  *
- * There is deliberately NO separate change-address concept here: any
- * leftover after the largest possible number of equal-sized outputs is
- * itself just one more output, at the NEXT sequential index in the same
- * destination chain — whether the destination is the source wallet
- * itself (self-split) or a different one entirely (consolidation into a
- * new wallet). This fully clears the source wallet's balance rather than
- * leaving a residual change output behind in it, and keeps every output
- * — including the leftover — visible as one uniform, ordered list in
- * [StructureTransactionUiState.outputPreview] instead of a separately-
- * tracked "change" that's easy to lose track of.
+ * Any leftover after the largest possible number of equal-sized outputs
+ * goes one of two ways, per [RemainderDestination]: swept into one more
+ * output at the NEXT sequential destination index (the default — fully
+ * clears the source wallet, nothing left behind in it), or back to an
+ * explicit change-address index in the SOURCE wallet, exactly like an
+ * ordinary transaction's change output, for when the source wallet isn't
+ * meant to be fully emptied. Either way it's shown in
+ * [StructureTransactionUiState.outputPreview] before continuing, so it's
+ * never a surprise which form it took.
  */
 class StructureTransactionViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(StructureTransactionUiState())
@@ -102,6 +117,8 @@ class StructureTransactionViewModel : ViewModel() {
     fun setStartReceiveIndex(text: String) = _uiState.update { it.copy(startReceiveIndex = text.filter { c -> c.isDigit() }, error = null) }
     fun setDestinationChoice(choice: DestinationWalletChoice) = _uiState.update { it.copy(destinationChoice = choice, error = null) }
     fun setDestinationXpub(text: String) = _uiState.update { it.copy(destinationXpub = text.trim(), error = null) }
+    fun setRemainderDestination(destination: RemainderDestination) = _uiState.update { it.copy(remainderDestination = destination, error = null) }
+    fun setChangeIndex(text: String) = _uiState.update { it.copy(changeIndex = text.filter { c -> c.isDigit() }, error = null) }
     fun onXpubScanned(text: String) = _uiState.update { it.copy(destinationXpub = text.trim(), error = null) }
     fun consumeBuiltPsbt() = _uiState.update { it.copy(builtPsbtBytes = null, outputPreview = emptyList()) }
     fun clearError() = _uiState.update { it.copy(error = null) }
@@ -193,11 +210,16 @@ class StructureTransactionViewModel : ViewModel() {
         require(chosenSplitCount >= 1) { "Not enough balance to cover $maxSplits×$splitAmountSats sats plus fees at this rate — try a lower split amount or fee rate." }
 
         val hasRemainder = remainderSats > 0L
-        val totalOutputCount = chosenSplitCount + if (hasRemainder) 1 else 0
+        // Only sweep the remainder into the destination sequence when that's
+        // the chosen handling — with SOURCE_CHANGE_ADDRESS, the destination
+        // side is exactly chosenSplitCount outputs, and the remainder is
+        // built separately below as its own source-wallet change output.
+        val sweepsRemainder = hasRemainder && state.remainderDestination == RemainderDestination.SWEEP_TO_NEXT_DESTINATION_INDEX
+        val destinationOutputCount = chosenSplitCount + if (sweepsRemainder) 1 else 0
 
-        val outputsWithPreview = (0 until totalOutputCount).map { offset ->
+        val destinationOutputsWithPreview = (0 until destinationOutputCount).map { offset ->
             val index = startIndex + offset
-            val isRemainder = hasRemainder && offset == chosenSplitCount
+            val isRemainder = sweepsRemainder && offset == chosenSplitCount
             val amount = if (isRemainder) remainderSats else splitAmountSats
             val derived = when (state.destinationChoice) {
                 DestinationWalletChoice.SAME_AS_SOURCE ->
@@ -223,6 +245,16 @@ class StructureTransactionViewModel : ViewModel() {
                 StructuredOutputPreview(derivationIndex = index, amountSats = amount, isRemainder = isRemainder)
         }
 
+        val sourceChangeOutputWithPreview = if (hasRemainder && !sweepsRemainder) {
+            val changeIndex = state.changeIndex.toIntOrNull() ?: throw IllegalArgumentException("Enter a valid change-address index.")
+            val change = deriveWalletAddress(mnemonicWords, passphrase, network, account, chain = 1, index = changeIndex)
+            PsbtOutputPlan(amountSats = remainderSats, scriptPubKey = change.scriptPubKey, changeDerivation = change.derivation) to
+                StructuredOutputPreview(derivationIndex = changeIndex, amountSats = remainderSats, isRemainder = true)
+        } else {
+            null
+        }
+
+        val outputsWithPreview = destinationOutputsWithPreview + listOfNotNull(sourceChangeOutputWithPreview)
         val psbtBytes = restructurePsbt(harvested, outputsWithPreview.map { it.first }, state.rbf)
         return PlanResult(psbtBytes, outputsWithPreview.map { it.second })
     }
