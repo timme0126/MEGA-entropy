@@ -42,6 +42,7 @@ import org.mega.entropy.ui.advancedmode.PsbtReviewScreen
 import org.mega.entropy.ui.advancedmode.PsbtScanScreen
 import org.mega.entropy.ui.advancedmode.PsbtSignResultScreen
 import org.mega.entropy.ui.advancedmode.SeedQrScanScreen
+import org.mega.entropy.ui.advancedmode.structuretx.StructureTransactionDisclaimerScreen
 import org.mega.entropy.ui.advancedmode.structuretx.StructureTransactionScreen
 import org.mega.entropy.ui.advancedmode.structuretx.StructureTransactionViewModel
 import org.mega.entropy.ui.advancedmode.multisig.AdvancedModeMultisigDeriveCosignerScreen
@@ -729,9 +730,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     },
                     onStructureTransaction = { passphrase ->
                         advancedModePsbtPassphrase = passphrase
-                        advancedModeStructureAfterScan = true
-                        structureTxViewModel.reset()
-                        navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_SCAN)
+                        navController.navigate(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX_DISCLAIMER)
                     },
                     onSaveAsSession = { label ->
                         coroutineScope.launch { saveAdvancedModeSession(words, label) }
@@ -790,6 +789,17 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     navController.popBackStack()
                 }
             }
+        }
+        composable(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX_DISCLAIMER) {
+            StructureTransactionDisclaimerScreen(
+                allowScreenshots = allowScreenshots,
+                onBack = { navController.popBackStack() },
+                onContinueToScan = {
+                    advancedModeStructureAfterScan = true
+                    structureTxViewModel.reset()
+                    navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_SCAN)
+                },
+            )
         }
         composable(MegaDestinations.ADVANCED_MODE_PSBT_SCAN) {
             PsbtScanScreen(

@@ -132,14 +132,22 @@ object MegaDestinations {
     const val ADVANCED_MODE_PSBT_REVIEW = "advanced_mode_psbt_review"
     const val ADVANCED_MODE_PSBT_SIGN_RESULT = "advanced_mode_psbt_sign_result"
 
-    /** "Structure a Transaction" — reachable from ADVANCED_MODE_HUB,
-     * alongside ADVANCED_MODE_PSBT_SCAN: builds (rather than merely
-     * signs) a UTXO-split transaction from manually-entered source UTXOs,
-     * using the already-loaded mnemonic/passphrase. See
-     * StructureTransactionViewModel for the form state (scoped here, not
-     * `remember`ed inside the screen, so it survives the trip out to
-     * ADVANCED_MODE_STRUCTURE_TX_SCAN and back). Once built, the
-     * resulting unsigned PSBT is handed to the SAME
+    /** "Structure a Transaction" entry point from ADVANCED_MODE_HUB — a
+     * mandatory acknowledgment before the camera opens: MEGA has no node
+     * connection, so it can only work with whatever UTXOs the scanned PSBT
+     * (built on another, chain-aware device) actually included. See
+     * StructureTransactionDisclaimerScreen. Its "Continue to Scan" is the
+     * only path into ADVANCED_MODE_PSBT_SCAN when structuring — Sign PSBT
+     * still goes there directly, with no disclaimer, since it doesn't
+     * discard/rebuild anything. */
+    const val ADVANCED_MODE_STRUCTURE_TX_DISCLAIMER = "advanced_mode_structure_tx_disclaimer"
+    /** Builds (rather than merely signs) a UTXO-split transaction by
+     * harvesting the scanned PSBT's real inputs — see
+     * harvestOwnedInputsForStructuring (entropy-core) — using the
+     * already-loaded mnemonic/passphrase. See StructureTransactionViewModel
+     * for the form state (scoped here, not `remember`ed inside the screen,
+     * so it survives the trip out to ADVANCED_MODE_STRUCTURE_TX_SCAN and
+     * back). Once built, the resulting unsigned PSBT is handed to the SAME
      * ADVANCED_MODE_PSBT_REVIEW / ADVANCED_MODE_PSBT_SIGN_RESULT screens
      * the scanned-PSBT flow above uses — no separate review/result routes
      * needed. */
