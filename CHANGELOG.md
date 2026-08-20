@@ -1,12 +1,19 @@
 # Changelog
 
-Notable changes to MEGA, most recent first. The current beta build is `v0.1.10` (see [`README.md`](README.md#download-the-beta-apk)).
+Notable changes to MEGA, most recent first. The current beta build is `v0.1.11` (see [`README.md`](README.md#download-the-beta-apk)).
 
-## [Unreleased] — PSBT hotfixes
+## [0.1.11] — 2026-08-20
 
-- Moved PSBT review, diagnostics, and signing off the Compose main thread with cancellable, single-execution workers.
-- Fixed RFC6979 `bits2octets` handling for the secp256k1 boundary where a SHA-256 hash is at or above the curve order.
+### Added
+- **"Structure a Transaction"** (Advanced Mode) — splits a wallet's balance into equal-sized UTXOs entirely offline. MEGA has no blockchain access, so it never asks the user to type a source UTXO's txid/vout/amount by hand: instead, you build an ordinary transaction in a chain-aware watch-only wallet (e.g. Sparrow), scan the resulting PSBT, and MEGA harvests the real inputs directly from it (`harvestOwnedInputsForStructuring`). You choose a split amount, fee rate, RBF on/off, a starting receive-address index, a destination (self-split or another wallet's xpub, scan or paste), and where any leftover balance goes — swept into the next destination address (fully clearing the source wallet) or back to an explicit change address in the source wallet. Before signing, an explicit preview lists every output's derivation index, address, and amount. A mandatory acknowledgment screen, shown before the camera opens, explains that MEGA can only structure a transaction from whatever UTXOs the scanned PSBT actually included — see `docs/STRUCTURE-A-TRANSACTION.md`.
+- Optional Android device security verification screen (Advanced Mode entry), with direct links to relevant device settings.
+
+### Changed
+- Moved PSBT review, diagnostics, and signing off the Compose main thread with cancellable, single-execution workers; the UI now shows an explicit progress state instead of hanging or re-running cryptography during recomposition.
 - Streamlined PSBT signing so fingerprint diagnostics no longer gate the signing flow; the 00000000 origin-fingerprint condition is shown informationally after signing. Added a top-bar Save action for signed PSBT files and placed signed transaction hex below the broadcast QR.
+
+### Fixed
+- Fixed RFC6979 `bits2octets` handling for the secp256k1 boundary where a SHA-256 hash is at or above the curve order, with a regression test.
 
 ## [0.1.10] — 2026-08-13
 

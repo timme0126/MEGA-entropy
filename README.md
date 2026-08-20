@@ -10,15 +10,15 @@ six-sided die rolls, supplied entirely by the user,** into a valid 12- or
 
 ## Download the beta APK
 
-**Current beta:** [`mega-beta-v0.1.10.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.10/mega-beta-v0.1.10.apk)
+**Current beta:** [`mega-beta-v0.1.11.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.11/mega-beta-v0.1.11.apk)
 
-Release page: [`MEGA Beta v0.1.10`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.10)
+Release page: [`MEGA Beta v0.1.11`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.11)
 
 Verify the primary release APK before installing:
 
 ```bash
-sha256sum mega-beta-v0.1.10.apk
-# 0a005ad22ccf59aebbd642b91d67283328333ee696085b27f898b6704c7923e6
+sha256sum mega-beta-v0.1.11.apk
+# a14561e61525ecc8dbb2ad38158f0887ed4868da9830eb41336f8050acf5caba
 ```
 
 This primary build is a **release-type, non-debuggable APK signed with the
@@ -38,11 +38,11 @@ installed`, you likely have a debug-signed build already installed. Use the
 compatibility APK below only to update that older test install without wiping
 local test data:
 
-[`mega-beta-v0.1.9-debug-compat.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.10/mega-beta-v0.1.9-debug-compat.apk)
+[`mega-beta-v0.1.11-debug-compat.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.11/mega-beta-v0.1.11-debug-compat.apk)
 
 ```bash
-sha256sum mega-beta-v0.1.9-debug-compat.apk
-# f45eaa4cd59a13659d70c853538f657b59f3dac8f29ea25f24e2eb30cc276ef7
+sha256sum mega-beta-v0.1.11-debug-compat.apk
+# d7482e11c9c0bf62069c3f470aba45afb056d2ed4d44000990d9888908e74ce0
 ```
 
 For a fresh install, prefer the primary non-debuggable APK above. The
@@ -129,6 +129,11 @@ is available at [`docs/index.html`](docs/index.html).
    `wsh(sortedmulti(...))` descriptor, or a locally scanned QR code. The result is a shareable
    `sortedmulti()` output descriptor and first receive address — public
    keys only, no signing or private-key material anywhere in that flow.
+10. Advanced Mode's "Structure a Transaction" splits a wallet's balance
+    into equal-sized UTXOs entirely offline. Since MEGA has no blockchain
+    access, it harvests the real source UTXOs from a PSBT you scan (built
+    in a chain-aware watch-only wallet like Sparrow) rather than requiring
+    manual entry — see [`docs/STRUCTURE-A-TRANSACTION.md`](docs/STRUCTURE-A-TRANSACTION.md).
 
 ## Building and installing
 
@@ -173,6 +178,8 @@ table.
 | [`docs/STORAGE-DESIGN.md`](docs/STORAGE-DESIGN.md) | How saved sessions are encrypted and stored, and what deletion actually does |
 | [`docs/BUILD-AND-INSTALL.md`](docs/BUILD-AND-INSTALL.md) | Exact tool versions, build commands, ADB install, GrapheneOS notes |
 | [`docs/TEST-VECTORS.md`](docs/TEST-VECTORS.md) | Worked example vectors you can independently re-derive |
+| [`docs/PSBT-SECURITY.md`](docs/PSBT-SECURITY.md) | PSBT signing security model and audit hardening history |
+| [`docs/STRUCTURE-A-TRANSACTION.md`](docs/STRUCTURE-A-TRANSACTION.md) | How "Structure a Transaction" harvests UTXOs from a scanned PSBT and plans a split, entirely offline |
 | [`docs/REPRODUCIBLE-BUILD.md`](docs/REPRODUCIBLE-BUILD.md) | Build verification notes and current reproducibility limits |
 | [`SECURITY.md`](SECURITY.md) | Vulnerability reporting and current audit status |
 | [`PRIVACY.md`](PRIVACY.md) | What MEGA collects (nothing) |
