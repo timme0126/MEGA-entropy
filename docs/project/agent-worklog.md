@@ -196,6 +196,35 @@ review agent (if any), Claude decision, code affected, tests added.
   type added), `AdvancedModeWalletScreen.kt` (doc comment only — the screen
   needed no functional change). Commit `84195b5`.
 
+## Task 9 — Delegated Gate 1 adversarial review: found and fixed a tooling bug
+- **Task:** Adversarial/security review of Schnorr.kt/TapTweak.kt/Bech32.kt
+  (outstanding from Task 6/8), delegated to Agent B (adversarial - edge
+  cases, the TapTweak parity-only-check concern, Bech32 decode
+  completeness) and Agent C (security/threat-model - RNG-boundary audit,
+  Schnorr nonce exfiltration surface, fail-closed audit, address-decode
+  error granularity) in parallel.
+- **Result (first attempt):** Both queries returned an EMPTY response —
+  `/tmp/query_agent.py` crashed writing `None` to the output file.
+- **Root cause found:** these endpoints (sglang/vllm-served Qwen3.6/3.8)
+  emit an extended `reasoning_content` field before the final `content`
+  field. With `max_tokens: 8000`, both requests hit `finish_reason: length`
+  entirely inside the reasoning phase — `content` stayed `null`, `content`
+  was never reached at all. Confirmed by a minimal manual repro (a "reply
+  with just OK" prompt at `max_tokens: 50` reproduced the exact same
+  null-content/length-truncation shape).
+- **This also retroactively explains Task 6's finding** (Agent A's Schnorr
+  implementation attempt truncating after one paragraph) — almost
+  certainly the same root cause, not a separate issue.
+- **Fix:** raised `max_tokens` to 24000 in `/tmp/query_agent.py` and
+  re-launched both queries. Standing practice going forward: any
+  non-trivial delegated task to these endpoints needs a generous
+  `max_tokens` budget (reasoning + answer, not just answer) — 8000 is only
+  safe for short/simple tasks.
+- **Claude decision:** not worth retrying Task 6's Schnorr delegation with
+  the fix now that Schnorr.kt is already implemented and vector-verified
+  directly — the fix matters for THIS review task and any future
+  delegation, not for redoing already-completed work.
+
 ---
 
 ## Delegation prompts on file (for reproducibility)

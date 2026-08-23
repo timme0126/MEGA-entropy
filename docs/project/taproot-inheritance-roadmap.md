@@ -57,23 +57,62 @@ decision, not as future work.
   correctness stakes. Agent B/C adversarial review of Gate 1 as a whole is
   still outstanding — recommended before Gate 2 sign-off, see agent-worklog.md.
 
-## Gate 2 — Taproot PSBT complete
-- BIP371 fields (§ project charter's list) added to Psbt.kt's accessors
-  (no allowlist gate — Gate 0.5 was skipped by user decision, unknown
-  fields continue to pass through as they already do for every other PSBT
-  field type); PsbtFinalization.kt gains a Taproot key-path finalization
-  branch (single-signature witness).
-- **Explicit user requirement (2026-08-23), applies here same as ordinary
-  signing**: an unrecorded/placeholder master fingerprint (`00000000`) in
-  PSBT_IN_TAP_BIP32_DERIVATION must remain acceptable for single-seed
-  Taproot signing, the same as the existing PSBT_BIP32_DERIVATION handling
-  (`a7e78a0`, `bfd3d1c`) already does for non-Taproot inputs — most
-  watch-only wallets don't record it. Do NOT require a verified fingerprint
-  to sign; do surface "Unverified Master Fingerprint" the same way
-  PsbtSignResultScreen already does for the non-Taproot case.
-- Exit criteria: a hand-constructed (or vector-sourced) Taproot PSBT
-  round-trips through parse → sign (key-path) → finalize → matches expected
-  witness bytes.
+## Gate 2 — Taproot PSBT complete ✅ (commit `3cef654`)
+- BIP371 fields added to `Psbt.kt`'s accessors (no allowlist gate — Gate 0.5
+  was skipped by user decision): `PsbtTapBip32Derivation`,
+  `tapInternalKey()`/`tapMerkleRoot()`/`tapKeySig()`/`tapBip32Derivations()`
+  (input), `outputTapInternalKey()`/`outputTapBip32Derivations()` (output).
+  Script-path fields (leaf script, script sig, output tap tree) deliberately
+  left unrecognized-but-passed-through — script-path spending is
+  inheritance-phase work, not this gate.
+- `TaprootSighash.kt`: BIP341 key-path SigMsg/TapSighash, scoped to
+  SIGHASH_DEFAULT (0x00) and SIGHASH_ALL (0x01) only — same restriction the
+  app already applies to non-Taproot signing. **Verified byte-for-byte
+  (sigMsg, sigHash, full sign+verify) against BIP341's own vectors.**
+- `TaprootPsbtSigning.kt` (`signTaprootPsbt`): mirrors `signPsbt`'s
+  structure/security posture. One required structural difference: the
+  Taproot sighash commits to every input's spent amount/scriptPubKey, so
+  every input's UTXO must resolve before ANY Taproot input signs, or none
+  do (documented, tested).
+- **Explicit user requirement (2026-08-23), implemented**: unrecorded
+  (`00000000`) master fingerprint remains signable for Taproot
+  (`classifyTapFingerprintMatch`, sharing `FingerprintMatchStatus`/
+  `FingerprintTrustPolicy` with the existing ECDSA path) — verified in
+  `TaprootPsbtEndToEndTest`, which explicitly checks STRICT policy refuses
+  and `ALLOW_UNKNOWN_FINGERPRINT_WITH_KEY_MATCH` accepts the same PSBT.
+  **Still open**: surfacing "Unverified Master Fingerprint" in the UI the
+  way `PsbtSignResultScreen` already does for non-Taproot — that's UI-layer
+  wiring, not yet done (entropy-core signing/classification is complete;
+  the UI screens haven't been touched for Taproot at all yet — see Gate 2.5
+  below).
+- `PsbtFinalization.kt` gains `finalizeTaprootKeyPathInput`: single-element
+  `[signature]` witness per BIP341, only after independently recomputing
+  the sighash and cryptographically verifying `PSBT_IN_TAP_KEY_SIG`.
+- **Exit criteria met**: `TaprootPsbtEndToEndTest` — a hand-constructed PSBT
+  (built from BIP341's own vector data, carrying an unrecorded fingerprint)
+  round-trips through serialize → parse → sign → finalize, landing on a
+  witness that verifies under BIP341's own output key and sighash.
+
+## Gate 2.5 — UI wiring for Taproot signing (NEW, not yet started)
+Entropy-core now fully supports parsing/signing/finalizing a Taproot
+key-path PSBT input, but **no UI screen calls any of it yet** —
+`PsbtSigning`/`AdvancedModeHubScreen`'s "Sign PSBT" flow still only invokes
+the ECDSA `signPsbt`. Needed before Taproot signing is actually usable from
+the app:
+- `PsbtSignResultScreen`'s "Unverified Master Fingerprint" notice needs to
+  fire for the `UNKNOWN_FINGERPRINT_PUBKEY_MATCH` Taproot case too.
+- Wherever "Sign PSBT" invokes `signPsbt`, it also needs to invoke
+  `signTaprootPsbt` for the same PSBT and merge results (a PSBT could carry
+  a mix of ECDSA and Taproot inputs, or be all-Taproot) — needs a decision
+  on whether to call both unconditionally or detect Taproot inputs first.
+- `PsbtSummary.kt` (the review screen's "what does this PSBT do" display)
+  doesn't yet recognize P2TR outputs/inputs at all — an incoming Taproot
+  PSBT would currently show as unrecognized/generic in review, which is a
+  real gap against "the signer independently parses and displays the
+  transaction."
+- `randomBytes` injection point for `signTaprootPsbt`'s `auxRand` needs an
+  app-module call site (same `SecureRandom` pattern
+  `BackupSharesViewModel` already established).
 
 ## Gate 3 — Wallet Policy abstraction complete
 - `OwnerPolicy`/`RecoveryPolicy`/`Participants`/`Threshold`/`RelativeDelay`/
