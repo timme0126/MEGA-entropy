@@ -15,8 +15,12 @@ package org.mega.entropycore
  * entropy type and length constraints (16 or 32 bytes, matching the two
  * mnemonic lengths [MnemonicEntropy] already supports).
  */
-fun entropyToBackupShares(entropy: MnemonicEntropy, threshold: Int, totalShares: Int): List<BackupShare> =
-    splitSecret(entropy.bytes, threshold, totalShares)
+fun entropyToBackupShares(
+    entropy: MnemonicEntropy,
+    threshold: Int,
+    totalShares: Int,
+    randomBytes: () -> ByteArray,
+): List<BackupShare> = splitSecret(entropy.bytes, threshold, totalShares, randomBytes)
 
 /**
  * Inverse of [entropyToBackupShares]. [expectedByteLength] must be told

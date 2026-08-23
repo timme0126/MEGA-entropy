@@ -11,6 +11,8 @@ class ShamirSecretSharingTest {
 
     private val random = SecureRandom()
 
+    private fun testRandomBytes(): ByteArray = ByteArray(32).also { random.nextBytes(it) }
+
     private fun randomSecret(byteLength: Int): ByteArray {
         val bytes = ByteArray(byteLength)
         random.nextBytes(bytes)
@@ -24,7 +26,7 @@ class ShamirSecretSharingTest {
         for ((threshold, totalShares) in combinations) {
             for (byteLength in byteLengths) {
                 val secret = randomSecret(byteLength)
-                val shares = splitSecret(secret, threshold, totalShares)
+                val shares = splitSecret(secret, threshold, totalShares) { testRandomBytes() }
                 assertEquals(totalShares, shares.size)
                 val recovered = reconstructSecret(shares.take(threshold), byteLength)
                 assertEquals(
@@ -39,7 +41,7 @@ class ShamirSecretSharingTest {
     @Test
     fun `reconstruction succeeds with any qualifying subset, not just the first ones generated`() {
         val secret = randomSecret(32)
-        val shares = splitSecret(secret, threshold = 3, totalShares = 6)
+        val shares = splitSecret(secret, threshold = 3, totalShares = 6) { testRandomBytes() }
 
         val lastThree = shares.takeLast(3)
         assertEquals(secret.toList(), reconstructSecret(lastThree, 32).toList())
@@ -74,13 +76,13 @@ class ShamirSecretSharingTest {
     @Test
     fun `threshold of 1 is rejected at split time`() {
         assertThrows(IllegalArgumentException::class.java) {
-            splitSecret(randomSecret(32), threshold = 1, totalShares = 3)
+            splitSecret(randomSecret(32), threshold = 1, totalShares = 3) { testRandomBytes() }
         }
     }
 
     @Test
     fun `fewer than threshold shares fails loudly rather than reconstructing`() {
-        val shares = splitSecret(randomSecret(32), threshold = 3, totalShares = 5)
+        val shares = splitSecret(randomSecret(32), threshold = 3, totalShares = 5) { testRandomBytes() }
         assertThrows(IllegalArgumentException::class.java) {
             reconstructSecret(shares.take(2), 32)
         }
@@ -90,8 +92,8 @@ class ShamirSecretSharingTest {
     fun `shares with mismatched integrity tags are rejected as mixed-up shares`() {
         val secretA = randomSecret(32)
         val secretB = randomSecret(32)
-        val sharesA = splitSecret(secretA, threshold = 2, totalShares = 3)
-        val sharesB = splitSecret(secretB, threshold = 2, totalShares = 3)
+        val sharesA = splitSecret(secretA, threshold = 2, totalShares = 3) { testRandomBytes() }
+        val sharesB = splitSecret(secretB, threshold = 2, totalShares = 3) { testRandomBytes() }
 
         assertThrows(IllegalArgumentException::class.java) {
             reconstructSecret(listOf(sharesA[0], sharesB[1]), 32)
@@ -101,8 +103,8 @@ class ShamirSecretSharingTest {
     @Test
     fun `shares with mismatched thresholds are rejected`() {
         val secret = randomSecret(32)
-        val sharesLowThreshold = splitSecret(secret, threshold = 2, totalShares = 3)
-        val sharesHighThreshold = splitSecret(secret, threshold = 3, totalShares = 3)
+        val sharesLowThreshold = splitSecret(secret, threshold = 2, totalShares = 3) { testRandomBytes() }
+        val sharesHighThreshold = splitSecret(secret, threshold = 3, totalShares = 3) { testRandomBytes() }
 
         assertThrows(IllegalArgumentException::class.java) {
             reconstructSecret(listOf(sharesLowThreshold[0], sharesHighThreshold[0]), 32)
@@ -111,7 +113,7 @@ class ShamirSecretSharingTest {
 
     @Test
     fun `duplicate share (same index) is rejected`() {
-        val shares = splitSecret(randomSecret(32), threshold = 2, totalShares = 3)
+        val shares = splitSecret(randomSecret(32), threshold = 2, totalShares = 3) { testRandomBytes() }
         assertThrows(IllegalArgumentException::class.java) {
             reconstructSecret(listOf(shares[0], shares[0]), 32)
         }
@@ -120,7 +122,7 @@ class ShamirSecretSharingTest {
     @Test
     fun `a single flipped bit in one share's y value fails the integrity check rather than silently reconstructing a wrong secret`() {
         val secret = randomSecret(32)
-        val shares = splitSecret(secret, threshold = 2, totalShares = 3)
+        val shares = splitSecret(secret, threshold = 2, totalShares = 3) { testRandomBytes() }
         val corrupted = shares[0].copy(y = shares[0].y.xor(BigInteger.ONE))
 
         assertThrows(IllegalArgumentException::class.java) {
@@ -131,13 +133,13 @@ class ShamirSecretSharingTest {
     @Test
     fun `total shares below threshold is rejected at split time`() {
         assertThrows(IllegalArgumentException::class.java) {
-            splitSecret(randomSecret(32), threshold = 5, totalShares = 3)
+            splitSecret(randomSecret(32), threshold = 5, totalShares = 3) { testRandomBytes() }
         }
     }
 
     @Test
     fun `share text encoding round trips exactly`() {
-        val shares = splitSecret(randomSecret(32), threshold = 2, totalShares = 4)
+        val shares = splitSecret(randomSecret(32), threshold = 2, totalShares = 4) { testRandomBytes() }
         for (share in shares) {
             val encoded = encodeBackupShare(share)
             val decoded = decodeBackupShare(encoded)
@@ -147,7 +149,7 @@ class ShamirSecretSharingTest {
 
     @Test
     fun `share text decoding rejects malformed strings`() {
-        val shares = splitSecret(randomSecret(32), threshold = 2, totalShares = 3)
+        val shares = splitSecret(randomSecret(32), threshold = 2, totalShares = 3) { testRandomBytes() }
         val validEncoded = encodeBackupShare(shares[0])
 
         // Wrong field count.
@@ -179,8 +181,8 @@ class ShamirSecretSharingTest {
     @Test
     fun `different splits of the same secret produce different shares (random coefficients, not deterministic)`() {
         val secret = randomSecret(32)
-        val sharesFirst = splitSecret(secret, threshold = 2, totalShares = 2)
-        val sharesSecond = splitSecret(secret, threshold = 2, totalShares = 2)
+        val sharesFirst = splitSecret(secret, threshold = 2, totalShares = 2) { testRandomBytes() }
+        val sharesSecond = splitSecret(secret, threshold = 2, totalShares = 2) { testRandomBytes() }
         assertNotEquals(sharesFirst[0].y, sharesSecond[0].y)
         // But both still reconstruct to the same secret and carry the same
         // integrity tag, since that's derived only from the secret itself.
