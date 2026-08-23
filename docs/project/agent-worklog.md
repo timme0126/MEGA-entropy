@@ -122,6 +122,80 @@ review agent (if any), Claude decision, code affected, tests added.
   exists actually runs `check`, not just `test`, so this class of bug can't
   ship silently again (noted in changes-since-v0.1.09.md).
 
+## Task 5 — User direction: skip Gate 0.5, preserve unrecorded-fingerprint signing
+- User reviewed the Phase 0 report, decided the PSBT unknown-field
+  pass-through finding is acceptable as-is (Gate 0.5 skipped), and clarified
+  a hard requirement: PSBTs with an unrecorded (`00000000`) master
+  fingerprint MUST remain signable, since most watch-only-wallet-created
+  PSBTs never record one. Recorded in taproot-inheritance-roadmap.md's Gate
+  2 section as an explicit requirement for the upcoming BIP371 work (the
+  existing non-Taproot handling of this, `a7e78a0`/`bfd3d1c`, is the
+  precedent to match, not tighten).
+- **Not a delegated task** — direct user instruction, no agent involved.
+
+## Task 6 — Gate 1: BIP340 Schnorr implementation
+- **Task:** Implement BIP340 Schnorr signatures matching the exact spec
+  algorithm (tagged_hash, lift_x, has_even_y, PubKey, Sign, Verify).
+- **Assigned agent:** Agent A (`192.168.12.5:8000`), given the full exact
+  spec pseudocode (fetched directly from bitcoin/bips, not paraphrased) plus
+  the existing Secp256k1.kt source, and told explicitly to flag any
+  uncertainty rather than guess.
+- **Result:** Response truncated after ~660 characters, one paragraph into
+  the answer (only the e=0 edge-case discussion for Verify's `s*G - e*P`
+  came through). Root cause not investigated (endpoint/timeout/streaming
+  issue, not a content problem visible in what did arrive).
+- **Claude decision:** Given the truncation and the correctness stakes,
+  implemented `Schnorr.kt` directly from the verified primary spec text
+  rather than retry/debug the delegation pipeline mid-task. This is a
+  deviation from the "Agent A implements" default the project charter
+  describes — recorded here rather than silently done, per the
+  transparency the worklog is for.
+- **Review:** All 19 official BIP340 test vectors pass on first attempt
+  (`Bip340OfficialVectorsTest.kt`, vectors parsed directly from the CSV via
+  Python, never hand-transcribed or LLM-summarized — a raw-fetch discipline
+  adopted after WebFetch's summarizing model was caught silently corrupting
+  hex-string lengths earlier in this task, see Task 7). **Independent
+  adversarial review (Agent B/C) of Schnorr.kt has NOT yet happened** —
+  flagged as outstanding before this is considered fully reviewed per the
+  charter's "Implementer → Independent Reviewer → Adversarial Reviewer →
+  Claude approval" sequence for security-critical code.
+- **Code affected:** `entropy-core/.../Schnorr.kt` (new),
+  `Bip340OfficialVectorsTest.kt` (new). Commit `be5f500`.
+
+## Task 7 — WebFetch summarization caught corrupting hex data
+- **Not a delegated task** — a tooling reliability finding, recorded because
+  it changed methodology for the rest of Gate 1.
+- While researching BIP341 test vectors, `WebFetch` (which processes fetched
+  content through a smaller summarizing model before returning it) rendered
+  a JSON test-vector file's hex strings with wrong lengths (33-byte values
+  rendered where the source data is 32 bytes) — caught by simply counting
+  characters in the tool's own output before using any of it.
+- **Decision:** From that point on, every test vector (BIP340 CSV, BIP341
+  JSON, BIP350/BIP173 mediawiki text) was fetched with raw `curl` on OpenClaw
+  and parsed with a small Python script, never through WebFetch's
+  summarization, for anything where exact byte values matter. Recorded here
+  as a standing practice for the rest of this project, not just this one
+  file.
+
+## Task 8 — Gate 1: BIP341 TapTweak, BIP350 Bech32m, BIP86 derivation
+- **Task:** Implement Taproot output-key tweaking, general segwit v0-v16
+  address encode/decode, and BIP86 wallet derivation.
+- **Assigned agent:** None — implemented directly by Claude, each piece
+  immediately checked against official test vectors fetched raw (see Task
+  7) before being trusted: BIP341's `wallet-test-vectors.json` (7 key-path
+  cases, all pass), BIP350's own address test-vector list (8 valid + 15
+  invalid, all pass), BIP86's worked example (both vectors pass, including
+  an end-to-end check that the exported WIF is the tweaked key and not the
+  internal one).
+- **Review:** Same as Task 6 — independent adversarial review by Agent B/C
+  has not yet happened for this code either. Both are queued together as
+  one review pass before Gate 2 begins, rather than reviewing Gate 1's
+  pieces one at a time.
+- **Code affected:** `TapTweak.kt` (new), `Bech32.kt` (extended),
+  `Bip32.kt`/`WalletDerivation.kt`/`WalletAddresses.kt` (Taproot script
+  type added), `AdvancedModeWalletScreen.kt` (doc comment only — the screen
+  needed no functional change). Commit `84195b5`.
+
 ---
 
 ## Delegation prompts on file (for reproducibility)
