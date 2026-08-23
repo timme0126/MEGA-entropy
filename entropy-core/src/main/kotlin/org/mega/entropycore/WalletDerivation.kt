@@ -11,9 +11,12 @@ enum class WalletNetwork(internal val bip32Network: Bip32Network, internal val c
 }
 
 /** Which account-level derivation standard (and therefore which extended-
- * public-key prefix and address format) to use. Taproot (BIP86) is
- * intentionally not included — deferred, not silently unsupported: see
- * the Advanced Mode wallet screen, which only offers these three. */
+ * public-key prefix and address format) to use. TAPROOT derives a
+ * key-path-only (BIP86) address — no script tree, see
+ * encodeP2trAddress's own doc — which is the correct default for a plain
+ * single-sig wallet-derivation display; a script-path-aware Taproot
+ * vault (inheritance) is separate, later work with its own derivation
+ * entry point, not a variant of this one. */
 enum class WalletScriptType(
     internal val extendedKeyScriptType: ExtendedKeyScriptType,
     val displayName: String,
@@ -22,6 +25,7 @@ enum class WalletScriptType(
     LEGACY(ExtendedKeyScriptType.LEGACY, "Legacy (P2PKH)", 44),
     NESTED_SEGWIT(ExtendedKeyScriptType.NESTED_SEGWIT, "Nested SegWit (P2SH-P2WPKH)", 49),
     NATIVE_SEGWIT(ExtendedKeyScriptType.NATIVE_SEGWIT, "Native SegWit (P2WPKH)", 84),
+    TAPROOT(ExtendedKeyScriptType.TAPROOT, "Taproot (P2TR)", 86),
 }
 
 data class WalletAccountKeys(
@@ -96,6 +100,10 @@ fun deriveWalletAccountKeys(
         WalletScriptType.LEGACY -> encodeP2pkhAddress(pubkey, network.bip32Network)
         WalletScriptType.NESTED_SEGWIT -> encodeP2shP2wpkhAddress(pubkey, network.bip32Network)
         WalletScriptType.NATIVE_SEGWIT -> encodeP2wpkhAddress(pubkey, network.bip32Network)
+        // The x-only key is simply the compressed pubkey's X-coordinate
+        // bytes (offset 1..33) - the 0x02/0x03 parity prefix byte carries
+        // no information x-only serialization needs, per BIP340.
+        WalletScriptType.TAPROOT -> encodeP2trAddress(pubkey.copyOfRange(1, 33), network.bip32Network)
     }
 
     val purpose = scriptType.bipNumber
@@ -137,7 +145,18 @@ fun deriveWalletReceivePrivateKey(
     val extendedPublicKey = accountKey.serializeExtendedPublicKey(scriptType.extendedKeyScriptType, network.bip32Network)
 
     val receiveKey = accountKey.deriveChild(0, hardened = false).deriveChild(0, hardened = false)
-    val wif = encodeWif(receiveKey.privateKey, network.bip32Network)
+    // For Taproot, the WIF exported here must be the key that actually
+    // signs for the on-chain address (the TWEAKED key), not the internal
+    // key deriveWalletAccountKeys' xpub is rooted at - same distinction
+    // TapTweak.tweakPrivateKey's own doc explains. Every other script
+    // type has no such tweak step, so the internal key IS the signing key.
+    val signingPrivateKey = if (scriptType == WalletScriptType.TAPROOT) {
+        val internalXOnlyPubkey = receiveKey.compressedPublicKey().copyOfRange(1, 33)
+        TapTweak.tweakPrivateKey(receiveKey.privateKey, internalXOnlyPubkey, ByteArray(0))
+    } else {
+        receiveKey.privateKey
+    }
+    val wif = encodeWif(signingPrivateKey, network.bip32Network)
 
     val purpose = scriptType.bipNumber
     val accountOrigin = "$masterFingerprint/${purpose}'/${network.coinType}'/${account}'"
@@ -146,6 +165,7 @@ fun deriveWalletReceivePrivateKey(
         WalletScriptType.LEGACY -> "pkh($descriptorBody)"
         WalletScriptType.NESTED_SEGWIT -> "sh(wpkh($descriptorBody))"
         WalletScriptType.NATIVE_SEGWIT -> "wpkh($descriptorBody)"
+        WalletScriptType.TAPROOT -> "tr($descriptorBody)"
     }
 
     val path = "m/${purpose}'/${network.coinType}'/${account}'/0/0"

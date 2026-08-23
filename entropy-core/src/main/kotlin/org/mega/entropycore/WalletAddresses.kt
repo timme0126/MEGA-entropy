@@ -50,3 +50,18 @@ internal fun encodeP2wshAddress(witnessScript: ByteArray, network: Bip32Network)
     val witnessProgram = sha256(witnessScript)
     return encodeSegwitV0Address(segwitHrp(network), witnessProgram)
 }
+
+/**
+ * Taproot key-path-only (BIP86) address: bech32m(output key), where the
+ * output key is [internalXOnlyPubkey] tweaked with an EMPTY Merkle root
+ * (see TapTweak.tweakPubKey) — i.e. no script tree, matching BIP86's own
+ * scope ("a key-path only wallet with no script paths"). A future
+ * script-path-aware Taproot vault would need its own function that
+ * threads a real Merkle root through instead of ByteArray(0); this one
+ * is deliberately the plain-wallet-address case only, same scope as
+ * every other function in this file.
+ */
+internal fun encodeP2trAddress(internalXOnlyPubkey: ByteArray, network: Bip32Network): String {
+    val outputKey = TapTweak.tweakPubKey(internalXOnlyPubkey, ByteArray(0)).outputKeyXOnly
+    return encodeTaprootAddress(segwitHrp(network), outputKey)
+}

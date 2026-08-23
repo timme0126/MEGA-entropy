@@ -42,8 +42,11 @@ import org.mega.entropycore.deriveWalletReceivePrivateKey
  * Advanced Mode wallet-derivation tool (spec "Advanced Mode wallet
  * derivation tools"): account-level xpub/ypub/zpub plus the first receive
  * address, for cross-checking against another wallet — never a private
- * key or signing capability. Taproot (BIP86) is deferred; see
- * WalletScriptType's KDoc in entropy-core for why.
+ * key or signing capability. Includes Taproot (BIP86, key-path-only —
+ * see WalletScriptType's KDoc in entropy-core) alongside Legacy/Nested/
+ * Native SegWit; this screen makes no assumption about which script
+ * types exist (WalletScriptType.entries.forEach below), so a future
+ * script type needs no changes here.
  *
  * [passphrase] was already decided once on AdvancedModeHubScreen — this
  * screen only displays it (masked, with a reveal toggle) and uses it
