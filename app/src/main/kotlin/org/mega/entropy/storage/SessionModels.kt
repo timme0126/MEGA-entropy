@@ -21,6 +21,11 @@ data class SavedSessionMetadata(
     // SegWit · Index 5" for a BIP85 child mnemonic saved from
     // Bip85Screen. Empty for every other kind of saved session.
     val childSeedInfo: String = "",
+    // User-added freeform tags for grouping/filtering the Saved Sessions
+    // list ("cold storage", "spending", ...) — no fixed vocabulary, same
+    // "not sensitive, no validation beyond the format's own delimiters"
+    // treatment as label above.
+    val tags: List<String> = emptyList(),
 ) {
     init {
         require(id.isNotBlank()) { "id must not be blank" }
@@ -28,6 +33,9 @@ data class SavedSessionMetadata(
         require(keystoreAlias.isNotBlank()) { "keystoreAlias must not be blank" }
         require(!label.contains('\n')) { "label must not contain a newline" }
         require(!childSeedInfo.contains('\n')) { "childSeedInfo must not contain a newline" }
+        require(tags.all { it.isNotBlank() && !it.contains('\n') && !it.contains(',') }) {
+            "tags must not be blank and must not contain a newline or comma"
+        }
     }
 }
 

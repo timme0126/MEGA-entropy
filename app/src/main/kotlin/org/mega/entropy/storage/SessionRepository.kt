@@ -79,6 +79,16 @@ class SessionRepository(private val context: Context) {
         }
     }
 
+    /** Same reasoning as [renameSession] — tags live in the unencrypted
+     * .meta file, so this only ever touches that file. */
+    suspend fun updateSessionTags(sessionId: String, tags: List<String>) {
+        withContext(Dispatchers.IO) {
+            val metadata = fileStore.readMetaFile(sessionId)
+                ?: throw NoSuchElementException("Session metadata not found for ID: $sessionId")
+            fileStore.writeMetaFile(metadata.copy(tags = tags))
+        }
+    }
+
     suspend fun listSessions(): List<SavedSessionMetadata> {
         return withContext(Dispatchers.IO) {
             fileStore.listAllMetadata().sortedByDescending { it.createdAtEpochMillis }

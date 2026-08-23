@@ -49,4 +49,8 @@ data class SavedMultisigVault(
     val network: WalletNetwork,
     val scriptType: MultisigScriptType,
     val cosigners: List<SavedMultisigCosigner>,
+    // User-added freeform tags for grouping/filtering the saved vaults
+    // list — same purpose and no-fixed-vocabulary treatment as
+    // SavedSessionMetadata.tags.
+    val tags: List<String> = emptyList(),
 )

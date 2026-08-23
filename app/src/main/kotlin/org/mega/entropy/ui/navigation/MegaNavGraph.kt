@@ -45,6 +45,11 @@ import org.mega.entropy.ui.advancedmode.SeedQrScanScreen
 import org.mega.entropy.ui.advancedmode.structuretx.StructureTransactionDisclaimerScreen
 import org.mega.entropy.ui.advancedmode.structuretx.StructureTransactionScreen
 import org.mega.entropy.ui.advancedmode.structuretx.StructureTransactionViewModel
+import org.mega.entropy.ui.advancedmode.backupshares.BackupSharesDisclaimerScreen
+import org.mega.entropy.ui.advancedmode.backupshares.BackupSharesSetupScreen
+import org.mega.entropy.ui.advancedmode.backupshares.BackupSharesViewModel
+import org.mega.entropy.ui.advancedmode.backupshares.BackupShareRevealScreen
+import org.mega.entropy.ui.advancedmode.backupshares.RecoverFromBackupSharesScreen
 import org.mega.entropy.ui.advancedmode.multisig.AdvancedModeMultisigDeriveCosignerScreen
 import org.mega.entropy.ui.advancedmode.multisig.AdvancedModeMultisigScannerScreen
 import org.mega.entropy.ui.advancedmode.multisig.AdvancedModeMultisigVaultScreen
@@ -120,6 +125,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     val diceSessionViewModel: DiceSessionViewModel = viewModel()
     val multisigVaultViewModel: MultisigVaultViewModel = viewModel()
     val structureTxViewModel: StructureTransactionViewModel = viewModel()
+    val backupSharesViewModel: BackupSharesViewModel = viewModel()
     val context = LocalContext.current
     val pinManager = remember { PinManager(context.filesDir) }
     val repository = remember { SessionRepository(context) }
@@ -659,6 +665,9 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onImportViaSeedQr = {
                     navController.navigate(MegaDestinations.ADVANCED_MODE_SEED_QR)
                 },
+                onRecoverFromBackupShares = {
+                    navController.navigate(MegaDestinations.ADVANCED_MODE_RECOVER_FROM_BACKUP_SHARES)
+                },
                 onMultisigVaults = {
                     coroutineScope.launch { enterMultisigVaultsEntry() }
                 },
@@ -731,6 +740,10 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     onStructureTransaction = { passphrase ->
                         advancedModePsbtPassphrase = passphrase
                         navController.navigate(MegaDestinations.ADVANCED_MODE_STRUCTURE_TX_DISCLAIMER)
+                    },
+                    onCreateBackupShares = {
+                        backupSharesViewModel.reset()
+                        navController.navigate(MegaDestinations.ADVANCED_MODE_BACKUP_SHARES_DISCLAIMER)
                     },
                     onSaveAsSession = { label ->
                         coroutineScope.launch { saveAdvancedModeSession(words, label) }
@@ -932,6 +945,65 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 },
             )
         }
+        composable(MegaDestinations.ADVANCED_MODE_BACKUP_SHARES_DISCLAIMER) {
+            BackupSharesDisclaimerScreen(
+                allowScreenshots = allowScreenshots,
+                onBack = { navController.returnToAdvancedModeHub() },
+                onContinueToSetup = {
+                    navController.navigate(MegaDestinations.ADVANCED_MODE_BACKUP_SHARES_SETUP)
+                },
+            )
+        }
+        composable(MegaDestinations.ADVANCED_MODE_BACKUP_SHARES_SETUP) {
+            BackupSharesSetupScreen(
+                viewModel = backupSharesViewModel,
+                allowScreenshots = allowScreenshots,
+                onBack = { navController.returnToAdvancedModeHub() },
+                onContinueToReveal = {
+                    // Splitting needs the actual mnemonic entropy, which
+                    // only exists while advancedModeWords is loaded -
+                    // true throughout this whole branch of the graph, but
+                    // checked rather than assumed, same as every other
+                    // Hub-reachable composable in this file.
+                    val words = advancedModeWords
+                    if (words != null) {
+                        backupSharesViewModel.beginReveal(words)
+                        navController.navigate(MegaDestinations.ADVANCED_MODE_BACKUP_SHARES_REVEAL)
+                    } else {
+                        navController.returnToAdvancedModeHub()
+                    }
+                },
+            )
+        }
+        composable(MegaDestinations.ADVANCED_MODE_BACKUP_SHARES_REVEAL) {
+            // Back here abandons the whole flow rather than stepping back
+            // to a previous share - see BackupShareRevealScreen's own doc
+            // for why there is deliberately no "go back one share".
+            BackupShareRevealScreen(
+                viewModel = backupSharesViewModel,
+                allowScreenshots = allowScreenshots,
+                onBack = {
+                    backupSharesViewModel.reset()
+                    navController.returnToAdvancedModeHub()
+                },
+                onAllSharesRevealed = {
+                    backupSharesViewModel.reset()
+                    navController.returnToAdvancedModeHub()
+                },
+            )
+        }
+        composable(MegaDestinations.ADVANCED_MODE_RECOVER_FROM_BACKUP_SHARES) {
+            RecoverFromBackupSharesScreen(
+                allowScreenshots = allowScreenshots,
+                onBack = { navController.popBackStack() },
+                onRecovered = { words ->
+                    advancedModeWords = words
+                    advancedModePassphrase = ""
+                    advancedModeSourceSessionLabel = null
+                    navController.navigate(MegaDestinations.ADVANCED_MODE_HUB)
+                },
+            )
+        }
         composable(MegaDestinations.ADVANCED_MODE_MULTISIG_VAULT) {
             val uiState by multisigVaultViewModel.uiState.collectAsState()
             val coroutineScope = rememberCoroutineScope()
@@ -1088,12 +1160,16 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             LaunchedEffect(Unit) { viewModel.refresh() }
             val state by viewModel.uiState.collectAsState()
             SavedMultisigVaultsScreen(
-                vaults = state.vaults,
+                vaults = state.visibleVaults,
                 isLoading = state.isLoading,
+                allTags = state.allTags,
+                selectedTagFilters = state.selectedTagFilters,
+                onTagFilterToggled = viewModel::toggleTagFilter,
                 allowScreenshots = allowScreenshots,
                 onBack = { navController.popBackStack() },
                 onViewVault = { id -> navController.navigate(MegaDestinations.savedMultisigVaultDetailRoute(id)) },
                 onRenameVault = viewModel::renameVault,
+                onUpdateVaultTags = viewModel::updateTags,
                 onDeleteVault = viewModel::deleteVault,
                 onCreateNewVault = {
                     multisigVaultViewModel.resetSession()

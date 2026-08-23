@@ -77,6 +77,11 @@ fun AdvancedModeHubScreen(
     // knows the exact UTXOs; MEGA harvests them from the scan rather than
     // asking the user to type txid/vout/amount by hand).
     onStructureTransaction: (passphrase: String) -> Unit,
+    // No passphrase parameter, unlike the buttons above — backup shares
+    // split the mnemonic's own entropy (see EntropyBackupShares.kt in
+    // entropy-core), which is intrinsic to the words themselves and
+    // independent of any passphrase typed here.
+    onCreateBackupShares: () -> Unit,
     // Only the words are ever saved — never the passphrase typed below,
     // matching every other saved session in the app. label comes from the
     // dialog opened by the top-right save icon.
@@ -197,6 +202,7 @@ fun AdvancedModeHubScreen(
         MegaPrimaryButton(text = "Derive BIP85 Child Mnemonic", onClick = { onBip85(passphrase) })
         MegaPrimaryButton(text = "Sign PSBT", onClick = { onSignPsbt(passphrase) })
         MegaPrimaryButton(text = "Structure a Transaction", onClick = { onStructureTransaction(passphrase) })
+        MegaPrimaryButton(text = "Create Backup Shares", onClick = { onCreateBackupShares() })
 
         val seed = revealedSeed
         if (seed == null) {

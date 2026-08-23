@@ -14,7 +14,21 @@ import org.mega.entropy.storage.SavedMultisigVault
 data class SavedMultisigVaultsUiState(
     val vaults: List<SavedMultisigVault> = emptyList(),
     val isLoading: Boolean = true,
-)
+    /** Every distinct tag across all [vaults], for the filter row —
+     * recomputed on every [refresh] rather than tracked independently, so
+     * it can never drift from what the vaults actually carry. */
+    val allTags: List<String> = emptyList(),
+    /** "Any of" matching, same as SavedSessionsUiState.selectedTagFilters
+     * — empty means no filter (show everything). */
+    val selectedTagFilters: Set<String> = emptySet(),
+) {
+    val visibleVaults: List<SavedMultisigVault>
+        get() = if (selectedTagFilters.isEmpty()) {
+            vaults
+        } else {
+            vaults.filter { it.tags.any { tag -> tag in selectedTagFilters } }
+        }
+}
 
 /**
  * Lists, renames, and deletes saved multisig vaults. Uses AndroidViewModel
@@ -43,7 +57,16 @@ class SavedMultisigVaultsViewModel(application: Application) : AndroidViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val vaults = repository.listVaults()
-            _uiState.update { it.copy(vaults = vaults, isLoading = false) }
+            _uiState.update {
+                it.copy(
+                    vaults = vaults,
+                    isLoading = false,
+                    allTags = vaults.flatMap { vault -> vault.tags }.distinct().sorted(),
+                    selectedTagFilters = it.selectedTagFilters.filter { tag ->
+                        vaults.any { vault -> tag in vault.tags }
+                    }.toSet(),
+                )
+            }
         }
     }
 
@@ -58,6 +81,20 @@ class SavedMultisigVaultsViewModel(application: Application) : AndroidViewModel(
         viewModelScope.launch {
             repository.renameVault(id, label)
             refresh()
+        }
+    }
+
+    fun updateTags(id: String, tags: List<String>) {
+        viewModelScope.launch {
+            repository.updateVaultTags(id, tags)
+            refresh()
+        }
+    }
+
+    fun toggleTagFilter(tag: String) {
+        _uiState.update {
+            val current = it.selectedTagFilters
+            it.copy(selectedTagFilters = if (tag in current) current - tag else current + tag)
         }
     }
 }

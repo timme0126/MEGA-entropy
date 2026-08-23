@@ -2,13 +2,17 @@ package org.mega.entropy.ui.savedsessions
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -146,11 +150,19 @@ fun SavedSessionsScreen(
                     MegaPrimaryButton(text = "New Dice Session", onClick = onNewDiceSession)
                 }
                 else -> {
-                    state.sessions.forEach { session ->
+                    if (state.allTags.isNotEmpty()) {
+                        TagFilterRow(
+                            allTags = state.allTags,
+                            selectedTags = state.selectedTagFilters,
+                            onTagToggled = { viewModel.toggleTagFilter(it) },
+                        )
+                    }
+                    state.visibleSessions.forEach { session ->
                         SavedSessionCard(
                             session = session,
                             onView = { onViewSession(session.id) },
                             onRename = { newLabel -> viewModel.renameSession(session.id, newLabel) },
+                            onTagsChanged = { tags -> viewModel.updateTags(session.id, tags) },
                             onDelete = { viewModel.deleteSession(session.id) },
                         )
                     }
@@ -425,10 +437,12 @@ private fun SavedSessionCard(
     session: SavedSessionMetadata,
     onView: () -> Unit,
     onRename: (String) -> Unit,
+    onTagsChanged: (List<String>) -> Unit,
     onDelete: () -> Unit,
 ) {
     var confirmingDelete by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
+    var editingTags by remember { mutableStateOf(false) }
     val dateText = remember(session.createdAtEpochMillis) {
         DateFormat.getDateTimeInstance().format(Date(session.createdAtEpochMillis))
     }
@@ -454,9 +468,20 @@ private fun SavedSessionCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        if (session.tags.isNotEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+            ) {
+                session.tags.forEach { tag ->
+                    AssistChip(onClick = { editingTags = true }, label = { Text(tag) })
+                }
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier) {
             MegaNeutralButton(text = "View", modifier = Modifier.weight(1f), onClick = onView)
             MegaNeutralButton(text = "Label", modifier = Modifier.weight(1f), onClick = { renaming = true })
+            MegaNeutralButton(text = "Tags", modifier = Modifier.weight(1f), onClick = { editingTags = true })
         }
         MegaPrimaryButton(text = "Secure Delete", onClick = { confirmingDelete = true })
     }
@@ -469,6 +494,19 @@ private fun SavedSessionCard(
                 renaming = false
             },
             onDismiss = { renaming = false },
+        )
+    }
+
+    if (editingTags) {
+        MegaLabelSessionDialog(
+            title = "Edit Tags",
+            helperText = "Comma-separated, e.g. cold storage, inheritance.",
+            initialLabel = session.tags.joinToString(", "),
+            onConfirm = { text ->
+                onTagsChanged(parseTagsInput(text))
+                editingTags = false
+            },
+            onDismiss = { editingTags = false },
         )
     }
 
@@ -505,4 +543,35 @@ private fun ConfirmDeleteDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
     )
+}
+
+/** Parses the comma-separated text MegaLabelSessionDialog's tag-editing
+ * mode collects into a clean tag list: trimmed, blanks dropped, duplicates
+ * collapsed — matches [SavedSessionMetadata]'s own tag validation (no
+ * blank, no comma, no newline) so this never produces a value the
+ * metadata's init block would reject. */
+internal fun parseTagsInput(text: String): List<String> =
+    text.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+
+/** Tag filter row shown above the session list once at least one session
+ * has a tag — "any of" selection, same semantics as
+ * SavedSessionsUiState.visibleSessions. */
+@Composable
+private fun TagFilterRow(
+    allTags: List<String>,
+    selectedTags: Set<String>,
+    onTagToggled: (String) -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+    ) {
+        allTags.forEach { tag ->
+            FilterChip(
+                selected = tag in selectedTags,
+                onClick = { onTagToggled(tag) },
+                label = { Text(tag) },
+            )
+        }
+    }
 }
