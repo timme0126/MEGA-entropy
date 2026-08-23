@@ -113,7 +113,7 @@ class CosignerPsbtSigningTest {
     @Test
     fun `Rejects an unrelated unknown claimed fingerprint`() {
         val psbtBytes = buildTwoCosignerPsbtBytes()
-        val result = signPsbtForCosigner(psbtBytes, "00000000", TEST_WORDS_A, "")
+        val result = signPsbtForCosigner(psbtBytes, "00000000", TEST_WORDS_A, "") { ByteArray(32) }
         assertTrue(result is SignForCosignerResult.FingerprintMismatch)
         val mismatch = result as SignForCosignerResult.FingerprintMismatch
         assertEquals("00000000", mismatch.expectedFingerprint)
@@ -128,7 +128,7 @@ class CosignerPsbtSigningTest {
         val psbtBytes = buildTwoCosignerPsbtBytes()
         val expectedB = masterKeyFingerprint(TEST_WORDS_B, "")
         val actualA = masterKeyFingerprint(TEST_WORDS_A, "")
-        val result = signPsbtForCosigner(psbtBytes, expectedB, TEST_WORDS_A, "")
+        val result = signPsbtForCosigner(psbtBytes, expectedB, TEST_WORDS_A, "") { ByteArray(32) }
         assertTrue(result is SignForCosignerResult.FingerprintMismatch)
         val mismatch = result as SignForCosignerResult.FingerprintMismatch
         assertEquals(expectedB, mismatch.expectedFingerprint)
@@ -138,7 +138,7 @@ class CosignerPsbtSigningTest {
     @Test
     fun `Signs only the selected cosigner input derivation leaves vault partially signed`() {
         val psbtBytes = buildTwoCosignerPsbtBytes()
-        val result = signPsbtForCosigner(psbtBytes, EXPECTED_FINGERPRINT_A, TEST_WORDS_A, "")
+        val result = signPsbtForCosigner(psbtBytes, EXPECTED_FINGERPRINT_A, TEST_WORDS_A, "") { ByteArray(32) }
         assertTrue(result is SignForCosignerResult.Signed)
         val signedBytes = (result as SignForCosignerResult.Signed).psbtBytes
         val parsed = parsePsbt(signedBytes)
@@ -153,7 +153,7 @@ class CosignerPsbtSigningTest {
     @Test
     fun `Signing with second cosigner reaches threshold and finalizes preserving first signature`() {
         val psbtBytes = buildTwoCosignerPsbtBytes()
-        val resultA = signPsbtForCosigner(psbtBytes, EXPECTED_FINGERPRINT_A, TEST_WORDS_A, "")
+        val resultA = signPsbtForCosigner(psbtBytes, EXPECTED_FINGERPRINT_A, TEST_WORDS_A, "") { ByteArray(32) }
         assertTrue(resultA is SignForCosignerResult.Signed)
         val signedABytes = (resultA as SignForCosignerResult.Signed).psbtBytes
         val parsedA = parsePsbt(signedABytes)
@@ -162,7 +162,7 @@ class CosignerPsbtSigningTest {
 
         val masterB = masterKeyFor(TEST_WORDS_B)
         val expectedB = masterB.fingerprint().toHex()
-        val resultB = signPsbtForCosigner(signedABytes, expectedB, TEST_WORDS_B, "")
+        val resultB = signPsbtForCosigner(signedABytes, expectedB, TEST_WORDS_B, "") { ByteArray(32) }
         assertTrue(resultB is SignForCosignerResult.Signed)
         val signedBothBytes = (resultB as SignForCosignerResult.Signed).psbtBytes
         val parsedBoth = parsePsbt(signedBothBytes)
@@ -185,13 +185,13 @@ class CosignerPsbtSigningTest {
     @Test
     fun `Idempotent re signing no duplicate or conflicting signatures`() {
         val psbtBytes = buildTwoCosignerPsbtBytes()
-        val resultA = signPsbtForCosigner(psbtBytes, EXPECTED_FINGERPRINT_A, TEST_WORDS_A, "")
+        val resultA = signPsbtForCosigner(psbtBytes, EXPECTED_FINGERPRINT_A, TEST_WORDS_A, "") { ByteArray(32) }
         assertTrue(resultA is SignForCosignerResult.Signed)
         val signedABytes = (resultA as SignForCosignerResult.Signed).psbtBytes
         val parsedA = parsePsbt(signedABytes)
         val sigAHex = parsedA.inputs[0].partialSigs()[0].signature.toHex()
 
-        val resultA2 = signPsbtForCosigner(signedABytes, EXPECTED_FINGERPRINT_A, TEST_WORDS_A, "")
+        val resultA2 = signPsbtForCosigner(signedABytes, EXPECTED_FINGERPRINT_A, TEST_WORDS_A, "") { ByteArray(32) }
         assertTrue(resultA2 is SignForCosignerResult.Signed)
         val signedA2Bytes = (resultA2 as SignForCosignerResult.Signed).psbtBytes
         val parsedA2 = parsePsbt(signedA2Bytes)
@@ -202,24 +202,24 @@ class CosignerPsbtSigningTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun `Malformed PSBT bytes with matching fingerprint propagates real parse failure`() {
-        signPsbtForCosigner(byteArrayOf(1, 2, 3), masterKeyFingerprint(TEST_WORDS_A, ""), TEST_WORDS_A, "")
+        signPsbtForCosigner(byteArrayOf(1, 2, 3), masterKeyFingerprint(TEST_WORDS_A, ""), TEST_WORDS_A, "") { ByteArray(32) }
     }
 
     @Test
     fun `Malformed PSBT bytes with non matching fingerprint rejected via fingerprint gate`() {
-        val result = signPsbtForCosigner(byteArrayOf(1, 2, 3), "00000000", TEST_WORDS_A, "")
+        val result = signPsbtForCosigner(byteArrayOf(1, 2, 3), "00000000", TEST_WORDS_A, "") { ByteArray(32) }
         assertTrue(result is SignForCosignerResult.FingerprintMismatch)
     }
 
     @Test(expected = IllegalArgumentException::class)
     fun `Rejects malformed claimed fingerprint string`() {
-        signPsbtForCosigner(buildTwoCosignerPsbtBytes(), "not-hex!!", TEST_WORDS_A, "")
+        signPsbtForCosigner(buildTwoCosignerPsbtBytes(), "not-hex!!", TEST_WORDS_A, "") { ByteArray(32) }
     }
 
     @Test
     fun `signPsbtForCosigner does not mutate the PSBT bytes array passed in`() {
         val psbtBytes = buildTwoCosignerPsbtBytes()
-        val result = signPsbtForCosigner(psbtBytes, EXPECTED_FINGERPRINT_A, TEST_WORDS_A, "")
+        val result = signPsbtForCosigner(psbtBytes, EXPECTED_FINGERPRINT_A, TEST_WORDS_A, "") { ByteArray(32) }
         assertTrue(result is SignForCosignerResult.Signed)
         val parsedOriginal = parsePsbt(psbtBytes)
         assertTrue(parsedOriginal.inputs[0].partialSigs().isEmpty())

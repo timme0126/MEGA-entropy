@@ -147,7 +147,7 @@ class PsbtConstructionTest {
             rbf = false,
         )
 
-        val signed = signAndFinalizePsbt(builtBytes, TEST_WORDS, TEST_PASSPHRASE)
+        val signed = signAndFinalizePsbt(builtBytes, TEST_WORDS, TEST_PASSPHRASE) { ByteArray(32) }
         assertTrue(isPsbtFullyFinalized(signed))
         assertEquals(EXPECTED_FINAL_TX_HEX, extractFinalTransactionHex(signed))
     }
@@ -360,7 +360,7 @@ class PsbtConstructionTest {
         assertEquals(0xFFFFFFFDL, restructuredTx.inputs.single().sequence) // rbf = true
         assertTrue(restructuredTx.inputs.single().previousTxid.contentEquals(parsePsbt(fixture).unsignedTx.inputs.single().previousTxid))
 
-        val signed = signAndFinalizePsbt(restructuredBytes, TEST_WORDS, TEST_PASSPHRASE)
+        val signed = signAndFinalizePsbt(restructuredBytes, TEST_WORDS, TEST_PASSPHRASE) { ByteArray(32) }
         assertTrue(isPsbtFullyFinalized(signed))
         assertTrue(extractFinalTransactionHex(signed) != null)
     }

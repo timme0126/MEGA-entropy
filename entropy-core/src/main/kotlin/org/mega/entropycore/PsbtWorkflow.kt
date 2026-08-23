@@ -22,17 +22,29 @@ package org.mega.entropycore
  * which only single-seed Advanced Mode signing may do, and only after
  * showing the user the required warning and getting explicit confirmation.
  * See [FingerprintTrustPolicy]'s own doc for the full security rationale.
+ *
+ * Also signs any Taproot (P2TR) key-path inputs via [signTaprootPsbt],
+ * unconditionally alongside the ECDSA [signPsbt] pass — safe to call both
+ * on the same PSBT regardless of which script types it actually contains,
+ * since each only ever touches inputs matching its own script-type check
+ * and leaves every other input unchanged. [randomBytes] supplies BIP340's
+ * per-signature auxiliary randomness for any Taproot input signed —
+ * caller-injected because :entropy-core's own securityAudit Gradle task
+ * forbids this module's source from referencing a hidden RNG source (see
+ * Schnorr.sign's own doc for the same reasoning applied there).
  */
 fun signAndFinalizePsbt(
     psbtBytes: ByteArray,
     mnemonicWords: List<String>,
     passphrase: String = "",
     fingerprintTrustPolicy: FingerprintTrustPolicy = FingerprintTrustPolicy.STRICT,
+    randomBytes: () -> ByteArray,
 ): ByteArray {
     val psbt = parsePsbt(psbtBytes)
     val masterKey = bip32MasterKeyFromSeed(deriveSeed(mnemonicWords, passphrase).bytes)
-    val signed = signPsbt(psbt, masterKey, fingerprintTrustPolicy)
-    val finalized = finalizePsbt(signed)
+    val signedEcdsa = signPsbt(psbt, masterKey, fingerprintTrustPolicy)
+    val signedTaproot = signTaprootPsbt(signedEcdsa, masterKey, fingerprintTrustPolicy, randomBytes)
+    val finalized = finalizePsbt(signedTaproot)
     return serializePsbt(finalized)
 }
 

@@ -146,8 +146,8 @@ class PsbtTransportParityTest {
         val viaBbqr = decodeViaBbqr(original)
         val viaUr = decodeViaUr(original)
 
-        val signedFromBbqr = signAndFinalizePsbt(viaBbqr, TEST_WORDS, "")
-        val signedFromUr = signAndFinalizePsbt(viaUr, TEST_WORDS, "")
+        val signedFromBbqr = signAndFinalizePsbt(viaBbqr, TEST_WORDS, "") { ByteArray(32) }
+        val signedFromUr = signAndFinalizePsbt(viaUr, TEST_WORDS, "") { ByteArray(32) }
 
         assertTrue(isPsbtFullyFinalized(signedFromBbqr))
         assertTrue(isPsbtFullyFinalized(signedFromUr))

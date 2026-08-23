@@ -29,10 +29,11 @@ internal fun attemptPsbtSign(
     mnemonicWords: List<String>,
     passphrase: String,
     expectedCosignerFingerprint: String?,
+    randomBytes: () -> ByteArray,
 ): PsbtSignOutcome {
     if (expectedCosignerFingerprint != null) {
         val attempt = runCatching {
-            signPsbtForCosigner(psbtBytes, expectedCosignerFingerprint, mnemonicWords, passphrase)
+            signPsbtForCosigner(psbtBytes, expectedCosignerFingerprint, mnemonicWords, passphrase, randomBytes)
         }
         val outcome = attempt.getOrElse {
             return PsbtSignOutcome.Failed(it.message ?: "This PSBT could not be signed by this device.")
@@ -45,7 +46,7 @@ internal fun attemptPsbtSign(
     }
 
     val policy = FingerprintTrustPolicy.ALLOW_UNKNOWN_FINGERPRINT_WITH_KEY_MATCH
-    val result = runCatching { signAndFinalizePsbt(psbtBytes, mnemonicWords, passphrase, policy) }
+    val result = runCatching { signAndFinalizePsbt(psbtBytes, mnemonicWords, passphrase, policy, randomBytes) }
     return result.fold(
         onSuccess = { PsbtSignOutcome.Signed(it) },
         onFailure = { PsbtSignOutcome.Failed(it.message ?: "This PSBT could not be signed by this device.") },

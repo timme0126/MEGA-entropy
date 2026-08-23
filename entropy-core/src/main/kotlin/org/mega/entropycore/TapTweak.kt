@@ -67,13 +67,26 @@ internal object TapTweak {
 
     /**
      * The private-key side of the same tweak, needed to actually sign a
-     * key-path spend: given the (possibly odd-y) internal private key,
-     * apply the same even-y-of-P and even-y-of-Q parity adjustments
-     * BIP340/BIP341 both use before adding the tweak scalar, so the
-     * result signs correctly under [outputKeyXOnly]. Mirrors
-     * Schnorr.sign's own `d = d' if has_even_y(P) else n - d'` step,
-     * applied twice (once for the internal key's own parity, once for
-     * the output key's).
+     * key-path spend: `d_tweaked = (d_even + t) mod n`, where `d_even` is
+     * [internalPrivateKey] negated iff its own point has odd y — exactly
+     * BIP341's reference `taproot_sign_key` procedure, no more.
+     *
+     * `d_even * G` is, by construction, EXACTLY [liftXOnly]'s result for
+     * [internalPubkey] (both are "the even-y point at that x-coordinate" —
+     * the same point, not merely the same x). [tweakPubKey] computes its
+     * output point as `liftXOnly(internalPubkey) + t*G`, so
+     * `d_tweaked * G = d_even*G + t*G` is EXACTLY that same output point —
+     * full point equality, not just matching x — with no further parity
+     * correction needed here. (An earlier draft of this function
+     * recomputed `d_tweaked * G` and conditionally re-negated to match
+     * [TweakedKey.outputKeyIsEvenY]; that branch never actually fired —
+     * confirmed both by this proof and empirically, across every parity
+     * combination in BIP341's own test vectors — and was removed as
+     * confusing dead code, not a correctness fix.) The signature itself
+     * still works out regardless of `d_tweaked * G`'s own y-parity:
+     * [Schnorr.sign] performs its own independent `d = d' if
+     * has_even_y(d'*G) else n - d'` adjustment on whatever scalar it's
+     * given, per BIP340's own Sign algorithm.
      */
     fun tweakPrivateKey(internalPrivateKey: ByteArray, internalPubkey: ByteArray, merkleRoot: ByteArray): ByteArray {
         require(internalPrivateKey.size == 32) { "Internal private key must be 32 bytes, got ${internalPrivateKey.size}" }
@@ -88,12 +101,9 @@ internal object TapTweak {
 
         val t = tweakScalar(internalPubkey, merkleRoot)
         require(t < N) { "Tweak scalar is out of the secp256k1 scalar field's range" }
-        val tweaked = tweakPubKey(internalPubkey, merkleRoot)
 
         val dTweaked = dEven.add(t).mod(N)
-        val checkPoint = Secp256k1.scalarMultiply(dTweaked, G)
-        val dFinal = if (tweaked.outputKeyIsEvenY == !checkPoint.y!!.testBit(0)) dTweaked else N.subtract(dTweaked)
-        return dFinal.toFixed32Bytes()
+        return dTweaked.toFixed32Bytes()
     }
 
     /** lift_x, exposed here (rather than reusing Schnorr's private one) —
