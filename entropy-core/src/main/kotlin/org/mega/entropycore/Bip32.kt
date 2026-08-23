@@ -186,23 +186,29 @@ internal enum class Bip32Network { MAINNET, TESTNET }
 
 /** Which BIP defines the account-level derivation path and, correspondingly,
  * which extended-public-key version bytes / address format to use — see
- * SLIP-132 for the xpub/ypub/zpub version byte registry. Taproot (BIP86,
- * "P2TR"/no widely-used xpub prefix) is intentionally not included yet. */
+ * SLIP-132 for the xpub/ypub/zpub version byte registry. Taproot (BIP86)
+ * has no entry of its own in that registry — verified directly against
+ * SLIP-132 (github.com/satoshilabs/slips/blob/master/slip-0132.md, no
+ * mention of Taproot/BIP86 anywhere) and against BIP86's own worked
+ * example, whose xpub literally starts "xpub..." — so it reuses the plain
+ * LEGACY version bytes below, same as every wallet that supports Taproot
+ * today. */
 internal enum class ExtendedKeyScriptType(val purpose: Long) {
     LEGACY(44L),
     NESTED_SEGWIT(49L),
     NATIVE_SEGWIT(84L),
+    TAPROOT(86L),
 }
 
 private fun extendedPublicKeyVersionBytes(scriptType: ExtendedKeyScriptType, network: Bip32Network): ByteArray =
     when (network) {
         Bip32Network.MAINNET -> when (scriptType) {
-            ExtendedKeyScriptType.LEGACY -> byteArrayOf(0x04, 0x88.toByte(), 0xB2.toByte(), 0x1E)
+            ExtendedKeyScriptType.LEGACY, ExtendedKeyScriptType.TAPROOT -> byteArrayOf(0x04, 0x88.toByte(), 0xB2.toByte(), 0x1E)
             ExtendedKeyScriptType.NESTED_SEGWIT -> byteArrayOf(0x04, 0x9D.toByte(), 0x7C, 0xB2.toByte())
             ExtendedKeyScriptType.NATIVE_SEGWIT -> byteArrayOf(0x04, 0xB2.toByte(), 0x47, 0x46)
         }
         Bip32Network.TESTNET -> when (scriptType) {
-            ExtendedKeyScriptType.LEGACY -> byteArrayOf(0x04, 0x35, 0x87.toByte(), 0xCF.toByte())
+            ExtendedKeyScriptType.LEGACY, ExtendedKeyScriptType.TAPROOT -> byteArrayOf(0x04, 0x35, 0x87.toByte(), 0xCF.toByte())
             ExtendedKeyScriptType.NESTED_SEGWIT -> byteArrayOf(0x04, 0x4A, 0x52, 0x62)
             ExtendedKeyScriptType.NATIVE_SEGWIT -> byteArrayOf(0x04, 0x5F, 0x1C, 0xF6.toByte())
         }
