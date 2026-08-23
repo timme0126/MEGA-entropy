@@ -24,6 +24,20 @@ private fun encodeText(value: String): String =
 private fun decodeText(value: String): String =
     String(Base64.getUrlDecoder().decode(value), StandardCharsets.UTF_8)
 
+/** Separator joining multiple tags before the whole joined string is
+ * base64url-encoded as one unit (via encodeText/decodeText) — the ASCII
+ * Unit Separator control character, never producible by the tag entry
+ * UI's plain text field, so an individual tag can freely contain a comma,
+ * pipe, or anything else without needing its own escaping. */
+private const val TAG_SEPARATOR = ""
+
+private fun encodeTags(tags: List<String>): String = encodeText(tags.joinToString(TAG_SEPARATOR))
+
+private fun decodeTags(encoded: String): List<String> {
+    val joined = decodeText(encoded)
+    return if (joined.isEmpty()) emptyList() else joined.split(TAG_SEPARATOR)
+}
+
 fun encodeMultisigVault(vault: SavedMultisigVault): ByteArray {
     val lines = mutableListOf(
         "MEGA-MULTISIG-VAULT-V1",
@@ -45,6 +59,10 @@ fun encodeMultisigVault(vault: SavedMultisigVault): ByteArray {
         )
     }
     lines.add("label64:${encodeText(vault.label)}")
+    // Trailing, OPTIONAL line (see decodeMultisigVault) — same reasoning
+    // as the label64/label fallback there: older vault files simply
+    // predate this line rather than needing a version-number bump.
+    lines.add("tags64:${encodeTags(vault.tags)}")
     return lines.joinToString("\n").toByteArray(StandardCharsets.UTF_8)
 }
 
@@ -80,8 +98,11 @@ fun decodeMultisigVault(bytes: ByteArray): SavedMultisigVault {
     val cosignerCount = extractValue(6, "cosignerCount").toIntOrNull()
         ?: throw IllegalArgumentException("Invalid multisig vault format: malformed cosignerCount")
 
-    require(lines.size == 8 + cosignerCount) {
-        "Invalid multisig vault format: expected ${8 + cosignerCount} lines for $cosignerCount cosigner(s), got ${lines.size}"
+    // Body is 7 fixed header lines + one COSIGNER line per cosigner, then
+    // either just label64 (older files) or label64 + tags64 (current).
+    require(lines.size == 8 + cosignerCount || lines.size == 9 + cosignerCount) {
+        "Invalid multisig vault format: expected ${8 + cosignerCount} or ${9 + cosignerCount} lines for " +
+            "$cosignerCount cosigner(s), got ${lines.size}"
     }
 
     val cosigners = (0 until cosignerCount).map { i ->
@@ -111,6 +132,13 @@ fun decodeMultisigVault(bytes: ByteArray): SavedMultisigVault {
         else -> throw IllegalArgumentException("Invalid multisig vault format: line $labelLineIndex must start with 'label64:'")
     }
 
+    val tagsLineIndex = labelLineIndex + 1
+    val tags = if (lines.size > tagsLineIndex && lines[tagsLineIndex].startsWith("tags64:")) {
+        decodeTags(lines[tagsLineIndex].substringAfter("tags64:"))
+    } else {
+        emptyList()
+    }
+
     return SavedMultisigVault(
         id = id,
         createdAtEpochMillis = createdAt,
@@ -119,5 +147,6 @@ fun decodeMultisigVault(bytes: ByteArray): SavedMultisigVault {
         network = network,
         scriptType = scriptType,
         cosigners = cosigners,
+        tags = tags,
     )
 }

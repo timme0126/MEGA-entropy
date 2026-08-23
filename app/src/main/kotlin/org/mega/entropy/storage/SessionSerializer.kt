@@ -130,13 +130,14 @@ fun decodePayload(bytes: ByteArray): SessionPayload {
 
 /**
  * Encodes session metadata into the exact plaintext format for the unencrypted
- * .meta file. V4 adds the childSeedInfo line; V3 files (no childSeedInfo,
- * defaults to "") are still readable — see decodeMetadata — since real
- * beta-tester data exists in that format by now, unlike the V2-to-V3 jump.
+ * .meta file. V5 adds the tags line; V4 adds the childSeedInfo line. Both
+ * V3 (no childSeedInfo, no tags) and V4 (no tags) files are still readable
+ * — see decodeMetadata — since real beta-tester data exists in those
+ * formats by now, unlike the V2-to-V3 jump.
  */
 fun encodeMetadata(metadata: SavedSessionMetadata): ByteArray {
     val lines = listOf(
-        "MEGA-META-V4",
+        "MEGA-META-V5",
         "id:${metadata.id}",
         "createdAt:${metadata.createdAtEpochMillis}",
         "rollsCount:${metadata.rollsCount}",
@@ -145,6 +146,7 @@ fun encodeMetadata(metadata: SavedSessionMetadata): ByteArray {
         "label:${metadata.label}",
         "hasPassphraseCheck:${metadata.hasPassphraseCheck}",
         "childSeedInfo:${metadata.childSeedInfo}",
+        "tags:${metadata.tags.joinToString(",")}",
     )
     return lines.joinToString("\n").toByteArray(StandardCharsets.UTF_8)
 }
@@ -158,9 +160,9 @@ fun encodeMetadata(metadata: SavedSessionMetadata): ByteArray {
  * treated as unreadable rather than silently guessing a default.
  * SessionFileStore.listAllMetadata() already skips (not crashes on)
  * individual files that fail to parse, so pre-V3 test sessions simply
- * stop being listed rather than breaking the app. V3 itself IS still
- * read (childSeedInfo defaults to "") since real beta-tester saved
- * sessions exist in that format.
+ * stop being listed rather than breaking the app. V3 and V4 are both
+ * still read (childSeedInfo and/or tags defaulting to "" / empty) since
+ * real beta-tester saved sessions exist in both formats.
  */
 fun decodeMetadata(bytes: ByteArray): SavedSessionMetadata {
     val text = bytes.decodeToString()
@@ -172,11 +174,15 @@ fun decodeMetadata(bytes: ByteArray): SavedSessionMetadata {
         return line.substringAfter("$key:")
     }
 
-    val childSeedInfo = when {
-        lines.size == 9 && lines[0] == "MEGA-META-V4" -> extractValue(8, "childSeedInfo")
-        lines.size == 8 && lines[0] == "MEGA-META-V3" -> ""
+    fun parseTags(tagsField: String): List<String> = if (tagsField.isEmpty()) emptyList() else tagsField.split(",")
+
+    val (childSeedInfo, tags) = when {
+        lines.size == 10 && lines[0] == "MEGA-META-V5" -> extractValue(8, "childSeedInfo") to parseTags(extractValue(9, "tags"))
+        lines.size == 9 && lines[0] == "MEGA-META-V4" -> extractValue(8, "childSeedInfo") to emptyList()
+        lines.size == 8 && lines[0] == "MEGA-META-V3" -> "" to emptyList()
         else -> throw IllegalArgumentException(
-            "Invalid metadata format: expected 'MEGA-META-V3' (8 lines) or 'MEGA-META-V4' (9 lines), got ${lines.size} line(s) starting with '${lines.getOrNull(0)}'",
+            "Invalid metadata format: expected 'MEGA-META-V3' (8 lines), 'MEGA-META-V4' (9 lines), or " +
+                "'MEGA-META-V5' (10 lines), got ${lines.size} line(s) starting with '${lines.getOrNull(0)}'",
         )
     }
 
@@ -189,5 +195,6 @@ fun decodeMetadata(bytes: ByteArray): SavedSessionMetadata {
         label = extractValue(6, "label"),
         hasPassphraseCheck = extractValue(7, "hasPassphraseCheck").toBoolean(),
         childSeedInfo = childSeedInfo,
+        tags = tags,
     )
 }

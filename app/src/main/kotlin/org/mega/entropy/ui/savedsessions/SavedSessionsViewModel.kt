@@ -17,7 +17,22 @@ data class SavedSessionsUiState(
     val isLoading: Boolean = true,
     val isPinEnabled: Boolean = false,
     val isDuressPinEnabled: Boolean = false,
-)
+    /** Every distinct tag across all [sessions], for the filter row —
+     * recomputed on every [refresh] rather than tracked independently, so
+     * it can never drift from what the sessions actually carry. */
+    val allTags: List<String> = emptyList(),
+    /** Tags currently selected in the filter row — "any of" matching (a
+     * session shows if it carries at least one selected tag), empty means
+     * no filter (show everything). See [visibleSessions]. */
+    val selectedTagFilters: Set<String> = emptySet(),
+) {
+    val visibleSessions: List<SavedSessionMetadata>
+        get() = if (selectedTagFilters.isEmpty()) {
+            sessions
+        } else {
+            sessions.filter { it.tags.any { tag -> tag in selectedTagFilters } }
+        }
+}
 
 /**
  * Lists, deletes, and (individually) deletes-all saved sessions. Uses
@@ -55,6 +70,14 @@ class SavedSessionsViewModel(application: Application) : AndroidViewModel(applic
                     isLoading = false,
                     isPinEnabled = pinEnabled,
                     isDuressPinEnabled = duressPinEnabled,
+                    allTags = sessions.flatMap { session -> session.tags }.distinct().sorted(),
+                    // Drop any filter selection for a tag that no longer
+                    // exists on any session (e.g. it was removed from the
+                    // last session that had it) rather than leaving a
+                    // stale, unreachable filter silently active.
+                    selectedTagFilters = it.selectedTagFilters.filter { tag ->
+                        sessions.any { session -> tag in session.tags }
+                    }.toSet(),
                 )
             }
         }
@@ -85,6 +108,20 @@ class SavedSessionsViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch {
             repository.renameSession(id, label)
             refresh()
+        }
+    }
+
+    fun updateTags(id: String, tags: List<String>) {
+        viewModelScope.launch {
+            repository.updateSessionTags(id, tags)
+            refresh()
+        }
+    }
+
+    fun toggleTagFilter(tag: String) {
+        _uiState.update {
+            val current = it.selectedTagFilters
+            it.copy(selectedTagFilters = if (tag in current) current - tag else current + tag)
         }
     }
 }

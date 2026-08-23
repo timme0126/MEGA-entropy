@@ -132,6 +132,25 @@ object MegaDestinations {
     const val ADVANCED_MODE_PSBT_REVIEW = "advanced_mode_psbt_review"
     const val ADVANCED_MODE_PSBT_SIGN_RESULT = "advanced_mode_psbt_sign_result"
 
+    /** "Create Backup Shares" entry point from ADVANCED_MODE_HUB — splits
+     * this session's mnemonic entropy into Shamir shares (see
+     * EntropyBackupShares.kt in entropy-core). A mandatory acknowledgment
+     * (BackupSharesDisclaimerScreen), same "agree, don't just read" bar as
+     * ADVANCED_MODE_STRUCTURE_TX_DISCLAIMER, before the threshold/total
+     * picker is reachable. */
+    const val ADVANCED_MODE_BACKUP_SHARES_DISCLAIMER = "advanced_mode_backup_shares_disclaimer"
+    const val ADVANCED_MODE_BACKUP_SHARES_SETUP = "advanced_mode_backup_shares_setup"
+    /** Shows one share at a time — see BackupShareRevealScreen for why
+     * there's a single route here rather than one per share index (the
+     * "which share" state lives in BackupSharesViewModel, not the route). */
+    const val ADVANCED_MODE_BACKUP_SHARES_REVEAL = "advanced_mode_backup_shares_reveal"
+
+    /** Reachable from ADVANCED_MODE_ENTRY, alongside Manual Entry / Import
+     * from Saved Session / Import via SeedQR — a fourth way to arrive at a
+     * validated mnemonicWords list, by reconstructing it from Shamir
+     * backup shares created earlier via ADVANCED_MODE_BACKUP_SHARES_REVEAL. */
+    const val ADVANCED_MODE_RECOVER_FROM_BACKUP_SHARES = "advanced_mode_recover_from_backup_shares"
+
     /** "Structure a Transaction" entry point from ADVANCED_MODE_HUB — a
      * mandatory acknowledgment before the camera opens: MEGA has no node
      * connection, so it can only work with whatever UTXOs the scanned PSBT

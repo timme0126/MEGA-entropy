@@ -29,6 +29,7 @@ fun AdvancedModeEntryScreen(
     onManualEntry: () -> Unit,
     onImportFromSavedSession: () -> Unit,
     onImportViaSeedQr: () -> Unit,
+    onRecoverFromBackupShares: () -> Unit,
     onMultisigVaults: () -> Unit,
     onSecurityVerification: () -> Unit,
 ) {
@@ -49,6 +50,11 @@ fun AdvancedModeEntryScreen(
         MegaPrimaryButton(text = "Manual Seed Word Entry", onClick = onManualEntry)
         MegaPrimaryButton(text = "Import from Saved Session", onClick = onImportFromSavedSession)
         MegaPrimaryButton(text = "Import via SeedQR", onClick = onImportViaSeedQr)
+        // Reconstructs a mnemonic from Shamir backup shares created
+        // earlier via Advanced Mode Hub's "Create Backup Shares" — a
+        // fourth way to arrive at the same mnemonicWords the three
+        // buttons above produce. See RecoverFromBackupSharesScreen.
+        MegaPrimaryButton(text = "Recover From Backup Shares", onClick = onRecoverFromBackupShares)
         // Deliberately does not require a seed to already be loaded first —
         // unlike every button above, a multisig vault's cosigners are each
         // filled independently from within that flow itself (saved

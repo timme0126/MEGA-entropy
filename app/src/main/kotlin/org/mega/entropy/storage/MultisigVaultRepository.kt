@@ -75,6 +75,14 @@ class MultisigVaultRepository(context: Context) {
         }
     }
 
+    suspend fun updateVaultTags(vaultId: String, tags: List<String>) {
+        withContext(Dispatchers.IO) {
+            val vault = fileStore.readVaultFile(vaultId)
+                ?: throw NoSuchElementException("Multisig vault not found for ID: $vaultId")
+            fileStore.writeVaultFile(vault.copy(tags = tags))
+        }
+    }
+
     suspend fun deleteVault(vaultId: String) {
         withContext(Dispatchers.IO) {
             fileStore.deleteVaultFile(vaultId)
