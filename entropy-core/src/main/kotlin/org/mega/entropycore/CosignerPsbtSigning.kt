@@ -60,6 +60,7 @@ fun signPsbtForCosigner(
     expectedMasterFingerprint: String,
     mnemonicWords: List<String>,
     passphrase: String = "",
+    randomBytes: () -> ByteArray,
 ): SignForCosignerResult {
     val normalizedExpected = normalizeMasterFingerprint(expectedMasterFingerprint)
     val actual = masterKeyFingerprint(mnemonicWords, passphrase)
@@ -69,6 +70,6 @@ fun signPsbtForCosigner(
     }
 
     return SignForCosignerResult.Signed(
-        signAndFinalizePsbt(psbtBytes, mnemonicWords, passphrase, FingerprintTrustPolicy.STRICT),
+        signAndFinalizePsbt(psbtBytes, mnemonicWords, passphrase, FingerprintTrustPolicy.STRICT, randomBytes),
     )
 }

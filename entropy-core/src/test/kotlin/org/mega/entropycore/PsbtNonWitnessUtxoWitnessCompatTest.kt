@@ -145,7 +145,7 @@ class PsbtNonWitnessUtxoWitnessCompatTest {
                 PsbtKeyValue(0x06, EXPECTED_PUBKEY_HEX.hexToBytes(), bip32DerivationValue()),
             ),
         )
-        val signed = signAndFinalizePsbt(buildPsbtBytes(unsignedTx, inputMap), TEST_WORDS, TEST_PASSPHRASE)
+        val signed = signAndFinalizePsbt(buildPsbtBytes(unsignedTx, inputMap), TEST_WORDS, TEST_PASSPHRASE) { ByteArray(32) }
         assertTrue(isPsbtFullyFinalized(signed))
     }
 
@@ -164,7 +164,7 @@ class PsbtNonWitnessUtxoWitnessCompatTest {
                 PsbtKeyValue(0x06, EXPECTED_PUBKEY_HEX.hexToBytes(), bip32DerivationValue()),
             ),
         )
-        val signed = signAndFinalizePsbt(buildPsbtBytes(unsignedTx, inputMap), TEST_WORDS, TEST_PASSPHRASE)
+        val signed = signAndFinalizePsbt(buildPsbtBytes(unsignedTx, inputMap), TEST_WORDS, TEST_PASSPHRASE) { ByteArray(32) }
         assertTrue(isPsbtFullyFinalized(signed))
     }
 
@@ -180,7 +180,7 @@ class PsbtNonWitnessUtxoWitnessCompatTest {
                 PsbtKeyValue(0x06, EXPECTED_PUBKEY_HEX.hexToBytes(), bip32DerivationValue()),
             ),
         )
-        val signed = signAndFinalizePsbt(buildPsbtBytes(unsignedTx, inputMap), TEST_WORDS, TEST_PASSPHRASE)
+        val signed = signAndFinalizePsbt(buildPsbtBytes(unsignedTx, inputMap), TEST_WORDS, TEST_PASSPHRASE) { ByteArray(32) }
         assertTrue(isPsbtFullyFinalized(signed))
     }
 

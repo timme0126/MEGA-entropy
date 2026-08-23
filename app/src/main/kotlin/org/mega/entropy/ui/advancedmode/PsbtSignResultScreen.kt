@@ -1,6 +1,7 @@
 package org.mega.entropy.ui.advancedmode
 
 import android.util.Base64
+import java.security.SecureRandom
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Save
@@ -91,8 +92,15 @@ fun PsbtSignResultScreen(
     // Start signing immediately. entropy-core still performs every required
     // fingerprint, derivation, UTXO-binding, and signature check internally.
     // Diagnostics are a failure explanation only; they never gate signing.
+    // Taproot signing needs BIP340 auxiliary randomness per signature (see
+    // Schnorr.sign's own doc for why entropy-core can't supply this
+    // itself) - one SecureRandom instance per composition, not
+    // reconstructed on every signing attempt.
+    val secureRandom = remember { SecureRandom() }
     val signOutcomeState = producePsbtAsync(psbtBytes, mnemonicWords, passphrase, expectedCosignerFingerprint) {
-        attemptPsbtSign(psbtBytes, mnemonicWords, passphrase, expectedCosignerFingerprint)
+        attemptPsbtSign(psbtBytes, mnemonicWords, passphrase, expectedCosignerFingerprint) {
+            ByteArray(32).also { secureRandom.nextBytes(it) }
+        }
     }
     val signedBytes = ((signOutcomeState as? PsbtAsyncState.Success<PsbtSignOutcome>)?.value as? PsbtSignOutcome.Signed)?.psbtBytes
     val failedOutcome = ((signOutcomeState as? PsbtAsyncState.Success<PsbtSignOutcome>)?.value as? PsbtSignOutcome.Failed)

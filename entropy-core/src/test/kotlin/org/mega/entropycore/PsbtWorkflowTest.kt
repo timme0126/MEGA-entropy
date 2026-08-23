@@ -82,7 +82,7 @@ class PsbtWorkflowTest {
     @Test
     fun `signAndFinalizePsbt fully finalizes a single P2WPKH input this device's key matches`() {
         val unsignedBytes = buildUnsignedPsbtBytes()
-        val resultBytes = signAndFinalizePsbt(unsignedBytes, TEST_WORDS, TEST_PASSPHRASE)
+        val resultBytes = signAndFinalizePsbt(unsignedBytes, TEST_WORDS, TEST_PASSPHRASE) { ByteArray(32) }
 
         assertTrue(isPsbtFullyFinalized(resultBytes))
     }
@@ -102,7 +102,7 @@ class PsbtWorkflowTest {
     @Test
     fun `extractFinalTransactionHex produces the correct BIP144 witness transaction after signing`() {
         val unsignedBytes = buildUnsignedPsbtBytes()
-        val resultBytes = signAndFinalizePsbt(unsignedBytes, TEST_WORDS, TEST_PASSPHRASE)
+        val resultBytes = signAndFinalizePsbt(unsignedBytes, TEST_WORDS, TEST_PASSPHRASE) { ByteArray(32) }
 
         assertEquals(EXPECTED_FINAL_TX_HEX, extractFinalTransactionHex(resultBytes))
     }
@@ -143,7 +143,7 @@ class PsbtWorkflowTest {
             inputs = listOf(inputMap),
             outputs = updatedUnsigned.outputs.map { PsbtMap(emptyList()) },
         )
-        val signed = signAndFinalizePsbt(serializePsbt(psbt), TEST_WORDS, TEST_PASSPHRASE)
+        val signed = signAndFinalizePsbt(serializePsbt(psbt), TEST_WORDS, TEST_PASSPHRASE) { ByteArray(32) }
         assertTrue(isPsbtFullyFinalized(signed))
     }
 }

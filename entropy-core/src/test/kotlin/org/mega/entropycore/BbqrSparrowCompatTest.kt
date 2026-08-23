@@ -210,7 +210,7 @@ class BbqrSparrowCompatTest {
 
     @Test fun `real signed multisig PSBT BBQr export is fully Sparrow compatible`() {
         val psbtBytes = buildTwoCosignerPsbtBytes()
-        val signedBytes = signAndFinalizePsbt(psbtBytes, TWO_COSIGNER_WORDS_A, "")
+        val signedBytes = signAndFinalizePsbt(psbtBytes, TWO_COSIGNER_WORDS_A, "") { ByteArray(32) }
         val frames = encodeBbqr('P', signedBytes)
         for ((idx, frame) in frames.withIndex()) {
             val part = parseBbqrPart(frame)
@@ -226,8 +226,8 @@ class BbqrSparrowCompatTest {
 
     @Test fun `finalized transaction BBQr export uses file type T and is fully Sparrow compatible`() {
         val psbtBytes = buildTwoCosignerPsbtBytes()
-        val onceSigned = signAndFinalizePsbt(psbtBytes, TWO_COSIGNER_WORDS_A, "")
-        val twiceSigned = signAndFinalizePsbt(onceSigned, TWO_COSIGNER_WORDS_B, "")
+        val onceSigned = signAndFinalizePsbt(psbtBytes, TWO_COSIGNER_WORDS_A, "") { ByteArray(32) }
+        val twiceSigned = signAndFinalizePsbt(onceSigned, TWO_COSIGNER_WORDS_B, "") { ByteArray(32) }
         assertTrue(isPsbtFullyFinalized(twiceSigned))
         val finalTxHex = extractFinalTransactionHex(twiceSigned)!!
         val txBytes = finalTxHex.hexToBytes()

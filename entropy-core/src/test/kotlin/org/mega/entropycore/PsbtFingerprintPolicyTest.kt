@@ -251,12 +251,12 @@ class PsbtFingerprintPolicyTest {
     fun `signAndFinalizePsbt fully finalizes the 00000000-fingerprint P2WPKH input only under the liberal policy`() {
         val psbtBytes = buildPsbtBytes(listOf(buildMatchingInputMap(UNKNOWN_FINGERPRINT_HEX)))
 
-        val strictResult = signAndFinalizePsbt(psbtBytes, TEST_WORDS, TEST_PASSPHRASE)
+        val strictResult = signAndFinalizePsbt(psbtBytes, TEST_WORDS, TEST_PASSPHRASE) { ByteArray(32) }
         assertFalse(isPsbtFullyFinalized(strictResult))
 
         val liberalResult = signAndFinalizePsbt(
             psbtBytes, TEST_WORDS, TEST_PASSPHRASE, FingerprintTrustPolicy.ALLOW_UNKNOWN_FINGERPRINT_WITH_KEY_MATCH,
-        )
+        ) { ByteArray(32) }
         assertTrue(isPsbtFullyFinalized(liberalResult))
     }
 
@@ -299,7 +299,7 @@ class PsbtFingerprintPolicyTest {
         }
 
         val expectedA = masterKeyFingerprint(TEST_WORDS, "")
-        val result = signPsbtForCosigner(psbtBytes, expectedA, TEST_WORDS, "")
+        val result = signPsbtForCosigner(psbtBytes, expectedA, TEST_WORDS, "") { ByteArray(32) }
         assertTrue(result is SignForCosignerResult.Signed)
         val signedBytes = (result as SignForCosignerResult.Signed).psbtBytes
         // Device identity was confirmed (Signed, not FingerprintMismatch), but
@@ -312,13 +312,13 @@ class PsbtFingerprintPolicyTest {
         val psbtBytes = buildTwoCosignerPsbtBytes()
         val expectedA = masterKeyFingerprint(TEST_WORDS, "")
         val expectedB = masterKeyFingerprint(TEST_WORDS_B, "")
-        val resultA = signPsbtForCosigner(psbtBytes, expectedA, TEST_WORDS, "")
+        val resultA = signPsbtForCosigner(psbtBytes, expectedA, TEST_WORDS, "") { ByteArray(32) }
         assertTrue(resultA is SignForCosignerResult.Signed)
         val afterA = (resultA as SignForCosignerResult.Signed).psbtBytes
         assertEquals(1, parsePsbt(afterA).inputs[0].partialSigs().size)
         assertFalse(isPsbtFullyFinalized(afterA))
 
-        val resultB = signPsbtForCosigner(afterA, expectedB, TEST_WORDS_B, "")
+        val resultB = signPsbtForCosigner(afterA, expectedB, TEST_WORDS_B, "") { ByteArray(32) }
         assertTrue(resultB is SignForCosignerResult.Signed)
         val afterBoth = (resultB as SignForCosignerResult.Signed).psbtBytes
         assertTrue(isPsbtFullyFinalized(afterBoth))
