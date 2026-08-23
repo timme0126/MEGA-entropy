@@ -1,6 +1,7 @@
 package org.mega.entropy.ui.advancedmode.backupshares
 
 import androidx.lifecycle.ViewModel
+import java.security.SecureRandom
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,6 +50,14 @@ class BackupSharesViewModel : ViewModel() {
 
     private var shares: List<BackupShare> = emptyList()
 
+    // entropy-core's splitSecret is deliberately RNG-agnostic — its own
+    // securityAudit Gradle task forbids referencing SecureRandom in that
+    // module's source at all (see docs/NO-RNG-PROOF.md). This is the one
+    // place, at the app-module boundary, where an actual SecureRandom
+    // instance is created and handed in as the randomness source for the
+    // polynomial coefficients (never for the secret itself).
+    private val secureRandom = SecureRandom()
+
     fun setThreshold(value: Int) = _uiState.update {
         val clamped = value.coerceIn(2, it.totalShares)
         it.copy(threshold = clamped, error = null)
@@ -86,7 +95,9 @@ class BackupSharesViewModel : ViewModel() {
             return
         }
 
-        val generatedShares = entropyToBackupShares(entropy, state.threshold, state.totalShares)
+        val generatedShares = entropyToBackupShares(entropy, state.threshold, state.totalShares) {
+            ByteArray(32).also { bytes -> secureRandom.nextBytes(bytes) }
+        }
         shares = generatedShares
         _uiState.update {
             it.copy(

@@ -1,7 +1,6 @@
 package org.mega.entropycore
 
 import java.math.BigInteger
-import java.security.SecureRandom
 
 /**
  * One share of a secret split via Shamir's Secret Sharing over the
@@ -25,14 +24,24 @@ data class BackupShare(
     val integrityTag: String,
 )
 
-private val SHARE_RANDOM = SecureRandom()
-
 /**
  * Splits [secret] into [totalShares] shares, any [threshold] of which
  * reconstruct it exactly via [reconstructSecret]. [secret] is treated as
  * the constant term of a random polynomial of degree `threshold - 1`
  * evaluated at x = 1, 2, ..., totalShares (x = 0 is never handed out —
  * that point IS the secret).
+ *
+ * [randomBytes] supplies 32 fresh random bytes on every call, used only
+ * for the polynomial's non-constant coefficients (never for the secret
+ * itself). It is REQUIRED as a parameter, rather than this function
+ * instantiating an RNG itself, because :entropy-core's own securityAudit
+ * Gradle task forbids this module's source from referencing any OS-level
+ * randomness or clock API at all — see docs/NO-RNG-PROOF.md: the module's
+ * whole point is that wallet entropy is provably a pure function of dice
+ * rolls and nothing else. The actual randomness source is created at the
+ * app-module call site (see
+ * BackupSharesViewModel), the same boundary PinCrypto.generateSalt()
+ * already uses for its own unrelated, non-wallet-entropy randomness.
  *
  * [secret] must be strictly less than [Secp256k1.N] — true with
  * overwhelming probability for any 16- or 32-byte value MEGA actually
@@ -43,7 +52,7 @@ private val SHARE_RANDOM = SecureRandom()
  * the original bytes, corrupting recovery in a way round-trip tests
  * covering ordinary inputs would never catch.
  */
-internal fun splitSecret(secret: ByteArray, threshold: Int, totalShares: Int): List<BackupShare> {
+internal fun splitSecret(secret: ByteArray, threshold: Int, totalShares: Int, randomBytes: () -> ByteArray): List<BackupShare> {
     require(threshold >= 2) {
         "Threshold must be at least 2 - a threshold of 1 provides no protection against a single lost or stolen share"
     }
@@ -65,7 +74,7 @@ internal fun splitSecret(secret: ByteArray, threshold: Int, totalShares: Int): L
     // all arithmetic mod n. Random, uniformly distributed coefficients:
     // the only thing that makes fewer than `threshold` shares reveal
     // nothing about the secret.
-    val coefficients = (1 until threshold).map { randomScalarModN(n) }
+    val coefficients = (1 until threshold).map { randomScalarModN(n, randomBytes) }
 
     return (1..totalShares).map { x ->
         val xBig = BigInteger.valueOf(x.toLong())
@@ -142,10 +151,10 @@ private fun lagrangeInterpolateAtZero(shares: List<BackupShare>, n: BigInteger):
     return result
 }
 
-private fun randomScalarModN(n: BigInteger): BigInteger {
+private fun randomScalarModN(n: BigInteger, randomBytes: () -> ByteArray): BigInteger {
     while (true) {
-        val bytes = ByteArray(32)
-        SHARE_RANDOM.nextBytes(bytes)
+        val bytes = randomBytes()
+        require(bytes.size == 32) { "randomBytes() must return exactly 32 bytes, got ${bytes.size}" }
         val candidate = bytes.toPositiveBigInteger()
         if (candidate.signum() > 0 && candidate < n) return candidate
     }
