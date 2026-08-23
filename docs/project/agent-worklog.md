@@ -225,6 +225,43 @@ review agent (if any), Claude decision, code affected, tests added.
   directly — the fix matters for THIS review task and any future
   delegation, not for redoing already-completed work.
 
+## Task 10 — Gate 1 adversarial review results: one false positive (verified and refuted), one clean pass, one still pending
+- **Agent B** (`192.168.12.6:8000`, adversarial review of Schnorr.kt/
+  TapTweak.kt/Bech32.kt): reported four "pass" verdicts (malformed-input
+  handling, `sGMinusEP`'s e=0 case, Bech32/Bech32m decode completeness,
+  constant-time/threat-model applicability) and one "CRITICAL" finding
+  against `TapTweak.tweakPrivateKey`'s parity-recheck branch, claiming it
+  produces a signing key for the wrong point when the internal key has odd
+  Y.
+  - **Claude verification — the CRITICAL finding was a false positive.**
+    Re-derived the algebra independently: `d_even * G` is, by construction,
+    always exactly `lift_x(internalPubkey)` (the identical point, not
+    merely the same x-coordinate — both are "the even-y point at that x"),
+    so `d_tweaked * G = d_even*G + t*G` always equals the tweaked output
+    point exactly. Agent B's own counter-derivation used the ORIGINAL
+    (possibly odd-y) internal point instead of the always-even-y lift_x
+    result, which is where its analysis diverged from correct. Confirmed
+    empirically too: added temporary debug instrumentation and reran
+    `TapTweakVectorsTest` (7 vectors spanning both key parities) plus
+    `TaprootPsbtEndToEndTest` — the branch Agent B flagged as "the bug"
+    never actually fired in any case, consistent with the proof.
+  - **Claude decision**: reject the "bug" framing, but act on the signal
+    anyway — code confusing enough to produce a plausible-sounding false
+    alarm from an independent reviewer is worth simplifying regardless of
+    whether it was ever wrong. Removed the redundant recheck/negate branch
+    and documented the proof directly in the function so a future reviewer
+    doesn't raise the same false alarm. `./gradlew check` green after the
+    change; all Taproot tests still pass. Commit `99760a5`.
+  - This is exactly the "Claude resolves conflicts rather than
+    automatically accepting" case the delegation rules describe — recorded
+    in full here rather than either silently accepting the "fix" or
+    silently discarding the finding without explanation.
+- **Agent C** (`192.168.12.7:8000`, security/threat-model review, same
+  code): query still running as of this entry — no response yet even at
+  24000 max_tokens (started ~15:28, still incomplete after 30+ minutes).
+  Will record its result in a follow-up entry once it returns; not
+  blocking further work in the meantime.
+
 ---
 
 ## Delegation prompts on file (for reproducibility)
