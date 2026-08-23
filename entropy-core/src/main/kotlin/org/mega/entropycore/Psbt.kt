@@ -25,6 +25,19 @@ data class PsbtBip32Derivation(
 
 data class PsbtPartialSig(val pubkey: ByteArray, val signature: ByteArray)
 
+/** PSBT_IN/OUT_TAP_BIP32_DERIVATION (BIP371) — same role as
+ * [PsbtBip32Derivation] for a Taproot input/output, but keyed on a
+ * 32-byte X-ONLY pubkey (not a 33-byte compressed one) and carrying
+ * [leafHashes]: the script leaves (if any) this pubkey participates in.
+ * An empty [leafHashes] means this is the internal key itself (BIP371's
+ * own wording: "The internal key does not have leaf hashes"). */
+data class PsbtTapBip32Derivation(
+    val pubkey: ByteArray, // 32 bytes, x-only
+    val leafHashes: List<ByteArray>, // each 32 bytes
+    val masterFingerprint: ByteArray, // 4 bytes
+    val path: List<Long>,
+)
+
 fun parsePsbt(bytes: ByteArray): Psbt {
     if (bytes.size < 5) throw IllegalArgumentException("Truncated PSBT header")
     val magic = byteArrayOf(0x70, 0x73, 0x62, 0x74, 0xFF.toByte())
@@ -110,12 +123,19 @@ fun parsePsbt(bytes: ByteArray): Psbt {
  * keydata): non_witness_utxo, witness_utxo, sighash_type, redeem_script,
  * witness_script, final_scriptSig, final_scriptWitness. The keyed types
  * (0x02 partial_sig, 0x06 bip32_derivation) legitimately carry a pubkey and
- * are deliberately absent. */
-private val SINGLETON_INPUT_KEY_TYPES = setOf(0x00, 0x01, 0x03, 0x04, 0x05, 0x07, 0x08)
+ * are deliberately absent. Also includes BIP371's un-keyed Taproot fields:
+ * 0x13 (PSBT_IN_TAP_KEY_SIG), 0x17 (PSBT_IN_TAP_INTERNAL_KEY), 0x18
+ * (PSBT_IN_TAP_MERKLE_ROOT) — 0x14 (TAP_SCRIPT_SIG), 0x15 (TAP_LEAF_SCRIPT),
+ * and 0x16 (TAP_BIP32_DERIVATION) all legitimately carry keydata and are
+ * deliberately absent, same as 0x02/0x06 above. */
+private val SINGLETON_INPUT_KEY_TYPES = setOf(0x00, 0x01, 0x03, 0x04, 0x05, 0x07, 0x08, 0x13, 0x17, 0x18)
 
 /** BIP174 output key types whose key is the type byte alone: redeem_script
- * and witness_script. 0x02 (bip32_derivation) carries a pubkey. */
-private val SINGLETON_OUTPUT_KEY_TYPES = setOf(0x00, 0x01)
+ * and witness_script. 0x02 (bip32_derivation) carries a pubkey. Also
+ * includes BIP371's 0x05 (PSBT_OUT_TAP_INTERNAL_KEY) and 0x06
+ * (PSBT_OUT_TAP_TREE) — 0x07 (PSBT_OUT_TAP_BIP32_DERIVATION) carries a
+ * pubkey and is deliberately absent, same as 0x02 above. */
+private val SINGLETON_OUTPUT_KEY_TYPES = setOf(0x00, 0x01, 0x05, 0x06)
 
 /**
  * Rejects a key that carries keydata for a type BIP174 defines as un-keyed.
@@ -355,3 +375,69 @@ private fun parseBip32Derivations(entries: List<PsbtKeyValue>, keyType: Int): Li
 
 fun PsbtMap.finalScriptWitness(): ByteArray? =
     entries.find { it.keyType == 0x08 }?.value
+
+// --- BIP371 Taproot fields -------------------------------------------------
+
+/** PSBT_IN_TAP_INTERNAL_KEY (0x17): the 32-byte x-only internal key this
+ * input's output key was tweaked from. */
+fun PsbtMap.tapInternalKey(): ByteArray? =
+    entries.find { it.keyType == 0x17 }?.value?.also {
+        if (it.size != 32) throw IllegalArgumentException("PSBT_IN_TAP_INTERNAL_KEY must be exactly 32 bytes, got ${it.size}")
+    }
+
+/** PSBT_IN_TAP_MERKLE_ROOT (0x18): the 32-byte script-tree Merkle root, if
+ * this Taproot output has a script tree — absent (null) for a key-path-only
+ * output, the same as an empty merkle root passed to [TapTweak.tweakPubKey]. */
+fun PsbtMap.tapMerkleRoot(): ByteArray? =
+    entries.find { it.keyType == 0x18 }?.value?.also {
+        if (it.size != 32) throw IllegalArgumentException("PSBT_IN_TAP_MERKLE_ROOT must be exactly 32 bytes, got ${it.size}")
+    }
+
+/** PSBT_IN_TAP_KEY_SIG (0x13): this device's own key-path Schnorr signature,
+ * once produced — the Taproot equivalent of [partialSigs] for ECDSA inputs.
+ * 64 bytes (SIGHASH_DEFAULT) or 65 bytes (explicit sighash byte appended). */
+fun PsbtMap.tapKeySig(): ByteArray? =
+    entries.find { it.keyType == 0x13 }?.value?.also {
+        if (it.size != 64 && it.size != 65) throw IllegalArgumentException("PSBT_IN_TAP_KEY_SIG must be 64 or 65 bytes, got ${it.size}")
+    }
+
+/** PSBT_IN_TAP_BIP32_DERIVATION (0x16): which x-only pubkey(s) (internal
+ * key or a leaf-script key) this input involves, and the path to derive
+ * each from its own master — the Taproot equivalent of [bip32Derivations]. */
+fun PsbtMap.tapBip32Derivations(): List<PsbtTapBip32Derivation> = parseTapBip32Derivations(entries, 0x16)
+
+/** PSBT_OUT_TAP_INTERNAL_KEY (0x05): the 32-byte x-only internal key used
+ * in this OUTPUT — the output-map counterpart of [tapInternalKey], needed
+ * to independently verify a Taproot change output the same way
+ * VaultChangeVerification.kt already does for other script types. */
+fun PsbtMap.outputTapInternalKey(): ByteArray? =
+    entries.find { it.keyType == 0x05 }?.value?.also {
+        if (it.size != 32) throw IllegalArgumentException("PSBT_OUT_TAP_INTERNAL_KEY must be exactly 32 bytes, got ${it.size}")
+    }
+
+/** PSBT_OUT_TAP_BIP32_DERIVATION (0x07) — the output-map counterpart of
+ * [tapBip32Derivations]. */
+fun PsbtMap.outputTapBip32Derivations(): List<PsbtTapBip32Derivation> = parseTapBip32Derivations(entries, 0x07)
+
+private fun parseTapBip32Derivations(entries: List<PsbtKeyValue>, keyType: Int): List<PsbtTapBip32Derivation> =
+    entries.filter { it.keyType == keyType }.map { entry ->
+        require(entry.keyData.size == 32) {
+            "Taproot BIP32 derivation key data must be a 32-byte x-only pubkey, got ${entry.keyData.size}"
+        }
+        val value = entry.value
+        val hashCountResult = readCompactSize(value, 0)
+        val hashCount = hashCountResult.value
+        var offset = hashCountResult.consumed
+        val leafHashes = (0 until hashCount.toInt()).map {
+            if (offset + 32 > value.size) throw IllegalArgumentException("Truncated Taproot BIP32 derivation leaf hash")
+            value.copyOfRange(offset, offset + 32).also { offset += 32 }
+        }
+        if (offset + 4 > value.size) throw IllegalArgumentException("Truncated Taproot BIP32 derivation fingerprint")
+        val fingerprint = value.copyOfRange(offset, offset + 4)
+        offset += 4
+        val remaining = value.size - offset
+        if (remaining % 4 != 0) throw IllegalArgumentException("Truncated Taproot BIP32 derivation path")
+        val pathElementCount = remaining / 4
+        val path = (0 until pathElementCount).map { i -> readUInt32LE(value, offset + 4 * i) }
+        PsbtTapBip32Derivation(entry.keyData, leafHashes, fingerprint, path)
+    }

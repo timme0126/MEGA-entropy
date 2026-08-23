@@ -46,20 +46,103 @@ internal fun parseBareMultisigWitnessScript(script: ByteArray): Pair<Int, List<B
  * half-finalized into an invalid transaction.
  */
 internal fun finalizePsbt(psbt: Psbt): Psbt {
+    // Resolved once for the whole PSBT (not per input): a Taproot key-path
+    // signature's sighash commits to EVERY input's spent amount and
+    // scriptPubKey (see computeTaprootKeyPathSighash), so verifying even
+    // one Taproot input's signature during finalization needs every
+    // input's UTXO, not just its own. A null entry means "some input's
+    // UTXO can't be resolved" - any Taproot input is then left unfinalized
+    // (see finalizeTaprootKeyPathInput's own null-check), exactly mirroring
+    // signTaprootPsbt's own all-or-nothing UTXO resolution.
+    val resolvedUtxos = psbt.inputs.mapIndexed { i, inputMap -> resolveInputUtxo(psbt.unsignedTx, i, inputMap) }
+
     val finalizedInputs = psbt.inputs.mapIndexed { index, inputMap ->
         // Idempotency: never touch an already-finalized input.
         if (inputMap.finalScriptWitness() != null) {
             inputMap
         } else {
-            val witnessScript = inputMap.witnessScript()
-            if (witnessScript != null) {
-                finalizeMultisigInput(psbt.unsignedTx, index, inputMap, witnessScript)
+            val witnessUtxo = resolvedUtxos[index]
+            if (witnessUtxo != null && isP2trScriptPubKey(witnessUtxo.scriptPubKey)) {
+                finalizeTaprootKeyPathInput(psbt.unsignedTx, index, inputMap, witnessUtxo, resolvedUtxos)
             } else {
-                finalizeSingleSigInput(psbt.unsignedTx, index, inputMap)
+                val witnessScript = inputMap.witnessScript()
+                if (witnessScript != null) {
+                    finalizeMultisigInput(psbt.unsignedTx, index, inputMap, witnessScript)
+                } else {
+                    finalizeSingleSigInput(psbt.unsignedTx, index, inputMap)
+                }
             }
         }
     }
     return psbt.copy(inputs = finalizedInputs)
+}
+
+/**
+ * Finalizes a Taproot key-path input: a single-element witness stack
+ * `[signature]`, per BIP341 — no pubkey, no script, unlike every other
+ * finalizer in this file, since the signature alone is everything a
+ * key-path spend's witness ever needs.
+ *
+ * Cryptographically verifies PSBT_IN_TAP_KEY_SIG against the input's own
+ * output key before trusting it enough to finalize — the same
+ * "never finalize an unverified signature" posture [isValidPartialSig]
+ * enforces for ECDSA inputs. The output key is recomputed from
+ * PSBT_IN_TAP_INTERNAL_KEY + PSBT_IN_TAP_MERKLE_ROOT (empty when absent)
+ * via [TapTweak.tweakPubKey] and checked against [witnessUtxo]'s own
+ * scriptPubKey — an input whose declared internal key/merkle root doesn't
+ * actually match its own UTXO can never produce a valid signature and is
+ * left unfinalized, same as [signTaprootPsbt]'s own binding check.
+ */
+private fun finalizeTaprootKeyPathInput(
+    unsignedTx: Transaction,
+    inputIndex: Int,
+    inputMap: PsbtMap,
+    witnessUtxo: TxOut,
+    allResolvedUtxos: List<TxOut?>,
+): PsbtMap {
+    val sig = inputMap.tapKeySig() ?: return inputMap
+    val internalKey = inputMap.tapInternalKey() ?: return inputMap
+    val merkleRoot = inputMap.tapMerkleRoot() ?: ByteArray(0)
+    // Every input's UTXO must resolve to reconstruct the sighash this
+    // signature actually committed to - see this function's own doc.
+    if (allResolvedUtxos.any { it == null }) return inputMap
+    @Suppress("UNCHECKED_CAST")
+    val allResolved = allResolvedUtxos as List<TxOut>
+
+    val tweaked = try {
+        TapTweak.tweakPubKey(internalKey, merkleRoot)
+    } catch (e: IllegalArgumentException) {
+        return inputMap
+    }
+    val expectedScriptPubKey = byteArrayOf(0x51, 0x20) + tweaked.outputKeyXOnly
+    if (!witnessUtxo.scriptPubKey.contentEquals(expectedScriptPubKey)) return inputMap
+
+    val sighashType = when (sig.size) {
+        64 -> 0
+        65 -> sig[64].toInt() and 0xFF
+        else -> return inputMap // tapKeySig() itself already enforces 64/65, defensive only
+    }
+    try {
+        validateTaprootSighashType(sighashType.toLong(), inputIndex)
+    } catch (e: IllegalArgumentException) {
+        return inputMap
+    }
+    val signature = if (sig.size == 65) sig.copyOfRange(0, 64) else sig
+
+    val sighash = try {
+        computeTaprootKeyPathSighash(unsignedTx, inputIndex, allResolved, sighashType)
+    } catch (e: IllegalArgumentException) {
+        return inputMap
+    }
+    if (!Schnorr.verify(tweaked.outputKeyXOnly, sighash, signature)) return inputMap
+
+    val finalWitness = serializeWitnessStack(listOf(sig))
+    return PsbtMap(
+        entries = listOf(
+            PsbtKeyValue(keyType = 0x01, keyData = ByteArray(0), value = writeUInt64LE(witnessUtxo.valueSats) + writeCompactSize(witnessUtxo.scriptPubKey.size.toLong()) + witnessUtxo.scriptPubKey),
+            PsbtKeyValue(keyType = 0x08, keyData = ByteArray(0), value = finalWitness),
+        ),
+    )
 }
 
 /**
