@@ -124,7 +124,10 @@ class PsbtWorkflowTest {
         )
         val unsigned = parseTransaction(UNSIGNED_TX_HEX.hexToBytes())
         val updatedInput = unsigned.inputs[0].copy(
-            previousTxid = doubleSha256(serializeTransaction(previous)).reversedArray(),
+            // Wire/internal order, matching TxIn.previousTxid's documented
+            // convention and what resolveInputUtxo actually compares against
+            // - no .reversedArray() (that would be display order).
+            previousTxid = doubleSha256(serializeTransaction(previous)),
             previousVout = 0L,
         )
         val updatedUnsigned = unsigned.copy(inputs = listOf(updatedInput))
