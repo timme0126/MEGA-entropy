@@ -30,6 +30,9 @@ fun ChecksumScreen(
 ) {
     val digestHex = checksum.digest.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
     val checksumBitsString = checksum.checksumBits.joinToString("") { if (it) "1" else "0" }
+    val checksumBitCount = checksum.checksumBits.size
+    val entropyBitCount = checksumBitCount * 32
+    val totalBitCount = entropyBitCount + checksumBitCount
 
     SecureScreen()
     Column(
@@ -52,17 +55,21 @@ fun ChecksumScreen(
             MegaMonoText(digestHex.chunked(8).joinToString(" "))
         }
 
-        MegaCard(title = "First 8 bits of the digest → checksum") {
+        MegaCard(title = "First $checksumBitCount bits of the digest → checksum") {
             MegaMonoText(checksumBitsString)
             Text(
-                "These 8 bits are BIP39's checksum for 256-bit entropy " +
-                    "(ENT/32 = 256/32 = 8).",
+                "These $checksumBitCount bits are BIP39's checksum for " +
+                    "$entropyBitCount-bit entropy (ENT/32 = " +
+                    "$entropyBitCount/32 = $checksumBitCount).",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
 
         MegaCard(title = "Entropy + checksum") {
-            MegaMonoText("256 entropy bits + 8 checksum bits = 264 bits")
+            MegaMonoText(
+                "$entropyBitCount entropy bits + $checksumBitCount checksum " +
+                    "bits = $totalBitCount bits",
+            )
         }
 
         MegaPrimaryButton(text = "Continue", onClick = onContinue)

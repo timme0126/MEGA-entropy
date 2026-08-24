@@ -17,6 +17,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,14 @@ fun SavedSessionsScreen(
     val state by viewModel.uiState.collectAsState()
     var confirmingDeleteAll by remember { mutableStateOf(false) }
     var showingSettings by remember { mutableStateOf(false) }
+
+    // This destination stays on the back stack (and its ViewModel with it)
+    // while PIN setup/change is pushed on top, so the cached isPinEnabled
+    // here goes stale the moment that flow completes. Re-running this
+    // LaunchedEffect(Unit) every time this composable re-enters composition
+    // (i.e. every time we're navigated back to) re-syncs it, rather than
+    // requiring a full app relaunch to pick up the change.
+    LaunchedEffect(Unit) { viewModel.refresh() }
 
     if (showingSettings) {
         SavedSessionSettingsScreen(
