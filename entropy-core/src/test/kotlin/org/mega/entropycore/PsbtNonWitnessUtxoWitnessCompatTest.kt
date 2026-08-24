@@ -104,7 +104,13 @@ class PsbtNonWitnessUtxoWitnessCompatTest {
             return out
         }
 
-        private fun ancestorTxid(legacyBytes: ByteArray): ByteArray = doubleSha256(legacyBytes).reversedArray()
+        // Wire/internal byte order (never reversed) - matches how TxIn.previousTxid
+        // is documented and how the real wire parser (parseTxInputs) stores it
+        // from actual PSBT bytes. A previous version of this fixture reversed this
+        // into display order, which matched a since-fixed bug in resolveInputUtxo
+        // but silently diverged from what a real PSBT (from Bitcoin Core, Sparrow,
+        // etc.) actually contains on the wire.
+        private fun ancestorTxid(legacyBytes: ByteArray): ByteArray = doubleSha256(legacyBytes)
 
         private fun buildUnsignedTx(previousTxid: ByteArray, previousVout: Long): Transaction = Transaction(
             version = 2L,

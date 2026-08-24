@@ -278,7 +278,19 @@ internal fun resolveInputUtxo(unsignedTx: Transaction, inputIndex: Int, inputMap
     val previousOutput = if (previous != null) {
         val input = unsignedTx.inputs.getOrNull(inputIndex)
             ?: throw IllegalArgumentException("PSBT input $inputIndex has no unsigned transaction input")
-        if (!doubleSha256(serializeTransaction(previous)).reversedArray().contentEquals(input.previousTxid)) {
+        // TxIn.previousTxid is wire/internal byte order (see its own doc
+        // comment) and doubleSha256's raw digest already IS that same
+        // internal-order txid - reversing it here would convert to
+        // display order and compare against the wrong convention. A
+        // previous bug did exactly that reversal, so this comparison
+        // silently failed for every real PSBT (any node/wallet's
+        // non_witness_utxo is wire-format, per BIP174) despite entropy-core's
+        // own test suite passing, because that suite's fixtures built
+        // previousTxid by hand in the same wrong (reversed) order rather
+        // than through the real wire parser - see
+        // PsbtNonWitnessUtxoWitnessCompatTest's ancestorTxid() for the
+        // matching fixture fix.
+        if (!doubleSha256(serializeTransaction(previous)).contentEquals(input.previousTxid)) {
             throw IllegalArgumentException("PSBT input $inputIndex non_witness_utxo txid does not match its outpoint")
         }
         if (input.previousVout < 0L || input.previousVout >= previous.outputs.size.toLong()) {
