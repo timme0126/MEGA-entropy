@@ -26,8 +26,8 @@ android {
         applicationId = "org.mega.entropy"
         minSdk = 29
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.1.12"
+        versionCode = 14
+        versionName = "0.1.13"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -113,6 +113,11 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
+    // Pure-Java (no JNI/native code, no ABI concerns) scrypt implementation
+    // for the encrypted backup-file feature — see security/backup/BackupCrypto.kt.
+    // Nothing else in the app uses BouncyCastle; PSBT/BIP32/ECDSA math is
+    // hand-rolled in :entropy-core.
+    implementation(libs.bouncycastle.bcprov)
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

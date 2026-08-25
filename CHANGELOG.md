@@ -1,6 +1,15 @@
 # Changelog
 
-Notable changes to MEGA, most recent first. The current beta build is `v0.1.11` (see [`README.md`](README.md#download-the-beta-apk)).
+Notable changes to MEGA, most recent first. The current beta build is `v0.1.11` (see [`README.md`](README.md#download-the-beta-apk)); `[Unreleased]` below reflects the in-development build (`v0.1.13`), not yet cut as a signed beta release.
+
+## [Unreleased] — v0.1.13
+
+### Added
+- **Encrypted backup export/import** (Settings) — bundles every saved session's mnemonic/label/tags/child-seed-info and every saved multisig vault's public descriptor data into one file, encrypted with AES-256-GCM under a key derived from a user-chosen passphrase via scrypt (RFC 7914). Lets a user move their saved data to a second MEGA device and recover it there. The passphrase is never stored on either device; a wrong passphrase or a corrupted/tampered file fails closed before anything is written. Importing requires the target device to already have a MEGA PIN set up, matching the existing rule for saving any data. The PIN itself is never included in a backup — it's per-device access-friction, not portable wallet data.
+- **Settings gear on the Welcome screen** — every app setting, including Advanced Mode, is now directly reachable from the main screen instead of only via a gear nested inside Saved Sessions, so a user can enable Advanced Mode before ever running a dice session.
+
+### Fixed
+- Account index and BIP85 index fields silently turned a typed "1" into "10" (or "01") when overwriting the default "0" — the field's cursor could land on either side of the existing digit, and no amount of trimming leading zeros afterward can recover which digit was meant once both are concatenated. Fixed by selecting the whole field on focus so the first keystroke replaces "0" outright, instead of merging with it.
 
 ## [0.1.11] — 2026-08-20
 

@@ -30,6 +30,11 @@ class MultisigVaultRepository(context: Context) {
         scriptType: MultisigScriptType,
         cosigners: List<SavedMultisigCosigner>,
         label: String,
+        // Overridable only so a backup restore (see BackupRepository) can
+        // preserve a vault's original save date instead of every restored
+        // vault jumping to the top of the list under today's date. Every
+        // other caller relies on the default (this instant).
+        createdAtEpochMillis: Long = System.currentTimeMillis(),
     ): SavedMultisigVault {
         // Every saved vault must be labeled — MegaLabelSessionDialog already
         // blocks its own Save button on a blank label, but every caller
@@ -41,7 +46,7 @@ class MultisigVaultRepository(context: Context) {
         return withContext(Dispatchers.IO) {
             val vault = SavedMultisigVault(
                 id = UUID.randomUUID().toString(),
-                createdAtEpochMillis = System.currentTimeMillis(),
+                createdAtEpochMillis = createdAtEpochMillis,
                 label = label,
                 threshold = threshold,
                 network = network,

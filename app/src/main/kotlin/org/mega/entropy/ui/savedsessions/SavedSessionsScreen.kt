@@ -36,6 +36,7 @@ import java.text.DateFormat
 import java.util.Date
 import org.mega.entropy.security.settings.SavedSessionLockTimeoutOption
 import org.mega.entropy.storage.SavedSessionMetadata
+import org.mega.entropy.ui.backup.BackupCard
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaLabelSessionDialog
@@ -329,6 +330,8 @@ fun SavedSessionSettingsScreen(
                 onCheckedChange = onAllowPrivateKeyExportChanged,
             )
         }
+
+        BackupCard()
 
         MegaCard {
             Text(
