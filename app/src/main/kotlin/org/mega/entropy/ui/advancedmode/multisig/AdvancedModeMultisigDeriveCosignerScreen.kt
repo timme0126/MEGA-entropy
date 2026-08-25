@@ -16,6 +16,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import org.mega.entropy.ui.components.MegaCard
+import org.mega.entropy.ui.components.MegaIndexField
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
@@ -99,17 +100,14 @@ fun AdvancedModeMultisigDeriveCosignerScreen(
             )
         }
 
-        OutlinedTextField(
+        MegaIndexField(
             value = accountText,
             onValueChange = { value ->
-                accountText = value.filter { it.isDigit() }.trimStart('0').ifEmpty { "0" }
+                accountText = value
                 error = null
             },
-            label = { Text("Account index") },
-            supportingText = { Text("Usually 0 unless you're intentionally using a separate account") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
+            label = "Account index",
+            supportingText = "Usually 0 unless you're intentionally using a separate account",
         )
 
         val currentError = error
