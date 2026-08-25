@@ -1,8 +1,8 @@
 # Changelog
 
-Notable changes to MEGA, most recent first. The current beta build is `v0.1.11` (see [`README.md`](README.md#download-the-beta-apk)); `[Unreleased]` below reflects the in-development build (`v0.1.13`), not yet cut as a signed beta release.
+Notable changes to MEGA, most recent first. The current beta build is `v0.1.13` (see [`README.md`](README.md#download-the-beta-apk)).
 
-## [Unreleased] — v0.1.13
+## [0.1.13] — 2026-08-25
 
 ### Added
 - **Encrypted backup export/import** (Settings) — bundles every saved session's mnemonic/label/tags/child-seed-info and every saved multisig vault's public descriptor data into one file, encrypted with AES-256-GCM under a key derived from a user-chosen passphrase via scrypt (RFC 7914). Lets a user move their saved data to a second MEGA device and recover it there. The passphrase is never stored on either device; a wrong passphrase or a corrupted/tampered file fails closed before anything is written. Importing requires the target device to already have a MEGA PIN set up, matching the existing rule for saving any data. The PIN itself is never included in a backup — it's per-device access-friction, not portable wallet data.
