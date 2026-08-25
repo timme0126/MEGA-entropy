@@ -17,6 +17,7 @@ import org.mega.entropycore.deriveMnemonic
 import org.mega.entropycore.mapRollsToBase6
 
 const val ROLLS_PER_BATCH = 5
+const val FIFTH_ROLL_DISPLAY_MILLIS = 1_100L
 
 /** Everything shown on-screen for one finished 5-roll batch, so the UI can
  * display the full worked calculation per spec section 6. */
@@ -33,6 +34,7 @@ data class DiceSessionUiState(
     val mnemonicLength: MnemonicLength = MnemonicLength.TWENTY_FOUR_WORDS,
     val completedBatches: List<CompletedBatch> = emptyList(),
     val currentBatchRolls: List<Int> = emptyList(),
+    val pendingRoll: Int? = null,
     val mnemonicResult: MnemonicResult? = null,
     // MnemonicResult.Success doesn't retain the X/T/6^N/2^bits comparison
     // (only MnemonicResult.Rejected does), but the Bias Check screen needs
@@ -51,7 +53,7 @@ data class DiceSessionUiState(
 ) {
     val totalRolls: Int get() = mnemonicLength.rollCount
     val totalBatches: Int get() = totalRolls / ROLLS_PER_BATCH
-    val rollsEntered: Int get() = completedBatches.size * ROLLS_PER_BATCH + currentBatchRolls.size
+    val rollsEntered: Int get() = completedBatches.size * ROLLS_PER_BATCH + currentBatchRolls.size + if (pendingRoll != null) 1 else 0
     val currentBatchNumber: Int get() = (completedBatches.size + 1).coerceAtMost(totalBatches)
     val isSessionComplete: Boolean get() = completedBatches.size == totalBatches
     val allRolls: List<Int> get() = completedBatches.flatMap { it.physicalRolls } + currentBatchRolls
@@ -87,39 +89,46 @@ class DiceSessionViewModel : ViewModel() {
     fun onRollEntered(physicalRoll: Int) {
         require(physicalRoll in 1..6) { "physicalRoll must be 1..6" }
         _uiState.update { state ->
-            if (state.isSessionComplete) return@update state
-
+            if (state.isSessionComplete || state.pendingRoll != null) return@update state
             val newCurrentBatch = state.currentBatchRolls + physicalRoll
             if (newCurrentBatch.size < ROLLS_PER_BATCH) {
                 return@update state.copy(currentBatchRolls = newCurrentBatch)
             }
+            // Keep the fifth value visible before committing the completed batch.
+            state.copy(pendingRoll = physicalRoll)
+        }
+    }
 
+    /** Commits the fifth roll after it has remained visible to the user. */
+    fun commitPendingRoll() {
+        _uiState.update { state ->
+            val pendingRoll = state.pendingRoll ?: return@update state
+            val newCurrentBatch = state.currentBatchRolls + pendingRoll
+            val stateWithoutPendingRoll = state.copy(pendingRoll = null)
             val base6Digits = mapRollsToBase6(newCurrentBatch)
             val chunk = calculateChunk(base6Digits)
-            val previousX = state.runningX
+            val previousX = stateWithoutPendingRoll.runningX
             val newX = accumulate(previousX, chunk)
             val completed = CompletedBatch(
-                batchNumber = state.completedBatches.size + 1,
+                batchNumber = stateWithoutPendingRoll.completedBatches.size + 1,
                 physicalRolls = newCurrentBatch,
                 base6Digits = base6Digits,
                 chunk = chunk,
                 previousX = previousX,
                 newX = newX,
             )
-            val newCompletedBatches = state.completedBatches + completed
-            val isNowComplete = newCompletedBatches.size == state.totalBatches
+            val newCompletedBatches = stateWithoutPendingRoll.completedBatches + completed
+            val isNowComplete = newCompletedBatches.size == stateWithoutPendingRoll.totalBatches
             val allRolls = newCompletedBatches.flatMap { it.physicalRolls }
-            val result = if (isNowComplete) deriveMnemonic(allRolls, state.mnemonicLength) else null
+            val result = if (isNowComplete) deriveMnemonic(allRolls, stateWithoutPendingRoll.mnemonicLength) else null
             val rejection = if (isNowComplete) {
                 checkAcceptance(
                     calculateXDirect(mapRollsToBase6(allRolls)),
-                    state.mnemonicLength.rollCount,
-                    state.mnemonicLength.entropyBits,
+                    stateWithoutPendingRoll.mnemonicLength.rollCount,
+                    stateWithoutPendingRoll.mnemonicLength.entropyBits,
                 )
-            } else {
-                null
-            }
-            state.copy(
+            } else null
+            stateWithoutPendingRoll.copy(
                 completedBatches = newCompletedBatches,
                 currentBatchRolls = emptyList(),
                 mnemonicResult = result,

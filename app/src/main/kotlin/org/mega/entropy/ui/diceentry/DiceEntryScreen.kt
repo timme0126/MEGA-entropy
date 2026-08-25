@@ -1,6 +1,7 @@
 package org.mega.entropy.ui.diceentry
 
 import androidx.compose.animation.AnimatedVisibility
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +70,13 @@ fun DiceEntryScreen(
         }
     }
 
+    LaunchedEffect(state.pendingRoll) {
+        if (state.pendingRoll != null) {
+            delay(FIFTH_ROLL_DISPLAY_MILLIS)
+            viewModel.commitPendingRoll()
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -90,10 +98,10 @@ fun DiceEntryScreen(
 
         ProgressCard(state = state)
 
-        RollSlots(currentBatchRolls = state.currentBatchRolls)
+        RollSlots(currentBatchRolls = state.currentBatchRolls + listOfNotNull(state.pendingRoll))
 
         DieButtonGrid(
-            enabled = !state.isSessionComplete,
+            enabled = !state.isSessionComplete && state.pendingRoll == null,
             onDieTapped = { value ->
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 viewModel.onRollEntered(value)
@@ -104,13 +112,13 @@ fun DiceEntryScreen(
             MegaSecondaryButton(
                 text = "Undo",
                 modifier = Modifier.weight(1f),
-                enabled = state.rollsEntered > 0,
+                enabled = state.rollsEntered > 0 && state.pendingRoll == null,
                 onClick = { viewModel.undoLastRoll() },
             )
             MegaSecondaryButton(
                 text = "Clear Batch",
                 modifier = Modifier.weight(1f),
-                enabled = state.currentBatchRolls.isNotEmpty(),
+                enabled = state.currentBatchRolls.isNotEmpty() && state.pendingRoll == null,
                 onClick = { viewModel.clearCurrentBatch() },
             )
         }
