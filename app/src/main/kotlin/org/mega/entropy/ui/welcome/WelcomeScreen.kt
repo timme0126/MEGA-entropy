@@ -10,8 +10,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,6 +82,7 @@ fun WelcomeScreen(
     onSecurityModel: () -> Unit,
     onAbout: () -> Unit,
     onExitApp: () -> Unit,
+    onSettings: () -> Unit,
     advancedModeEnabled: Boolean,
     onAdvancedMode: () -> Unit,
 ) {
@@ -137,14 +141,18 @@ fun WelcomeScreen(
         )
     }
 
-        IconButton(
-            onClick = { confirmingExit = true },
+        Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(8.dp),
         ) {
-            Icon(PowerIcon, contentDescription = "Close app")
+            IconButton(onClick = onSettings) {
+                Icon(Icons.Filled.Settings, contentDescription = "Settings")
+            }
+            IconButton(onClick = { confirmingExit = true }) {
+                Icon(PowerIcon, contentDescription = "Close app")
+            }
         }
 
         if (confirmingExit) {

@@ -79,7 +79,10 @@ import org.mega.entropy.ui.pin.PinSetupScreen
 import org.mega.entropy.ui.pin.PinVerifyScreen
 import org.mega.entropy.ui.privacy.PrivacyScreen
 import org.mega.entropy.ui.savedsessiondetail.SavedSessionDetailScreen
+import org.mega.entropy.ui.savedsessions.ConfirmDeleteDialog
+import org.mega.entropy.ui.savedsessions.SavedSessionSettingsScreen
 import org.mega.entropy.ui.savedsessions.SavedSessionsScreen
+import org.mega.entropy.ui.savedsessions.SavedSessionsViewModel
 import org.mega.entropy.ui.savesession.SaveSessionScreen
 import org.mega.entropy.ui.security.SecurityModelScreen
 import org.mega.entropy.ui.security.SecurityVerificationScreen
@@ -385,6 +388,9 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onExitApp = {
                     context.findActivity()?.finishAndRemoveTask()
                 },
+                onSettings = {
+                    coroutineScope.launch { enterSavedSessionsGate(MegaDestinations.SETTINGS) }
+                },
                 advancedModeEnabled = advancedModeEnabled,
                 onAdvancedMode = {
                     advancedModeWords = null
@@ -592,6 +598,79 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     advancedModeEnabled = savedSessionSecuritySettings.advancedModeEnabled()
                 },
             )
+        }
+        composable(MegaDestinations.SETTINGS) {
+            LockGuard(appLockViewModel, navController)
+            val coroutineScope = rememberCoroutineScope()
+            val viewModel: SavedSessionsViewModel = viewModel()
+            val state by viewModel.uiState.collectAsState()
+            var confirmingDeleteAll by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { viewModel.refresh() }
+            fun leaveSettings() {
+                coroutineScope.launch { armSavedSessionLock() }
+                navController.popBackStack()
+            }
+            BackHandler { leaveSettings() }
+            SavedSessionSettingsScreen(
+                pinButtonText = if (state.isPinEnabled) "Change PIN" else "Set Up PIN",
+                duressPinEnabled = state.isDuressPinEnabled,
+                selectedLockTimeoutMillis = savedSessionLockTimeoutMillis,
+                lockTimeoutOptions = SavedSessionSecuritySettings.LOCK_TIMEOUT_OPTIONS,
+                onLockTimeoutSelected = { millis ->
+                    savedSessionSecuritySettings.setLockTimeoutMillis(millis)
+                    savedSessionLockTimeoutMillis = savedSessionSecuritySettings.lockTimeoutMillis()
+                },
+                randomizePinKeypad = randomizePinKeypad,
+                onRandomizePinKeypadChanged = { randomize ->
+                    savedSessionSecuritySettings.setRandomizePinKeypad(randomize)
+                    randomizePinKeypad = savedSessionSecuritySettings.randomizePinKeypad()
+                },
+                allowScreenshots = allowScreenshots,
+                onAllowScreenshotsChanged = { allow ->
+                    savedSessionSecuritySettings.setAllowScreenshots(allow)
+                    allowScreenshots = savedSessionSecuritySettings.allowScreenshots()
+                },
+                allowSeedCopy = allowSeedCopy,
+                onAllowSeedCopyChanged = { allow ->
+                    savedSessionSecuritySettings.setAllowSeedCopy(allow)
+                    allowSeedCopy = savedSessionSecuritySettings.allowSeedCopy()
+                },
+                allowPrivateKeyExport = allowPrivateKeyExport,
+                onAllowPrivateKeyExportChanged = { allow ->
+                    savedSessionSecuritySettings.setAllowPrivateKeyExport(allow)
+                    allowPrivateKeyExport = savedSessionSecuritySettings.allowPrivateKeyExport()
+                },
+                advancedModeEnabled = advancedModeEnabled,
+                onAdvancedModeChanged = { enabled ->
+                    savedSessionSecuritySettings.setAdvancedModeEnabled(enabled)
+                    advancedModeEnabled = savedSessionSecuritySettings.advancedModeEnabled()
+                },
+                onChangePin = {
+                    coroutineScope.launch {
+                        if (pinManager.isPinEnabled()) {
+                            navController.navigate(MegaDestinations.PIN_CHANGE_VERIFY)
+                        } else {
+                            navController.navigate(MegaDestinations.PIN_SETUP)
+                        }
+                    }
+                },
+                onChangeDuressPin = { navController.navigate(MegaDestinations.PIN_DURESS_SETUP) },
+                onClearDuressPin = { viewModel.clearDuressPin() },
+                onDeleteAll = { confirmingDeleteAll = true },
+                onBack = { leaveSettings() },
+            )
+
+            if (confirmingDeleteAll) {
+                ConfirmDeleteDialog(
+                    text = "This permanently deletes every saved session and its encryption key. This cannot be undone.",
+                    confirmText = "Secure Delete All",
+                    onConfirm = {
+                        viewModel.deleteAllSessions()
+                        confirmingDeleteAll = false
+                    },
+                    onDismiss = { confirmingDeleteAll = false },
+                )
+            }
         }
         composable(MegaDestinations.SAVED_SESSION_UNLOCK) {
             PinVerifyScreen(
