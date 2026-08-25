@@ -29,6 +29,11 @@ class SessionRepository(private val context: Context) {
         label: String = "",
         passphraseCheck: PassphraseCheck? = null,
         childSeedInfo: String = "",
+        // Overridable only so a backup restore (see BackupRepository) can
+        // preserve a session's original save date instead of every
+        // restored session jumping to the top of the list under today's
+        // date. Every other caller relies on the default (this instant).
+        createdAtEpochMillis: Long = System.currentTimeMillis(),
     ): SavedSessionMetadata {
         // A dice-only save always has diceRolls; an Advanced-Mode manual
         // entry has no dice at all, so it must bring its own words instead
@@ -50,7 +55,7 @@ class SessionRepository(private val context: Context) {
 
             val metadata = SavedSessionMetadata(
                 id = sessionId,
-                createdAtEpochMillis = System.currentTimeMillis(),
+                createdAtEpochMillis = createdAtEpochMillis,
                 rollsCount = diceRolls.size,
                 hasMnemonic = mnemonicWords != null,
                 keystoreAlias = alias,
@@ -266,8 +271,12 @@ class SessionRepository(private val context: Context) {
      * mnemonic itself. Safe to assume MnemonicResult.Success: a session's
      * rolls only ever reach storage after they already produced an accepted
      * mnemonic (see SaveSessionScreen / MegaNavGraph).
+     *
+     * internal (not private): BackupRepository needs this same
+     * always-resolved view of a session's words when building an export,
+     * without decrypting the session's payload a second time itself.
      */
-    private fun resolveMnemonicWords(diceRolls: List<Int>, savedMnemonicWords: List<String>?): List<String> {
+    internal fun resolveMnemonicWords(diceRolls: List<Int>, savedMnemonicWords: List<String>?): List<String> {
         if (savedMnemonicWords != null) return savedMnemonicWords
 
         val length = MnemonicLength.entries.first { it.rollCount == diceRolls.size }

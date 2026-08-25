@@ -38,6 +38,21 @@ fun SecurityModelScreen(onBack: () -> Unit) {
             )
         }
 
+        MegaCard(title = "Encrypted Backup") {
+            Text(
+                "Exporting a backup encrypts every saved session and vault " +
+                    "with AES-256-GCM. The 256-bit key is derived from your " +
+                    "chosen passphrase using scrypt (RFC 7914) — a " +
+                    "memory-hard key derivation function designed to make " +
+                    "brute-force guessing slow and expensive, unlike a plain " +
+                    "fast hash. The passphrase itself is never stored on " +
+                    "this device or any other; if you forget it, that " +
+                    "backup cannot be recovered by anyone, including MEGA's " +
+                    "developers.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
         MegaCard(title = "MEGA does not protect against") {
             BulletList(
                 listOf(
@@ -52,6 +67,7 @@ fun SecurityModelScreen(onBack: () -> Unit) {
                     "Undiscovered vulnerabilities in Android or the hardware itself",
                     "A rooted or otherwise administratively-compromised device",
                     "Offline passphrase brute-forcing if a saved passphrase check's encryption is ever defeated",
+                    "Recovering an exported backup file without its original passphrase — MEGA never stores it, anywhere",
                 ),
             )
         }
