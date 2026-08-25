@@ -188,7 +188,7 @@ fun SavedSessionsScreen(
  * [SavedSessionsScreen]. Grouped into auto-lock timing, PIN management, and
  * a visually separated destructive section, instead of one flat dialog. */
 @Composable
-private fun SavedSessionSettingsScreen(
+fun SavedSessionSettingsScreen(
     pinButtonText: String,
     duressPinEnabled: Boolean,
     selectedLockTimeoutMillis: Long,
@@ -524,7 +524,7 @@ private fun SavedSessionCard(
 }
 
 @Composable
-private fun ConfirmDeleteDialog(
+fun ConfirmDeleteDialog(
     text: String,
     confirmText: String,
     onConfirm: () -> Unit,
