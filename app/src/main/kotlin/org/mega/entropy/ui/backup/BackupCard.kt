@@ -26,7 +26,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +37,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.launch
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
@@ -55,18 +53,19 @@ private const val MIN_BACKUP_PASSPHRASE_LENGTH = 8
 @Composable
 fun BackupCard() {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val viewModel: BackupViewModel = viewModel()
     val state by viewModel.uiState.collectAsState()
 
     var showingExportDialog by remember { mutableStateOf(false) }
-    var showingPinRequiredDialog by remember { mutableStateOf(false) }
-    var showingImportPassphraseDialog by remember { mutableStateOf(false) }
-    // Holds bytes between one step completing and the next needing them:
-    // an export's ciphertext waiting on the "where to save" picker, or an
-    // import's just-read file waiting on the passphrase dialog.
+    // Holds the export ciphertext between "Export" completing and the
+    // "where to save" picker needing it. This one is safe as plain
+    // remember state (unlike the import side below) because it's set
+    // *before* the picker launches, not inside the picker's async result
+    // callback, so it survives being read even if the composable is torn
+    // down and recomposed by an auto-lock re-entry in between.
     var pendingExportBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var pendingImportBytes by remember { mutableStateOf<ByteArray?>(null) }
+    // Pending-import bytes and the PIN-required dialog live in
+    // BackupViewModel, not here — see BackupUiState's doc comment for why.
 
     val saveLauncher = rememberLauncherForActivityResult(CreateLocalBackupDocument) { destination ->
         val bytes = pendingExportBytes
@@ -87,14 +86,7 @@ fun BackupCard() {
             if (bytes == null) {
                 Toast.makeText(context, "Could not read that file.", Toast.LENGTH_LONG).show()
             } else {
-                coroutineScope.launch {
-                    if (viewModel.isPinMissing()) {
-                        showingPinRequiredDialog = true
-                    } else {
-                        pendingImportBytes = bytes
-                        showingImportPassphraseDialog = true
-                    }
-                }
+                viewModel.onBackupFilePicked(bytes)
             }
         }
     }
@@ -143,28 +135,23 @@ fun BackupCard() {
         )
     }
 
-    if (showingImportPassphraseDialog) {
+    if (state.pendingImportBytes != null) {
         ImportPassphraseDialog(
-            onDismiss = {
-                showingImportPassphraseDialog = false
-                pendingImportBytes = null
-            },
+            onDismiss = { viewModel.cancelPendingImport() },
             onConfirm = { passphrase ->
-                showingImportPassphraseDialog = false
-                val bytes = pendingImportBytes
-                pendingImportBytes = null
+                val bytes = state.pendingImportBytes
                 if (bytes != null) viewModel.importBackup(bytes, passphrase)
             },
         )
     }
 
-    if (showingPinRequiredDialog) {
+    if (state.showPinRequiredDialog) {
         AlertDialog(
-            onDismissRequest = { showingPinRequiredDialog = false },
+            onDismissRequest = { viewModel.dismissPinRequiredDialog() },
             title = { Text("Set a PIN First") },
             text = { Text("MEGA requires a PIN before importing saved data — set one up in the PIN section above, then try importing again.") },
             confirmButton = {
-                TextButton(onClick = { showingPinRequiredDialog = false }) { Text("OK") }
+                TextButton(onClick = { viewModel.dismissPinRequiredDialog() }) { Text("OK") }
             },
         )
     }

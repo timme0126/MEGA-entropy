@@ -25,6 +25,19 @@ sealed class BackupOperationResult {
 data class BackupUiState(
     val isWorking: Boolean = false,
     val result: BackupOperationResult? = null,
+    // Set once a picked backup file's bytes are read and confirmed to be
+    // importable (a PIN exists on this device), cleared once the user
+    // confirms/cancels the passphrase dialog or the import completes.
+    // Lives here rather than as Compose remember state in BackupCard
+    // because MEGA's PIN auto-lock can force a re-entry into the PIN gate
+    // between the file picker returning and the passphrase dialog being
+    // shown (the picker activity taking focus triggers ON_STOP, which
+    // arms the lock under an Immediately timeout) — that re-entry tears
+    // down and recomposes BackupCard, discarding any plain remember
+    // state, but this ViewModel is scoped to the Settings destination's
+    // back stack entry and survives being temporarily obscured.
+    val pendingImportBytes: ByteArray? = null,
+    val showPinRequiredDialog: Boolean = false,
 )
 
 /**
@@ -48,6 +61,27 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
      */
     suspend fun isPinMissing(): Boolean = withContext(Dispatchers.IO) { !pinManager.isPinEnabled() }
 
+    /** Called once a backup file has been picked and its bytes read.
+     * Routes to the set a PIN first dialog or holds the bytes for the
+     * import passphrase dialog, both via state this ViewModel owns. */
+    fun onBackupFilePicked(fileBytes: ByteArray) {
+        viewModelScope.launch {
+            if (isPinMissing()) {
+                _uiState.update { it.copy(showPinRequiredDialog = true) }
+            } else {
+                _uiState.update { it.copy(pendingImportBytes = fileBytes) }
+            }
+        }
+    }
+
+    fun dismissPinRequiredDialog() {
+        _uiState.update { it.copy(showPinRequiredDialog = false) }
+    }
+
+    fun cancelPendingImport() {
+        _uiState.update { it.copy(pendingImportBytes = null) }
+    }
+
     fun exportBackup(passphrase: String) {
         _uiState.update { it.copy(isWorking = true, result = null) }
         viewModelScope.launch {
@@ -63,7 +97,7 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun importBackup(fileBytes: ByteArray, passphrase: String) {
-        _uiState.update { it.copy(isWorking = true, result = null) }
+        _uiState.update { it.copy(isWorking = true, result = null, pendingImportBytes = null) }
         viewModelScope.launch {
             val result = try {
                 val outcome = repository.importBackup(fileBytes, passphrase)
