@@ -36,6 +36,15 @@ fun MegaInfoScaffold(
     onBack: () -> Unit,
     actions: @Composable () -> Unit = {},
     scrollToTopRequest: Int = 0,
+    // Every screen except a wide-screen two-pane layout (Saved Sessions'
+    // list+detail at Expanded width) wants the default: the whole screen
+    // is one scrollable, width-capped column. A two-pane Row cannot live
+    // inside that scrollable column (it would be measured with an
+    // infinite height constraint), since each pane needs to scroll on its
+    // own -- scrollable = false skips the scrolling/centering wrapper
+    // entirely and hands the caller a plain fillMaxSize content area to
+    // manage itself.
+    scrollable: Boolean = true,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val scrollState = rememberScrollState()
@@ -59,22 +68,29 @@ fun MegaInfoScaffold(
             )
         },
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(scrollState)
-                // Inside the scroll, not outside: this extends the
-                // scrollable content's height by the keyboard's height
-                // while it's open, so fields (and anything below them,
-                // like word-entry suggestion chips) near the bottom of a
-                // long form can still be scrolled up above the keyboard
-                // instead of staying hidden behind it.
-                .imePadding()
-                .padding(MegaScreenPadding),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            content()
+        if (scrollable) {
+            MegaResponsiveContent(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .verticalScroll(scrollState)
+                    // Inside the scroll, not outside: this extends the
+                    // scrollable content's height by the keyboard's height
+                    // while it's open, so fields (and anything below them,
+                    // like word-entry suggestion chips) near the bottom of a
+                    // long form can still be scrolled up above the keyboard
+                    // instead of staying hidden behind it.
+                    .imePadding(),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                content = content,
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                content = content,
+            )
         }
     }
 }
