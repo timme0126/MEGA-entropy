@@ -160,16 +160,79 @@ shouldn't appear in the public repo. Removed in commit `36fe2c4`.
   org.mega.entropy` — only `OTHER_SENSORS`, `CAMERA`, and the app's own
   dynamic-receiver permission are requested. **PASS**
 
-**Not completed this session (existing PIN-gated test data found on
-device):** the installed app already had a PIN and saved sessions from
-prior testing (data preserved across `adb install -r`, as intended). The
-real PIN was unknown, and MEGA has a duress-PIN wipe path
-(`PinVerifyScreen.kt`), so further PIN guessing was deliberately stopped
-after 2 failed attempts rather than risk triggering it or another wipe
-condition. As a result, **Session save and retrieval**, **encrypted
-backup export/import**, and the PIN-gated parts of **Settings/Privacy**
-were not adb-validated this session — needs Bob, who knows the device's
-actual PIN, to run those (see checklist items above).
+**PIN-gated validation continued (2026-08-26, same day, PIN supplied by
+Bob: device test PIN `13579`, current settings Auto-lock=Immediately,
+PIN pad layout=Randomized):**
+- FLAG_SECURE: on the revealed Final Mnemonic screen, `adb shell
+  screencap` (which is NOT itself blocked by FLAG_SECURE — it captures
+  the raw framebuffer via a different path than a normal screenshot/
+  MediaProjection) produced an image with only the system status bar
+  visible and the entire content area solid black, confirming the
+  in-app content itself is correctly hidden from capture. **PASS**
+- Session save and retrieval: completed a real 50-roll dice session
+  (random rolls, passed Bias Check on the first attempt), saved via
+  "Save Dice Rolls + Derived Mnemonic" (the extra confirmation step
+  correctly appeared first), labeled it, and confirmed it immediately
+  appeared in Saved Sessions alongside the pre-existing `tutorial-demo`
+  entry with the correct roll count and label. Opened it via View and
+  confirmed all 10 batches of dice rolls matched exactly what was
+  entered. **PASS**
+- Encrypted backup export: entered a passphrase (+ confirmation), tapped
+  Export, watched the real ~20s scrypt derivation (`N:131072, r:8, p:1`
+  per the backup file's own header — this is why it takes a few
+  seconds, not a sign of a hang), saved via the SAF picker to Downloads,
+  and confirmed the resulting `.megabackup` file exists with the
+  expected `MEGA-BACKUP-V1` header format. **PASS**
+- Encrypted backup import: **found and fixed a real bug** — see below.
+  After the fix, verified end-to-end: picked the exported file, the
+  passphrase dialog correctly appeared even after the forced PIN
+  re-entry, entered the same passphrase, and both saved sessions were
+  correctly restored (matching mnemonics, though restored as "Manually
+  entered seed" rather than with the original dice rolls — the backup
+  format stores each session's *resolved* mnemonic, not its raw dice
+  rolls, so a restored session can no longer show/edit the original
+  physical rolls; this looks like an intentional scope tradeoff, not
+  itself a bug, but worth Bob confirming it's the intended restore
+  behavior). Import does not deduplicate against an existing session
+  with the same label — it always adds a new entry. That's reasonable
+  for the primary use case (restoring onto a fresh second device) but
+  worth being aware of if re-importing the same backup onto a device
+  that already has some of its sessions. **PASS** (after fix)
+
+**Bug found and fixed this session: Import Backup silently discarded
+the picked file under Auto-lock=Immediately.** Launching the required
+system file picker triggers `ON_STOP`, arming the saved-session lock
+before the picker even returns; the resulting forced PIN re-entry tears
+down the Settings screen's composition (Navigation-Compose only keeps
+the current top-of-backstack destination composed), discarding
+`BackupCard`'s plain `remember` state. The picker's async result
+callback still fires afterward and sets `showingImportPassphraseDialog =
+true`, but on an orphaned, unobserved State object — so the passphrase
+dialog never appears and the import does nothing, with no error shown
+to the user. Root-caused with temporary instrumentation logging (removed
+before committing) confirming the exact sequence via logcat timestamps.
+Fixed by moving the pending-import bytes and PIN-required flag into
+`BackupViewModel` (scoped to the Settings back-stack entry, which is
+never popped by this flow, only temporarily obscured — so it survives).
+Verified fixed on-device: passphrase dialog now appears correctly after
+re-auth, import completes, sessions restored. Commit `7465d45`. Shipped
+as part of this session's hotfix — see [[project_mega]] memory for full
+detail and the debug-compat APK/release-notes update that went with it.
+
+Also observed (not itself a bug, just UX friction worth noting): under
+Auto-lock=Immediately, backing out of any PIN-gated screen (Settings,
+Saved Sessions) shows the PIN entry screen one extra time before
+reaching Welcome, rather than going straight there — every protected
+destination appears to sit in the back stack underneath an extra
+lock-gate layer. Minor, but generates more PIN prompts than a user might
+expect from a single "leave" action.
+
+**Not completed this session:** the pre-existing app had no clean way to
+test "wrong PIN" beyond confirming the retry-counter mechanics (already
+covered above) without risking the duress-PIN wipe path, since the
+actual duress PIN (if one is configured on this device) is unknown to
+this session — only Bob, or a fresh test device with a known duress PIN
+set up, can safely exercise that specific path.
 
 **Human-required (Phase 4), not attempted this session:** physical
 camera-to-camera QR round trip; multi-frame animated QR scanning;
@@ -179,5 +242,6 @@ beyond the basic retry check above; app killed during signing and
 relaunched.
 
 **Release decision: DO NOT SHIP** as a full release-ready build — the
-adb-driven matrix above passes, but PIN-gated data flows and every
-Phase 4 human-required test remain unverified this session.
+full adb-driven matrix (Phases 1-3) now passes, including a real bug
+found and fixed mid-session, but every Phase 4 human-required test
+remains unverified.
