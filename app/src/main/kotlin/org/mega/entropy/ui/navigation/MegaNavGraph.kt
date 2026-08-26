@@ -597,6 +597,11 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     savedSessionSecuritySettings.setAdvancedModeEnabled(enabled)
                     advancedModeEnabled = savedSessionSecuritySettings.advancedModeEnabled()
                 },
+                diceRollsLockedDefault = diceRollsLockedDefault,
+                onDiceRollsLockedDefaultChanged = { locked ->
+                    savedSessionSecuritySettings.setDiceRollsLockedByDefault(locked)
+                    diceRollsLockedDefault = savedSessionSecuritySettings.diceRollsLockedByDefault()
+                },
             )
         }
         composable(MegaDestinations.SETTINGS) {
