@@ -36,7 +36,8 @@ import java.time.Year
 import org.mega.entropy.BuildConfig
 import org.mega.entropy.ui.components.MegaLogo
 import org.mega.entropy.ui.components.MegaPrimaryButton
-import org.mega.entropy.ui.components.MegaScreenPadding
+import org.mega.entropy.ui.components.MegaFocusedContentMaxWidth
+import org.mega.entropy.ui.components.MegaResponsiveContent
 import org.mega.entropy.ui.components.MegaSecondaryButton
 
 private const val FOUNDING_YEAR = 2026
@@ -89,14 +90,19 @@ fun WelcomeScreen(
     var confirmingExit by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(
+        MegaResponsiveContent(
         modifier = Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
-            .padding(MegaScreenPadding),
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
+        // Narrower than the default MegaContentMaxWidth: this is a
+        // centered hero screen (logo + a short action list), not a body
+        // of text that benefits from a wider column -- and MegaLogo's
+        // fixed aspect ratio means a wider cap also makes it taller,
+        // which fights for space in a short landscape window.
+        maxWidth = MegaFocusedContentMaxWidth,
     ) {
         // Brand lockup uses the original black-background treatment in both
         // light and dark mode.

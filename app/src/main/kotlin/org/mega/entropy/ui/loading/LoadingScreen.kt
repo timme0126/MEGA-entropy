@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -28,7 +30,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import org.mega.entropy.ui.components.MegaLogo
 import org.mega.entropy.ui.components.MegaPrimaryButton
-import org.mega.entropy.ui.components.MegaScreenPadding
+import org.mega.entropy.ui.components.MegaFocusedContentMaxWidth
+import org.mega.entropy.ui.components.MegaResponsiveContent
 import org.mega.entropy.ui.theme.MegaSuccess
 
 private val LOADING_ITEMS = listOf(
@@ -62,13 +65,25 @@ fun LoadingScreen(onEnter: () -> Unit) {
         }
     }
 
-    Column(
+    MegaResponsiveContent(
         modifier = Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(MegaScreenPadding),
+            // A wide-but-short window (a tablet in landscape) can leave
+            // less height than this screen's content needs, since the
+            // logo above grows with the capped content width -- scrolling
+            // is the safety net so content clips into a scrollbar instead
+            // of overlapping/collapsing when that happens, matching every
+            // other MegaResponsiveContent screen's own verticalScroll.
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
+        // Narrower than the default MegaContentMaxWidth: this is a
+        // centered hero screen (logo + a short action list), not a body
+        // of text that benefits from a wider column -- and MegaLogo's
+        // fixed aspect ratio means a wider cap also makes it taller,
+        // which fights for space in a short landscape window.
+        maxWidth = MegaFocusedContentMaxWidth,
     ) {
         MegaLogo()
 
