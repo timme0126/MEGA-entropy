@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -27,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.mega.entropy.ui.components.MegaFocusedContentMaxWidth
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
 
@@ -68,13 +71,33 @@ fun PinEntryScreen(
     val enteredDigits = remember { mutableStateListOf<Int>() }
     var shuffleGeneration by remember { mutableIntStateOf(0) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                // fillMaxHeight only, deliberately NOT fillMaxSize/
+                // fillMaxWidth here: those would hand this Column a tight
+                // (min == max) width constraint matching the full screen,
+                // which widthIn(max = ...) below cannot narrow back down
+                // -- Constraints propagate outer-to-inner, and a tight
+                // incoming constraint wins over a looser max applied
+                // afterward. Leaving width unconstrained until widthIn
+                // lets this Column settle at min(availableWidth, cap),
+                // which is what actually caps the keypad on a wide screen
+                // while still filling a narrow phone's width exactly as
+                // before (MegaPrimaryButton and the keypad's own Rows
+                // request fillMaxWidth internally, so the column still
+                // grows to fill whatever width it's given).
+                .fillMaxHeight()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 32.dp),
+                .padding(horizontal = 24.dp, vertical = 32.dp)
+                // Capped so the keypad's own weight(1f)+aspectRatio(1f)
+                // buttons stay a reasonable touch-target size instead of
+                // growing to fill a tablet-width row -- see
+                // MegaFocusedContentMaxWidth's doc comment. At a narrow
+                // phone width this cap is simply never reached, so the
+                // existing compact layout is unaffected.
+                .widthIn(max = MegaFocusedContentMaxWidth),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
