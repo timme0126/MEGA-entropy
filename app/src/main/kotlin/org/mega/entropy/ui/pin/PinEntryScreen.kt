@@ -20,7 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -65,7 +65,7 @@ fun PinEntryScreen(
     // (matching the rest of the app) and the gesture/system back button —
     // either one runs the same cleanup (e.g. clearing a pending save).
     onCancel?.let { BackHandler(onBack = it) }
-    var enteredDigits by remember { mutableStateOf(listOf<Int>()) }
+    val enteredDigits = remember { mutableStateListOf<Int>() }
     var shuffleGeneration by remember { mutableIntStateOf(0) }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -93,11 +93,11 @@ fun PinEntryScreen(
                 scrambled = scrambled,
                 onDigitTapped = { digit ->
                     if (enteredDigits.size < PIN_MAX_LENGTH) {
-                        enteredDigits = enteredDigits + digit
+                        enteredDigits.add(digit)
                     }
                 },
-                onDelete = { enteredDigits = enteredDigits.dropLast(1) },
-                onClear = { enteredDigits = emptyList() },
+                onDelete = { if (enteredDigits.isNotEmpty()) enteredDigits.removeAt(enteredDigits.lastIndex) },
+                onClear = { enteredDigits.clear() },
                 deleteEnabled = enteredDigits.isNotEmpty(),
                 clearEnabled = enteredDigits.isNotEmpty(),
             )
@@ -107,7 +107,7 @@ fun PinEntryScreen(
                 enabled = enteredDigits.size in PIN_MIN_LENGTH..PIN_MAX_LENGTH,
                 onClick = {
                     onSubmit(enteredDigits.joinToString(""))
-                    enteredDigits = emptyList()
+                    enteredDigits.clear()
                     // Reshuffle after every submit attempt, matching "after an
                     // incorrect attempt" from spec section 21 — harmless to also
                     // reshuffle on a correct one, since the screen is about to
