@@ -1,8 +1,20 @@
 package org.mega.entropy.ui.about
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
 import org.mega.entropy.BuildConfig
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaMonoText
@@ -11,6 +23,42 @@ import org.mega.entropy.ui.components.MegaSection
 
 @Composable
 fun AboutScreen(onBack: () -> Unit, onPrivacy: () -> Unit) {
+    val context = LocalContext.current
+    var showSourceWarning by remember { mutableStateOf(false) }
+
+    if (showSourceWarning) {
+        AlertDialog(
+            onDismissRequest = { showSourceWarning = false },
+            title = { Text("Leave MEGA to open GitHub?") },
+            text = {
+                Text(
+                    "MEGA is designed for offline use, preferably on GrapheneOS, " +
+                        "Samsung Knox Secure Folder, or Android Private Space. " +
+                        "You are leaving MEGA to open GitHub in your browser. " +
+                        "Continue only if you understand and agree.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSourceWarning = false
+                    context.startActivity(
+                        Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse("https://github.com/timme0126/MEGA-entropy"),
+                        ),
+                    )
+                }) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSourceWarning = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
     MegaInfoScaffold(title = "About", onBack = onBack) {
         Text("MEGA — Make Entropy Great Again", style = MaterialTheme.typography.titleLarge)
         MegaMonoText("Version ${BuildConfig.VERSION_NAME}")
@@ -50,6 +98,12 @@ fun AboutScreen(onBack: () -> Unit, onPrivacy: () -> Unit) {
             heading = "Source",
             body = "Source, documentation, and issue tracking: " +
                 "github.com/timme0126/MEGA-entropy",
+        )
+        Text(
+            text = "Open GitHub source",
+            color = MaterialTheme.colorScheme.primary,
+            textDecoration = TextDecoration.Underline,
+            modifier = Modifier.clickable { showSourceWarning = true },
         )
         MegaPrimaryButton(text = "Privacy", onClick = onPrivacy)
     }
