@@ -20,9 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.mega.entropy.ui.components.MegaCard
+import org.mega.entropy.ui.components.MegaResponsiveContent
 import org.mega.entropy.ui.components.MegaLabelSessionDialog
 import org.mega.entropy.ui.components.MegaPrimaryButton
-import org.mega.entropy.ui.components.MegaScreenPadding
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
@@ -47,12 +47,11 @@ fun SaveSessionScreen(
     var labelingDiceOnly by remember { mutableStateOf(false) }
     var labelingDiceAndMnemonic by remember { mutableStateOf(false) }
 
-    Column(
+    MegaResponsiveContent(
         modifier = Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
-            .padding(MegaScreenPadding),
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("Save This Session?", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)

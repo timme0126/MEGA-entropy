@@ -23,10 +23,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.mega.entropy.ui.components.MegaCard
+import org.mega.entropy.ui.components.MegaResponsiveContent
 import org.mega.entropy.ui.components.MegaCopyIconButton
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
-import org.mega.entropy.ui.components.MegaScreenPadding
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 
@@ -53,12 +53,11 @@ fun FinalMnemonicScreen(
         "Make sure no one else can see this screen. $screenshotGuidance $copyGuidance"
     }
 
-    Column(
+    MegaResponsiveContent(
         modifier = Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
-            .padding(MegaScreenPadding),
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("Your ${words.size}-Word Mnemonic", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)

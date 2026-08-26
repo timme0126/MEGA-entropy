@@ -16,9 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.mega.entropy.ui.components.MegaCard
+import org.mega.entropy.ui.components.MegaResponsiveContent
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
-import org.mega.entropy.ui.components.MegaScreenPadding
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropycore.ChecksumResult
 
@@ -35,12 +35,11 @@ fun ChecksumScreen(
     val totalBitCount = entropyBitCount + checksumBitCount
 
     SecureScreen()
-    Column(
+    MegaResponsiveContent(
         modifier = Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
-            .padding(MegaScreenPadding),
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("SHA-256 Checksum", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
