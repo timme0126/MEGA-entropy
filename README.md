@@ -42,7 +42,7 @@ local test data:
 
 ```bash
 sha256sum mega-beta-v0.1.13-debug-compat.apk
-# 3FAFA479A6373B5E8E3CB48CF2A3659146AD8731AD03A7EFC72B5AA2CF176668
+# E9456F138F2F9F0EE3FF9735300EE9CFA51569880F1BDF0BD80D5EA0D7214F70
 ```
 
 For a fresh install, prefer the primary non-debuggable APK above. The
