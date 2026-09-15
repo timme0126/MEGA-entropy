@@ -101,8 +101,19 @@ This is **not secret** — it's meant to be public, so anyone can confirm a
 downloaded APK's signer matches previous releases:
 
 ```
-SHA-256: 42:C9:DA:07:22:58:5A:04:C3:38:8E:99:89:B8:EB:CB:4B:62:73:16:29:92:4A:AE:3C:96:EE:C7:D5:36:48:9C
+SHA-256: 91:D6:B2:22:CB:F3:58:EE:58:3F:D9:53:F3:09:56:EC:44:FB:F4:3A:8C:EB:F1:DB:98:F1:EE:48:BA:C0:A6:1F
 ```
+
+**Rotation history:** releases up to v0.1.13 (Aug 2026) were signed by key
+`42:C9:DA:07:...:D5:36:48:9C`. That key had sat inside the repo working copy
+(protected only by `.gitignore`) until Sep 15 2026, when it was moved
+out-of-tree and rotated the same day. It is therefore treated as
+**potentially exposed**: the old fingerprint proves signer continuity among
+pre-rotation APKs only — it does NOT prove any old APK was signed by the
+maintainer, since anyone holding an old copy or backup of the tree could
+produce an old-fingerprint APK claiming any version. This rotation does not
+retroactively certify already-distributed APKs; provenance of past releases
+is unchanged. Releases from v0.1.14 on carry the new fingerprint above.
 
 `verifyReleaseArtifact` hard-codes this same value
 (`expectedBetaReleaseSignerSha256` in `app/build.gradle.kts`) and fails the
@@ -137,3 +148,9 @@ seriously weigh rotating: rotation means a new key plus updated
 testers one uninstall/reinstall (no user data at risk, per above). Whether
 to rotate is the owner's call — but it should be an explicit decision made
 now, not deferred to the next release.
+
+After the 2026-09-15 rotation, the retired key is kept at
+`~/.mega-signing/mega-beta-release.jks.pre-rotation-20260915` (outside the
+repo, mode 0600) for forensic matching against already-published v0.1.13
+artifacts. It is still a signing-capable secret: never wire it back into a
+build, and delete it once no past-artifact verification is anticipated.

@@ -29,6 +29,13 @@ local mega-beta-release key** (see [`docs/RELEASE-SIGNING.md`](docs/RELEASE-SIGN
 42:C9:DA:07:22:58:5A:04:C3:38:8E:99:89:B8:EB:CB:4B:62:73:16:29:92:4A:AE:3C:96:EE:C7:D5:36:48:9C
 ```
 
+> **Note:** this fingerprint belongs to the signing key used through v0.1.13 only.
+> That key was rotated on 2026-09-15 (see `docs/RELEASE-SIGNING.md`); APKs from
+> future releases carry the new fingerprint listed there. Practical effect: the
+> next beta will NOT update over an existing install — Android will report
+> "package signatures don't match". Uninstall the old app first (this clears
+> local saved-session state), then install the new APK.
+
 This is an experimental beta build for disposable test roll sequences only.
 
 ### Debug-compatible APK for existing testers

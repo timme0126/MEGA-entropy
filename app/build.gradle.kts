@@ -87,8 +87,8 @@ android {
         applicationId = "org.mega.entropy"
         minSdk = 29
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.1.13"
+        versionCode = 15
+        versionName = "0.1.14"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -284,9 +284,13 @@ tasks.named("check") {
 /** Expected SHA-256 fingerprint of the mega-beta-release signing certificate
  * (see docs/RELEASE-SIGNING.md) — not secret, deliberately public: it's how a
  * beta tester or reviewer confirms a given APK was signed by the SAME local
- * key as a previous release, not a substituted one. Update this constant
- * (and the doc) if the keystore is ever deliberately rotated. */
-val expectedBetaReleaseSignerSha256 = "42c9da0722585a04c3388e9989b8ebcb4b62731629924aae3c96eec7d536489c"
+ * key as a previous release, not a substituted one. NOTE: this proves signer
+ * CONTINUITY only, not author authenticity — and only forward from the
+ * 2026-09-15 key rotation: the pre-rotation key is treated as potentially
+ * exposed, so the OLD fingerprint no longer proves any old APK was signed by
+ * the maintainer. Update this constant (and the doc) if the keystore is ever
+ * deliberately rotated. */
+val expectedBetaReleaseSignerSha256 = "91d6b222cbf358ee583fd953f30956ec44fbf43a8cebf1db98f1ee48bac0a61f"
 
 fun latestAndroidBuildToolsDir(): File {
     val localProperties = Properties().apply {
