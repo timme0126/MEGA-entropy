@@ -12,6 +12,10 @@ build/
 *.apk
 *.aab
 /tools/*.raw.json
+# Belt-and-braces: the build FAILS outright if these exist in-tree (see
+# app/build.gradle.kts) — signing secrets belong outside the repo per
+# docs/RELEASE-SIGNING.md. These patterns only stop an accidental
+# `git status` clutter before the build error fires.
 /keystore.properties
 /keystore/
 

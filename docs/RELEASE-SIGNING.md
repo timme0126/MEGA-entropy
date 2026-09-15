@@ -25,10 +25,20 @@ limits.
 
 ## Generating the local beta-release keystore (one-time, per machine)
 
+**The keystore and its passwords must live OUTSIDE the repository working
+copy.** `.gitignore` is a convenience, not a security boundary: `git add -f`,
+backups/copies of the tree, or a shared checkout all travel with in-tree
+secrets, and whoever gets them can sign APKs indistinguishable from a
+legitimate update. The build enforces this — an in-tree `keystore.properties`
+or `keystore/` directory is a hard build error.
+
+Generate the key in a private directory outside any repo (and back it up
+somewhere safe — see "If the keystore is lost"):
+
 ```bash
-mkdir -p keystore
+mkdir -p ~/.mega-signing
 keytool -genkeypair -v \
-  -keystore keystore/mega-beta-release.jks \
+  -keystore ~/.mega-signing/mega-beta-release.jks \
   -alias mega-beta \
   -keyalg RSA -keysize 4096 \
   -validity 10000 \
@@ -37,24 +47,36 @@ keytool -genkeypair -v \
 ```
 
 `keytool` will prompt for a store/key password — use a strong, unique one.
-Then create `keystore.properties` in the repo root (both `keystore/` and
-`keystore.properties` are git-ignored — **never commit either one**):
+Then create a properties file **next to the keystore, outside the repo** (any
+location; `~/.mega-signing/keystore.properties` is the convention). A
+relative `storeFile` resolves against the properties file's own directory:
 
 ```properties
-storeFile=keystore/mega-beta-release.jks
+storeFile=mega-beta-release.jks
 storePassword=<the password you chose>
 keyAlias=mega-beta
 keyPassword=<the same password, or a distinct key password if you set one>
 ```
 
-Without `keystore.properties` present, `./gradlew assembleRelease` still
-succeeds but produces an **unsigned** APK, and `verifyReleaseArtifact`
-(below) refuses to pass — there is no silent fallback to debug signing.
+Point the build at it with one environment variable:
+
+```bash
+export MEGA_KEYSTORE_PROPERTIES="$HOME/.mega-signing/keystore.properties"
+```
+
+Alternatively, skip the properties file and set all four directly:
+`MEGA_KEYSTORE_FILE` (absolute path to the .jks), `MEGA_STORE_PASSWORD`,
+`MEGA_KEY_ALIAS`, `MEGA_KEY_PASSWORD`.
+
+Without a signing config, `./gradlew assembleRelease` still succeeds but
+produces an **unsigned** APK, and `verifyReleaseArtifact` (below) refuses to
+pass — there is no silent fallback to debug signing.
 
 ## Building and verifying a release APK
 
 ```bash
-./gradlew assembleRelease verifyReleaseArtifact
+MEGA_KEYSTORE_PROPERTIES="$HOME/.mega-signing/keystore.properties" \
+  ./gradlew assembleRelease verifyReleaseArtifact
 ```
 
 `verifyReleaseArtifact` fails the build unless the produced
@@ -95,7 +117,7 @@ build on a mismatch.
 
 ## If the keystore is lost or rotated
 
-Losing `keystore/mega-beta-release.jks` (or deliberately rotating it) just
+Losing `mega-beta-release.jks` (or deliberately rotating it) just
 means the next beta release signs with a **new** key — existing testers
 get a normal "package signatures don't match" error from `adb`/their
 launcher when trying to install an update over the old one, and must
@@ -105,3 +127,13 @@ access to, and reinstalling starts with an empty saved-session store like
 any fresh install. After rotating, regenerate the keystore per the steps
 above and update `expectedBetaReleaseSignerSha256` in `app/build.gradle.kts`
 and the fingerprint in this doc to match.
+
+If the keystore was ever stored **in** the repo working copy, treat the key
+as **potentially exposed**: anyone who has any old copy or backup of the tree
+holds a key that signs APKs byte-indistinguishable from legitimate updates.
+Copy it out to `~/.mega-signing/`, delete the in-tree copies — and then
+seriously weigh rotating: rotation means a new key plus updated
+`expectedBetaReleaseSignerSha256` and doc fingerprint, and costs existing
+testers one uninstall/reinstall (no user data at risk, per above). Whether
+to rotate is the owner's call — but it should be an explicit decision made
+now, not deferred to the next release.
