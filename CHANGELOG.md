@@ -1,6 +1,16 @@
 # Changelog
 
-Notable changes to MEGA, most recent first. The current beta build is `v0.1.13` (see [`README.md`](README.md#download-the-beta-apk)).
+Notable changes to MEGA, most recent first. The current beta build is `v0.1.14` (see [`README.md`](README.md#download-the-beta-apk)).
+
+## [0.1.14] — 2026-09-15
+
+### Added
+- **Tablet / large-screen responsive layouts** — the dice flow, Welcome/Loading screens, Saved Sessions list+detail, and Settings now adapt to wide screens (two-pane layouts where it helps, capped-width keypad on tablets). New responsive layout primitives and breakpoint tests back them.
+
+### Changed
+- **Release signing key rotated.** The beta release key had been stored inside the repo working copy (protected only by `.gitignore`) until it was moved out-of-tree and rotated on 2026-09-15; it is treated as potentially exposed. v0.1.14 onward are signed with the new key (cert SHA-256 `91:D6:B2:22:...:BA:C0:A6:1F`; see [`docs/RELEASE-SIGNING.md`](docs/RELEASE-SIGNING.md) for rotation history and what each fingerprint does and doesn't prove).
+- **The build now enforces signing-secret hygiene**: signing config is read only from an out-of-tree properties file or dedicated environment variables, and any keystore material inside the repo working copy — including paths that try to hide behind `..` or custom names — is a hard build error.
+- **This build does not update over v0.1.13-era installs** (new signing key). Uninstall the old app first — export an encrypted backup beforehand if you want to keep saved sessions. No debug-compat APK ships with this release.
 
 ## [0.1.13] — 2026-08-25
 
