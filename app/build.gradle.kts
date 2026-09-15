@@ -52,7 +52,7 @@ if (inTreeKeystoreProperties.exists() || inTreeKeystoreDir.exists()) {
     )
 }
 val outOfTreeKeystorePropertiesFile = System.getenv("MEGA_KEYSTORE_PROPERTIES")?.let {
-    val f = File(it)
+    val f = File(it).canonicalFile
     if (!f.exists()) {
         throw GradleException(
             "MEGA_KEYSTORE_PROPERTIES is set to '$it' but no such file exists — " +
@@ -66,12 +66,27 @@ val outOfTreeKeystorePropertiesFile = System.getenv("MEGA_KEYSTORE_PROPERTIES")?
 val keystoreProperties = Properties().apply {
     if (outOfTreeKeystorePropertiesFile?.exists() == true) load(outOfTreeKeystorePropertiesFile.inputStream())
 }
-fun keystoreSetting(envVar: String, propertiesKey: String): String? =
-    System.getenv(envVar) ?: keystoreProperties.getProperty(propertiesKey)
-val signingStoreFile = keystoreSetting("MEGA_KEYSTORE_FILE", "storeFile")
-val signingStorePassword = keystoreSetting("MEGA_STORE_PASSWORD", "storePassword")
-val signingKeyAlias = keystoreSetting("MEGA_KEY_ALIAS", "keyAlias")
-val signingKeyPassword = keystoreSetting("MEGA_KEY_PASSWORD", "keyPassword")
+// The four fields come from ONE source, never mixed per-field: if ANY
+// MEGA_KEYSTORE_* env var is set, we treat that as the intended route and
+// refuse to silently backfill the remaining fields from the properties file
+// (a stray env var from an old shell session otherwise produces a
+// store/password/alias combination nobody assembled together).
+val envRoute = listOf(
+    "MEGA_KEYSTORE_FILE", "MEGA_STORE_PASSWORD", "MEGA_KEY_ALIAS", "MEGA_KEY_PASSWORD",
+).any { !System.getenv(it).isNullOrBlank() }
+if (envRoute && outOfTreeKeystorePropertiesFile != null) {
+    throw GradleException(
+        "Signing config is ambiguous: MEGA_KEYSTORE_PROPERTIES and at least one " +
+            "MEGA_KEYSTORE_*/MEGA_*_PASSWORD env var are both set. Use exactly one route " +
+            "(see docs/RELEASE-SIGNING.md).",
+    )
+}
+fun keystoreField(envVar: String, propertiesKey: String): String? =
+    if (envRoute) System.getenv(envVar) else keystoreProperties.getProperty(propertiesKey)
+val signingStoreFile = keystoreField("MEGA_KEYSTORE_FILE", "storeFile")
+val signingStorePassword = keystoreField("MEGA_STORE_PASSWORD", "storePassword")
+val signingKeyAlias = keystoreField("MEGA_KEY_ALIAS", "keyAlias")
+val signingKeyPassword = keystoreField("MEGA_KEY_PASSWORD", "keyPassword")
 // A configured-enough signing setup: every value present. A partial config
 // (e.g. file but no password) is treated as NOT configured so the build
 // produces an unsigned APK that verifyReleaseArtifact then refuses, rather
