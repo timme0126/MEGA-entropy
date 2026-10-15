@@ -10,15 +10,24 @@ six-sided die rolls, supplied entirely by the user,** into a valid 12- or
 
 ## Download the beta APK
 
-**Current beta:** [`mega-beta-v0.1.13.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.13/mega-beta-v0.1.13.apk)
+**Current beta:** [`mega-beta-v0.1.15.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.15/mega-beta-v0.1.15.apk)
 
-Release page: [`MEGA Beta v0.1.13`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.13)
+Release page: [`MEGA Beta v0.1.15`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.15)
+
+> ⚠️ **Updating from v0.1.13 or earlier? Uninstall the old app first.** This
+> release is signed with the rotated key (the previous one was rotated on
+> 2026-09-15, see [`docs/RELEASE-SIGNING.md`](docs/RELEASE-SIGNING.md)), so it
+> will NOT install over a pre-rotation MEGA — Android reports "package
+> signatures don't match". Uninstalling clears local saved-session state;
+> export an encrypted backup from Settings *before* uninstalling (import
+> requires re-setting the PIN on the fresh install). v0.1.14 installs update
+> in place normally.
 
 Verify the primary release APK before installing:
 
 ```bash
-sha256sum mega-beta-v0.1.13.apk
-# f39879b20d7dbaf156fa1c5f72e2528414aa38ddfba9cf670ed12fae823dab14
+sha256sum mega-beta-v0.1.15.apk
+# SHA_PLACEHOLDER_BETA
 ```
 
 This primary build is a **release-type, non-debuggable APK signed with the
@@ -26,28 +35,33 @@ local mega-beta-release key** (see [`docs/RELEASE-SIGNING.md`](docs/RELEASE-SIGN
 — not a debug build. Its signer certificate SHA-256 fingerprint is:
 
 ```
-42:C9:DA:07:22:58:5A:04:C3:38:8E:99:89:B8:EB:CB:4B:62:73:16:29:92:4A:AE:3C:96:EE:C7:D5:36:48:9C
+91:D6:B2:22:CB:F3:58:EE:58:3F:D9:53:F3:09:56:EC:44:FB:F4:3A:8C:EB:F1:DB:98:F1:EE:48:BA:C0:A6:1F
 ```
 
 This is an experimental beta build for disposable test roll sequences only.
 
-### Debug-compatible APK for existing testers
+### Debug build (parallel-installable)
 
-If Android refuses to update an older MEGA test install with `App not
-installed`, you likely have a debug-signed build already installed. Use the
-compatibility APK below only to update that older test install without wiping
-local test data:
+[`mega-debug-v0.1.15.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.15/mega-debug-v0.1.15.apk)
 
-[`mega-beta-v0.1.13-debug-compat.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.13/mega-beta-v0.1.13-debug-compat.apk)
+Debug-signed: installs **side-by-side** with the beta (different signing
+key). Same code as v0.1.15.
 
 ```bash
-sha256sum mega-beta-v0.1.13-debug-compat.apk
-# 33802E03BE135E7087548401BB0CCE1DA504407F999EBB01B8310D6081136264
+sha256sum mega-debug-v0.1.15.apk
+# SHA_PLACEHOLDER_DEBUG
 ```
 
-For a fresh install, prefer the primary non-debuggable APK above. The
-debug-compatible APK exists only because Android will not install an APK
-signed by a different key over an existing debug-signed package.
+### Earlier builds (historical)
+
+v0.1.14 artifacts live on the
+[`v0.1.14 release page`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.14).
+v0.1.13 and older artifacts (including their debug-compatible APK) remain on
+the [`v0.1.13 release page`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.13),
+signed with the retired pre-rotation key `42:C9:DA:07:...:D5:36:48:9C`. That
+fingerprint proves signer continuity among those pre-rotation builds only,
+not author authenticity (see the rotation history in
+`docs/RELEASE-SIGNING.md`).
 
 ## The core guarantee
 

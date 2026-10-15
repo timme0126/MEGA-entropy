@@ -1,8 +1,40 @@
 # Changelog
 
-Notable changes to MEGA, most recent first. The current beta build is `v0.1.13` (see [`README.md`](README.md#download-the-beta-apk)).
+Notable changes to MEGA, most recent first. The current beta build is `v0.1.15` (see [`README.md`](README.md#download-the-beta-apk)).
 
-## [Unreleased]
+## [0.1.15] — 2026-10-15
+
+### Fixed
+- **BlueWallet could not import MEGA-signed PSBTs at all** — BlueWallet's
+  bundled BIP174 parser (bitcoinjs-lib 7.0.2) rejects any document
+  carrying a v2 global key type 0x02 with "Unknown global type 2", and a
+  v2-built coordinator's (e.g. Sparrow's) v2 fields travel intact
+  through MEGA's faithful signing passthrough into MEGA's export. A new
+  opt-in **"Legacy wallet mode (PSBT v0, e.g. BlueWallet)"** checkbox on
+  the signed-PSBT export re-encodes the identical signed PSBT as a
+  strict v0 document (entropy-core `downgradePsbtToV0`): only v2 fields
+  mechanically redundant with the embedded unsigned transaction are
+  dropped, every signable field is preserved byte-identically, and any
+  unrepresentable field is a hard refusal, never a silent drop. The
+  primary export and the Sparrow workflow are unchanged. Full root-cause
+  analysis, spec field mapping, and a golden test verified end-to-end
+  against bitcoinjs-lib 7.0.2 itself:
+  [`docs/PSBT-V0-LEGACY-EXPORT.md`](docs/PSBT-V0-LEGACY-EXPORT.md).
+
+### Changed
+- Release builds are pinned to the rotated beta-release signing key
+  (fingerprint `91:D6:B2:22:...:BA:C0:A6:1F`, rotated 2026-09-15; this
+  main lineage previously still pinned the retired pre-rotation key) —
+  see `docs/RELEASE-SIGNING.md`.
+
+## [0.1.14] — 2026-09-15 (historical; released from the tablet-layout lineage)
+
+### Changed
+- Beta-release signing key rotated after the in-tree keystore was found
+  unprotected; v0.1.14-and-later ship under the new key, so they install
+  side-by-side-only relative to older builds (uninstall first; export a
+  Settings backup beforehand). Details and rotation history:
+  `docs/RELEASE-SIGNING.md`.
 
 ### Added
 - **Legacy wallet mode (PSBT v0 export)** on the signed-PSBT export
