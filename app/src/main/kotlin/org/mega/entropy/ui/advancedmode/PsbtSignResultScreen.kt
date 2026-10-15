@@ -233,6 +233,40 @@ fun PsbtSignResultScreen(
                             )
                         }
 
+                        // Sentinel (Samourai lineage, hummingbird-based
+                        // scanner) accepts a plain single-frame QR of the
+                        // raw signed transaction hex, or a UR2 crypto-psbt
+                        // QR. A signed PSBT in other framing is rejected
+                        // by BroadcastTx.validate().
+                        var wideTxQr by remember(txHex) { mutableStateOf(false) }
+                        Row(
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = wideTxQr, onCheckedChange = { wideTxQr = it })
+                            Text(
+                                text = "Wide-compatibility QR (Sentinel: plain hex, single frame)",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                        if (wideTxQr) {
+                            MegaCard(title = "Broadcast QR (wide compatibility)") {
+                                // zxing single-QR practical ceiling (byte
+                                // mode, version 40) is 2953 characters.
+                                if (txHex.length <= 2900) {
+                                    MegaAnimatedQrCode(
+                                        frames = remember(txHex) { listOf(txHex) },
+                                        contentDescription = "Static QR code of the signed transaction hex for coordinators that predate BBQR, such as Sentinel"
+                                    )
+                                } else {
+                                    Text(
+                                        text = "This transaction's hex is too long to fit a single QR. Copy the hex below and paste it into the broadcasting wallet instead.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+                            }
+                        }
+
                         MegaCard(
                             title = "Transaction (hex)",
                             trailingAction = if (allowSeedCopy) {
@@ -339,7 +373,6 @@ fun PsbtSignResultScreen(
                                 if (legacyV0) " (legacy v0 encoding)" else ""
                         )
                     }
-
 
                     MegaPrimaryButton(text = "Done", onClick = onBack)
                 }
