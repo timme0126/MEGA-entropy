@@ -2,9 +2,13 @@ package org.mega.entropy.ui.advancedmode
 
 import android.util.Base64
 import java.security.SecureRandom
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +29,7 @@ import org.mega.entropycore.FingerprintMatchStatus
 import org.mega.entropycore.PsbtInputScriptKind
 import org.mega.entropycore.PsbtInputSigningDiagnostic
 import org.mega.entropycore.diagnosePsbtSigning
+import org.mega.entropycore.downgradePsbtToV0
 import org.mega.entropycore.encodeBbqr
 import org.mega.entropycore.extractFinalTransactionHex
 import org.mega.entropycore.isPsbtFullyFinalized
@@ -282,20 +287,56 @@ fun PsbtSignResultScreen(
                         }
                     }
 
+                    // Legacy export for wallets whose BIP174 parsers are
+                    // v0-only — verified against BlueWallet, which rejects
+                    // any global key type 0x02 ("Unknown global type 2")
+                    // and therefore cannot import MEGA's native v2 output
+                    // at all. Off by default: the v2 encoding stays the
+                    // primary, Sparrow-compatible export.
+                    var legacyV0 by remember(signedPsbtBytes) { mutableStateOf(false) }
+                    val legacyV0Result = remember(signedPsbtBytes, legacyV0) {
+                        if (legacyV0) runCatching { downgradePsbtToV0(signedPsbtBytes) } else null
+                    }
+                    val exportBytes = if (legacyV0 && legacyV0Result?.isSuccess == true) {
+                        legacyV0Result.getOrThrow()
+                    } else {
+                        signedPsbtBytes
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = legacyV0, onCheckedChange = { legacyV0 = it })
+                        Text(
+                            text = "Legacy wallet mode (PSBT v0, e.g. BlueWallet)",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    if (legacyV0 && legacyV0Result?.isFailure == true) {
+                        MegaCard {
+                            Text(
+                                text = "This PSBT cannot be re-encoded as a legacy (v0) document. Export it normally and import it into a v2-aware coordinator instead.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
+
                     MegaCard(
                         title = "Updated PSBT",
                         trailingAction = if (allowSeedCopy) {
                             {
                                 MegaCopyIconButton(
                                     contentDescription = "Copy PSBT as base64",
-                                    getTextToCopy = { Base64.encodeToString(signedPsbtBytes, Base64.NO_WRAP) }
+                                    getTextToCopy = { Base64.encodeToString(exportBytes, Base64.NO_WRAP) }
                                 )
                             }
                         } else null
                     ) {
                         MegaAnimatedQrCode(
-                            frames = remember(signedPsbtBytes) { encodeBbqr('P', signedPsbtBytes) },
-                            contentDescription = "Animated QR code of the partially-signed PSBT, to scan into the next cosigner's wallet"
+                            frames = remember(exportBytes) { encodeBbqr('P', exportBytes) },
+                            contentDescription = "Animated QR code of the partially-signed PSBT, to scan into the next cosigner's wallet" +
+                                if (legacyV0) " (legacy v0 encoding)" else ""
                         )
                     }
 

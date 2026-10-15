@@ -133,3 +133,13 @@ scan (camera, local-only)  →  review (computePsbtSummary, no keys touched)
   validate against the real UTXO set — the transaction would be
   rejected by the network, not silently steal the difference as in the
   legacy-inputs case. MEGA never signs legacy inputs at all.)
+
+## Legacy (v0) export
+
+The default export is a BIP174 v2 document (see
+`PSBT-V0-LEGACY-EXPORT.md` for the full field mapping). BlueWallet and
+other v0-only coordinators cannot import it at all; the sign-result
+screen's opt-in "Legacy wallet mode" re-encodes the identical signed
+PSBT as a strict v0 document — no signatures, UTXO data, derivations,
+or amounts are altered in the process, and anything that cannot be
+faithfully represented is a hard refusal rather than a silent drop.

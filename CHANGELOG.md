@@ -2,6 +2,22 @@
 
 Notable changes to MEGA, most recent first. The current beta build is `v0.1.13` (see [`README.md`](README.md#download-the-beta-apk)).
 
+## [Unreleased]
+
+### Added
+- **Legacy wallet mode (PSBT v0 export)** on the signed-PSBT export
+  screen — a BlueWallet-compatibility fix. MEGA's PSBT serializer emits
+  BIP174 v2, which Sparrow reads but BlueWallet's bundled parser
+  (bitcoinjs-lib 7.0.2) rejects outright with "Unknown global type 2".
+  A new opt-in checkbox re-exports the same signed PSBT as a strict v0
+  document via `downgradePsbtToV0` (entropy-core), which drops only the
+  v2 fields a v0 document represents through its embedded unsigned
+  transaction, refuses anything it cannot represent faithfully, and
+  verifies against the original document that no signable field was
+  lost. The primary export is unchanged. Full design, spec mapping, and
+  the bitcoinjs-lib 7.0.2-verified golden test in
+  [`docs/PSBT-V0-LEGACY-EXPORT.md`](docs/PSBT-V0-LEGACY-EXPORT.md).
+
 ## [0.1.13] — 2026-08-25
 
 ### Added
