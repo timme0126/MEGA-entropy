@@ -7,16 +7,92 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Local beta-release signing (see docs/RELEASE-SIGNING.md). keystore.properties
-// is git-ignored and machine-local — its absence must never silently fall back
-// to shipping an unsigned or debug-signed APK as "release"; it just means
-// `assembleRelease` produces an unsigned artifact, and verifyReleaseArtifact
-// (below) refuses to pass until the keystore exists.
-val keystorePropertiesFile = rootProject.file("keystore.properties")
-val hasKeystoreProperties = keystorePropertiesFile.exists()
-val keystoreProperties = Properties().apply {
-    if (hasKeystoreProperties) load(keystorePropertiesFile.inputStream())
+// Local beta-release signing (see docs/RELEASE-SIGNING.md). Signing secrets
+// must live OUTSIDE the repo working copy: `.gitignore` alone is not a
+// protection — `git add -f`, a misconfigured `git clean -fdx` losing nothing
+// but a backup including them, or any copy of the working tree (USB, shared
+// checkout, compromised machine) travels with the keystore + passwords still
+// next to the code. So the build reads them ONLY from:
+//   1. environment variables MEGA_KEYSTORE_FILE / MEGA_STORE_PASSWORD /
+//      MEGA_KEY_ALIAS / MEGA_KEY_PASSWORD, or
+//   2. an out-of-tree properties file named by MEGA_KEYSTORE_PROPERTIES
+//      (keys: storeFile, storePassword, keyAlias, keyPassword).
+// An in-tree `keystore.properties` or `keystore/` directory is a hard BUILD
+// ERROR, and BOTH the properties file and the resolved keystore are checked
+// for path containment inside the repo root — naming a file `keystore.*`
+// was never the real boundary; "outside the working copy" is. So
+// "secrets in the checkout" stops being a policy and becomes mechanically
+// impossible. A configured MEGA_KEYSTORE_PROPERTIES path that doesn't exist
+// is also a config-time error (a mistyped path must not silently downgrade
+// to unsigned). Absence of any signing config is not an error:
+// `assembleRelease` produces an unsigned artifact and verifyReleaseArtifact
+// (below) refuses to pass — never a silent fallback to debug signing.
+val repoRootCanonical = rootProject.projectDir.canonicalFile
+fun assertOutsideRepo(label: String, file: File?) {
+    if (file == null) return
+    val canonical = file.canonicalFile
+    if (canonical == repoRootCanonical ||
+        canonical.path.startsWith(repoRootCanonical.path + File.separator)
+    ) {
+        throw GradleException(
+            "Release-signing $label must live OUTSIDE the repository working copy " +
+                "(resolved inside it: $canonical). See docs/RELEASE-SIGNING.md.",
+        )
+    }
 }
+val inTreeKeystoreProperties = rootProject.file("keystore.properties")
+val inTreeKeystoreDir = rootProject.file("keystore")
+if (inTreeKeystoreProperties.exists() || inTreeKeystoreDir.exists()) {
+    throw GradleException(
+        "Release-signing secrets must not live in the repository working copy " +
+            "(found ${if (inTreeKeystoreProperties.exists()) inTreeKeystoreProperties else inTreeKeystoreDir}). " +
+            "Move them out of tree and point MEGA_KEYSTORE_PROPERTIES at the properties file, or set " +
+            "MEGA_KEYSTORE_FILE / MEGA_STORE_PASSWORD / MEGA_KEY_ALIAS / MEGA_KEY_PASSWORD. " +
+            "See docs/RELEASE-SIGNING.md.",
+    )
+}
+val outOfTreeKeystorePropertiesFile = System.getenv("MEGA_KEYSTORE_PROPERTIES")?.let {
+    val f = File(it).canonicalFile
+    if (!f.exists()) {
+        throw GradleException(
+            "MEGA_KEYSTORE_PROPERTIES is set to '$it' but no such file exists — " +
+                "refusing to silently build unsigned. Fix the path or unset the variable. " +
+                "See docs/RELEASE-SIGNING.md.",
+        )
+    }
+    assertOutsideRepo("signing properties file", f)
+    f
+}
+val keystoreProperties = Properties().apply {
+    if (outOfTreeKeystorePropertiesFile?.exists() == true) load(outOfTreeKeystorePropertiesFile.inputStream())
+}
+// The four fields come from ONE source, never mixed per-field: if ANY
+// MEGA_KEYSTORE_* env var is set, we treat that as the intended route and
+// refuse to silently backfill the remaining fields from the properties file
+// (a stray env var from an old shell session otherwise produces a
+// store/password/alias combination nobody assembled together).
+val envRoute = listOf(
+    "MEGA_KEYSTORE_FILE", "MEGA_STORE_PASSWORD", "MEGA_KEY_ALIAS", "MEGA_KEY_PASSWORD",
+).any { !System.getenv(it).isNullOrBlank() }
+if (envRoute && outOfTreeKeystorePropertiesFile != null) {
+    throw GradleException(
+        "Signing config is ambiguous: MEGA_KEYSTORE_PROPERTIES and at least one " +
+            "MEGA_KEYSTORE_*/MEGA_*_PASSWORD env var are both set. Use exactly one route " +
+            "(see docs/RELEASE-SIGNING.md).",
+    )
+}
+fun keystoreField(envVar: String, propertiesKey: String): String? =
+    if (envRoute) System.getenv(envVar) else keystoreProperties.getProperty(propertiesKey)
+val signingStoreFile = keystoreField("MEGA_KEYSTORE_FILE", "storeFile")
+val signingStorePassword = keystoreField("MEGA_STORE_PASSWORD", "storePassword")
+val signingKeyAlias = keystoreField("MEGA_KEY_ALIAS", "keyAlias")
+val signingKeyPassword = keystoreField("MEGA_KEY_PASSWORD", "keyPassword")
+// A configured-enough signing setup: every value present. A partial config
+// (e.g. file but no password) is treated as NOT configured so the build
+// produces an unsigned APK that verifyReleaseArtifact then refuses, rather
+// than half-working.
+val hasKeystoreProperties =
+    listOf(signingStoreFile, signingStorePassword, signingKeyAlias, signingKeyPassword).all { !it.isNullOrBlank() }
 
 android {
     namespace = "org.mega.entropy"
@@ -35,10 +111,18 @@ android {
     signingConfigs {
         create("betaRelease") {
             if (hasKeystoreProperties) {
-                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
-                storePassword = keystoreProperties.getProperty("storePassword")
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-                keyPassword = keystoreProperties.getProperty("keyPassword")
+                // Relative storeFile paths resolve against the directory of the
+                // out-of-tree properties file; absolute paths pass through.
+                // Either way the RESOLVED keystore must canonicalize outside
+                // the repo — `..` tricks and the env-var route's
+                // projectDir base are both rejected here.
+                val storeFileBase = outOfTreeKeystorePropertiesFile?.parentFile ?: rootProject.projectDir
+                val resolvedStoreFile = storeFileBase.resolve(signingStoreFile!!)
+                assertOutsideRepo("keystore file", resolvedStoreFile)
+                storeFile = resolvedStoreFile
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
             }
         }
     }
@@ -215,8 +299,12 @@ tasks.named("check") {
 /** Expected SHA-256 fingerprint of the mega-beta-release signing certificate
  * (see docs/RELEASE-SIGNING.md) — not secret, deliberately public: it's how a
  * beta tester or reviewer confirms a given APK was signed by the SAME local
- * key as a previous release, not a substituted one. Update this constant
- * (and the doc) if the keystore is ever deliberately rotated. */
+ * key as a previous release, not a substituted one. NOTE: this proves signer
+ * CONTINUITY only, not author authenticity — and only forward from the
+ * 2026-09-15 key rotation: the pre-rotation key is treated as potentially
+ * exposed, so the OLD fingerprint no longer proves any old APK was signed by
+ * the maintainer. Update this constant (and the doc) if the keystore is ever
+ * deliberately rotated. */
 val expectedBetaReleaseSignerSha256 = "91d6b222cbf358ee583fd953f30956ec44fbf43a8cebf1db98f1ee48bac0a61f"
 
 fun latestAndroidBuildToolsDir(): File {
@@ -245,10 +333,10 @@ fun latestAndroidBuildToolsDir(): File {
  * permissions securityAudit already checks in the manifest.
  *
  * Deliberately NOT wired into `check` — it requires a real signing key
- * (keystore.properties, git-ignored, machine-local; see
- * docs/RELEASE-SIGNING.md) that most contributors won't have, and running
- * a full `assembleRelease` on every `./gradlew check` would be wasteful.
- * This is the release process's own explicit gate, run via
+ * (kept OUTSIDE the repo, pointed at via MEGA_KEYSTORE_PROPERTIES or env
+ * vars; see docs/RELEASE-SIGNING.md) that most contributors won't have, and
+ * running a full `assembleRelease` on every `./gradlew check` would be
+ * wasteful. This is the release process's own explicit gate, run via
  * `./gradlew assembleRelease verifyReleaseArtifact`.
  */
 tasks.register("verifyReleaseArtifact") {
@@ -259,9 +347,10 @@ tasks.register("verifyReleaseArtifact") {
     doLast {
         if (!hasKeystoreProperties) {
             throw GradleException(
-                "No keystore.properties found — assembleRelease produced an UNSIGNED apk, " +
-                    "not a distributable one. See docs/RELEASE-SIGNING.md to generate a local " +
-                    "beta-release keystore.",
+                "No out-of-tree signing config found (MEGA_KEYSTORE_PROPERTIES or the " +
+                    "MEGA_KEYSTORE_FILE/MEGA_STORE_PASSWORD/MEGA_KEY_ALIAS/MEGA_KEY_PASSWORD env vars) " +
+                    "— assembleRelease produced an UNSIGNED apk, not a distributable one. " +
+                    "See docs/RELEASE-SIGNING.md to set up a local beta-release keystore OUTSIDE the repo.",
             )
         }
 
