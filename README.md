@@ -27,7 +27,7 @@ Verify the primary release APK before installing:
 
 ```bash
 sha256sum mega-beta-v0.1.17.apk
-# CHECKSUM_BETA
+# cb70ab60273472b584d626e561dcfa4582da07bd7ce14b37bdbf332f52554107
 ```
 
 This primary build is a **release-type, non-debuggable APK signed with the
@@ -49,7 +49,7 @@ key). Same code as v0.1.17.
 
 ```bash
 sha256sum mega-debug-v0.1.17.apk
-# CHECKSUM_DEBUG
+# b83978c4b8757fb8ff9ee5b68e6dbb74bc66e9a5a669966765ed4fd0646ab05c
 ```
 
 ### Earlier builds (historical)
