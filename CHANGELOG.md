@@ -1,6 +1,26 @@
 # Changelog
 
-Notable changes to MEGA, most recent first. The current beta build is `v0.1.15` (see [`README.md`](README.md#download-the-beta-apk)).
+Notable changes to MEGA, most recent first. The current beta build is `v0.1.16` (see [`README.md`](README.md#download-the-beta-apk)).
+
+## [0.1.16] — 2026-10-16
+
+### Added
+- **Export picker for receiving wallets** — each PSBT result screen now
+  offers a single segmented choice instead of per-wallet toggles:
+  `Sparrow / modern` vs `BlueWallet (PSBT v0)` on the partially-signed
+  screen, `Sparrow / modern` vs `Sentinel / raw hex` on the
+  fully-signed screen (see
+  [`docs/WIDE-COMPAT-QR.md`](docs/WIDE-COMPAT-QR.md)). The Sentinel
+  option renders the exact transaction hex as one static QR —
+  source-verified against the current Sentinel fork
+  (`wanderingking072/sentinel-android`), whose `BroadcastTx.validate()`
+  broadcasts only raw signed transaction hex and rejects a signed
+  PSBT in any framing. Overly long hex shows a copy-and-paste
+  fallback instead of an unscannable QR.
+
+### Changed
+- A refused v0 re-encode now suppresses the export QR entirely rather
+  than falling back silently, so a mislabeled export is impossible.
 
 ## [0.1.15] — 2026-10-15
 

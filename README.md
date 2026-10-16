@@ -10,9 +10,9 @@ six-sided die rolls, supplied entirely by the user,** into a valid 12- or
 
 ## Download the beta APK
 
-**Current beta:** [`mega-beta-v0.1.15.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.15/mega-beta-v0.1.15.apk)
+**Current beta:** [`mega-beta-v0.1.16.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.16/mega-beta-v0.1.16.apk)
 
-Release page: [`MEGA Beta v0.1.15`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.15)
+Release page: [`MEGA Beta v0.1.16`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.16)
 
 > ⚠️ **Updating from v0.1.13 or earlier? Uninstall the old app first.** This
 > release is signed with the rotated key (the previous one was rotated on
@@ -26,8 +26,8 @@ Release page: [`MEGA Beta v0.1.15`](https://github.com/timme0126/MEGA-entropy/re
 Verify the primary release APK before installing:
 
 ```bash
-sha256sum mega-beta-v0.1.15.apk
-# 892e228f538740982be733184ee5402b201ae8aeac0f2fa173e5d1670861d0f8
+sha256sum mega-beta-v0.1.16.apk
+# BETA_SHA_TBD
 ```
 
 This primary build is a **release-type, non-debuggable APK signed with the
@@ -42,18 +42,20 @@ This is an experimental beta build for disposable test roll sequences only.
 
 ### Debug build (parallel-installable)
 
-[`mega-debug-v0.1.15.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.15/mega-debug-v0.1.15.apk)
+[`mega-debug-v0.1.16.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.16/mega-debug-v0.1.16.apk)
 
 Debug-signed: installs **side-by-side** with the beta (different signing
-key). Same code as v0.1.15.
+key). Same code as v0.1.16.
 
 ```bash
-sha256sum mega-debug-v0.1.15.apk
-# e66b612dd1341013391c22bc1a91f53965fcf0664bd420224e987948a880cb4c
+sha256sum mega-debug-v0.1.16.apk
+# DEBUG_SHA_TBD
 ```
 
 ### Earlier builds (historical)
 
+v0.1.15 artifacts live on the
+[`v0.1.15 release page`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.15).
 v0.1.14 artifacts live on the
 [`v0.1.14 release page`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.14).
 v0.1.13 and older artifacts (including their debug-compatible APK) remain on
