@@ -34,6 +34,7 @@ import org.mega.entropy.storage.SavedMultisigVault
 import org.mega.entropy.storage.SessionRepository
 import org.mega.entropy.ui.about.AboutScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeEntryScreen
+import org.mega.entropy.ui.custody.CustodyBackupScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeHubScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeImportPickerScreen
 import org.mega.entropy.ui.advancedmode.AdvancedModeMnemonicEntryScreen
@@ -747,6 +748,9 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onRecoverFromBackupShares = {
                     navController.navigate(MegaDestinations.ADVANCED_MODE_RECOVER_FROM_BACKUP_SHARES)
                 },
+                onCustodyBackup = {
+                    navController.navigate(MegaDestinations.ADVANCED_MODE_CUSTODY_BACKUP)
+                },
                 onMultisigVaults = {
                     coroutineScope.launch { enterMultisigVaultsEntry() }
                 },
@@ -1071,6 +1075,12 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 },
             )
         }
+        composable(MegaDestinations.ADVANCED_MODE_CUSTODY_BACKUP) {
+            // Not gated behind a loaded mnemonic: the envelope covers the whole
+            // backup database, and works the same before or after any session.
+            CustodyBackupScreen(onBack = { navController.popBackStack() })
+        }
+
         composable(MegaDestinations.ADVANCED_MODE_RECOVER_FROM_BACKUP_SHARES) {
             RecoverFromBackupSharesScreen(
                 allowScreenshots = allowScreenshots,

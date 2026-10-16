@@ -30,6 +30,7 @@ fun AdvancedModeEntryScreen(
     onImportFromSavedSession: () -> Unit,
     onImportViaSeedQr: () -> Unit,
     onRecoverFromBackupShares: () -> Unit,
+    onCustodyBackup: () -> Unit,
     onMultisigVaults: () -> Unit,
     onSecurityVerification: () -> Unit,
 ) {
@@ -55,6 +56,7 @@ fun AdvancedModeEntryScreen(
         // fourth way to arrive at the same mnemonicWords the three
         // buttons above produce. See RecoverFromBackupSharesScreen.
         MegaPrimaryButton(text = "Recover From Backup Shares", onClick = onRecoverFromBackupShares)
+        MegaPrimaryButton(text = "Encrypted Backup+", onClick = onCustodyBackup)
         // Deliberately does not require a seed to already be loaded first —
         // unlike every button above, a multisig vault's cosigners are each
         // filled independently from within that flow itself (saved

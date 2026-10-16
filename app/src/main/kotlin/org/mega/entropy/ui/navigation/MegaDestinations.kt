@@ -130,6 +130,7 @@ object MegaDestinations {
      * validated mnemonicWords list, by reconstructing it from Shamir
      * backup shares created earlier via ADVANCED_MODE_BACKUP_SHARES_REVEAL. */
     const val ADVANCED_MODE_RECOVER_FROM_BACKUP_SHARES = "advanced_mode_recover_from_backup_shares"
+    const val ADVANCED_MODE_CUSTODY_BACKUP = "advanced_mode_custody_backup"
 
     /** "Structure a Transaction" entry point from ADVANCED_MODE_HUB — a
      * mandatory acknowledgment before the camera opens: MEGA has no node
