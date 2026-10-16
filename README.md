@@ -10,9 +10,9 @@ six-sided die rolls, supplied entirely by the user,** into a valid 12- or
 
 ## Download the beta APK
 
-**Current beta:** [`mega-beta-v0.1.16.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.16/mega-beta-v0.1.16.apk)
+**Current beta:** [`mega-beta-v0.1.17.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.17/mega-beta-v0.1.17.apk)
 
-Release page: [`MEGA Beta v0.1.16`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.16)
+Release page: [`MEGA Beta v0.1.17`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.17)
 
 > ⚠️ **Updating from v0.1.13 or earlier? Uninstall the old app first.** This
 > release is signed with the rotated key (the previous one was rotated on
@@ -26,8 +26,8 @@ Release page: [`MEGA Beta v0.1.16`](https://github.com/timme0126/MEGA-entropy/re
 Verify the primary release APK before installing:
 
 ```bash
-sha256sum mega-beta-v0.1.16.apk
-# 86112da74c2e7871aa0708644ce595499b7a5c24bf748159706c8c8f46dfd5a5
+sha256sum mega-beta-v0.1.17.apk
+# CHECKSUM_BETA
 ```
 
 This primary build is a **release-type, non-debuggable APK signed with the
@@ -42,18 +42,20 @@ This is an experimental beta build for disposable test roll sequences only.
 
 ### Debug build (parallel-installable)
 
-[`mega-debug-v0.1.16.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.16/mega-debug-v0.1.16.apk)
+[`mega-debug-v0.1.17.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.17/mega-debug-v0.1.17.apk)
 
 Debug-signed: installs **side-by-side** with the beta (different signing
-key). Same code as v0.1.16.
+key). Same code as v0.1.17.
 
 ```bash
-sha256sum mega-debug-v0.1.16.apk
-# 7bcca0d3076846f3dc4b000d23983a79662b6b6e60104fed3b1c636809dee45c
+sha256sum mega-debug-v0.1.17.apk
+# CHECKSUM_DEBUG
 ```
 
 ### Earlier builds (historical)
 
+v0.1.16 artifacts live on the
+[`v0.1.16 release page`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.16).
 v0.1.15 artifacts live on the
 [`v0.1.15 release page`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.15).
 v0.1.14 artifacts live on the

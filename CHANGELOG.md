@@ -2,6 +2,24 @@
 
 Notable changes to MEGA, most recent first. The current beta build is `v0.1.16` (see [`README.md`](README.md#download-the-beta-apk)).
 
+## [0.1.17] - 2026-10-16
+### Added
+- Custody Backup+ (Advanced Mode -> "Encrypted Backup+"): seals your
+  complete standard MEGA backup plus one attached document (e.g. estate
+  planning documents) into a single MEGACUSTODY-V1 encrypted container.
+  One passphrase, held by a trusted third party, opens it - not even
+  MEGA can. Send the opaque container to your custodian; the on-screen
+  (or exported .txt) SHA-256 fingerprint verifies the transfer.
+- "Check passphrase (writes nothing)": full end-to-end authentication
+  of a container with zero side effects. "Extract backup +
+  attachment..." writes the two files only after verification.
+- Passphrase double-entry with live mismatch warning; show/hide toggle
+  on every passphrase field; centered progress dialogs for the long
+  scrypt steps; plain-language decryption errors.
+### Fixed
+- Sealing large attachments no longer runs out of memory: encryption
+  now streams through a 64 KB window straight to the saved file.
+
 ## [0.1.16] — 2026-10-16
 
 ### Added
