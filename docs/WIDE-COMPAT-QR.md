@@ -30,15 +30,26 @@ From `app/src/main/java/com/samourai/sentinel/ui/broadcast/BroadcastTx.kt`:
   `validate()` — **a static QR of the raw transaction hex is the
   correct wide-compatibility scan**.
 
-## What MEGA now offers
+## The export picker (Option A)
 
-An opt-in **"Wide-compatibility QR (Sentinel: plain hex, single
-frame)"** checkbox on the fully-signed screen, off by default. When
-enabled it renders the exact same transaction hex shown in the
-"Transaction (hex)" card as **one static QR** — no BBQR framing, no
-transformation. Transactions whose hex exceeds the single-QR
-capacity (~2900 characters) show a copy-and-paste instruction
-instead of a broken render.
+Each result screen shows **one** segmented picker, defaulting to the
+leftmost option, replacing what used to be per-wallet checkboxes:
+
+| Screen | Options | Payload rendered |
+|---|---|---|
+| Partially signed | `Sparrow / modern` | v2 PSBT as a BBQR animation |
+| | `BlueWallet (PSBT v0)` | strict v0 re-encode as a BBQR animation |
+| Fully signed | `Sparrow / modern` | signed transaction as a BBQR animation |
+| | `Sentinel / raw hex` | the tx hex as **one static QR** |
+
+The Sentinel option renders the exact same string as the "Transaction
+(hex)" card, untransformed. Transactions whose hex exceeds
+single-QR capacity (~2900 characters) show a copy-and-paste
+instruction instead of a broken render.
+
+Mutually exclusive targets belong in one control, not a stack of
+independent toggles — picking "BlueWallet (PSBT v0)" never silently
+changes the broadcast export, and vice versa.
 
 **Clipboard route (no QR):** the existing copy button on
 "Transaction (hex)" + Sentinel's paste field is equivalent and

@@ -88,9 +88,9 @@ Anything else is a hard refusal.
 
 `PsbtSignResultScreen` ("Updated PSBT", the partially-signed export
 step) gains a **"Legacy wallet mode (PSBT v0, e.g. BlueWallet)"**
-checkbox, off by default. Enabling it re-encodes the export QR/base64
+picker option, off by default. Selecting it re-encodes the export QR/base64
 copy from the downgraded bytes. If a document refuses downgrade, the
-checkbox surfaces a plain message to export normally and use a
+picker surfaces a plain message to export normally and use a
 v2-aware coordinator — the app never shows a second QR that is subtly
 different from, or broken relative to, what the primary export produced.
 

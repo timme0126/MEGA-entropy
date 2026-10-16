@@ -5,12 +5,18 @@ import java.security.SecureRandom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -82,6 +88,7 @@ private fun describeSigningDiagnostic(d: PsbtInputSigningDiagnostic): String {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PsbtSignResultScreen(
     psbtBytes: ByteArray,
@@ -226,42 +233,49 @@ fun PsbtSignResultScreen(
                         }
 
 
-                        MegaCard(title = "Broadcast QR") {
-                            MegaAnimatedQrCode(
-                                frames = remember(txHex) { encodeBbqr('T', hexStringToByteArray(txHex)) },
-                                contentDescription = "Animated QR code of the signed transaction, to scan into a broadcasting wallet"
-                            )
+                                                // The wallet doing the broadcast picks the format —
+                        // one choice, not stacked toggles. Sentinel (Samourai
+                        // lineage) scans with a hummingbird/zxing scanner
+                        // whose BroadcastTx.validate() accepts only a plain
+                        // single-frame QR of the raw signed transaction hex;
+                        // it rejects a signed PSBT in any framing. See
+                        // docs/WIDE-COMPAT-QR.md.
+                        val broadcastModes = listOf("Sparrow / modern", "Sentinel / raw hex")
+                        var broadcastMode by remember(txHex) { mutableStateOf(0) }
+                        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                            broadcastModes.forEachIndexed { index, label ->
+                                SegmentedButton(
+                                    selected = broadcastMode == index,
+                                    onClick = { broadcastMode = index },
+                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = broadcastModes.size),
+                                ) {
+                                    Text(label, style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
                         }
-
-                        // Sentinel (Samourai lineage, hummingbird-based
-                        // scanner) accepts a plain single-frame QR of the
-                        // raw signed transaction hex, or a UR2 crypto-psbt
-                        // QR. A signed PSBT in other framing is rejected
-                        // by BroadcastTx.validate().
-                        var wideTxQr by remember(txHex) { mutableStateOf(false) }
-                        Row(
-                            horizontalArrangement = Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(checked = wideTxQr, onCheckedChange = { wideTxQr = it })
-                            Text(
-                                text = "Wide-compatibility QR (Sentinel: plain hex, single frame)",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                        if (wideTxQr) {
-                            MegaCard(title = "Broadcast QR (wide compatibility)") {
-                                // zxing single-QR practical ceiling (byte
-                                // mode, version 40) is 2953 characters.
-                                if (txHex.length <= 2900) {
+                        when (broadcastMode) {
+                            1 -> {
+                                MegaCard(title = "Broadcast QR (Sentinel / raw hex)") {
+                                    // zxing single-QR practical ceiling
+                                    // (byte mode, version 40) is 2953 chars.
+                                    if (txHex.length <= 2900) {
+                                        MegaAnimatedQrCode(
+                                            frames = remember(txHex) { listOf(txHex) },
+                                            contentDescription = "Static QR code of the signed transaction hex for wallets that broadcast raw hex, such as Sentinel"
+                                        )
+                                    } else {
+                                        Text(
+                                            text = "This transaction's hex is too long to fit a single QR. Copy the hex below and paste it into the broadcasting wallet instead.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                    }
+                                }
+                            }
+                            else -> {
+                                MegaCard(title = "Broadcast QR") {
                                     MegaAnimatedQrCode(
-                                        frames = remember(txHex) { listOf(txHex) },
-                                        contentDescription = "Static QR code of the signed transaction hex for coordinators that predate BBQR, such as Sentinel"
-                                    )
-                                } else {
-                                    Text(
-                                        text = "This transaction's hex is too long to fit a single QR. Copy the hex below and paste it into the broadcasting wallet instead.",
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        frames = remember(txHex) { encodeBbqr('T', hexStringToByteArray(txHex)) },
+                                        contentDescription = "Animated QR code of the signed transaction, to scan into a broadcasting wallet"
                                     )
                                 }
                             }
@@ -321,13 +335,25 @@ fun PsbtSignResultScreen(
                         }
                     }
 
-                    // Legacy export for wallets whose BIP174 parsers are
-                    // v0-only — verified against BlueWallet, which rejects
-                    // any global key type 0x02 ("Unknown global type 2")
-                    // and therefore cannot import MEGA's native v2 output
-                    // at all. Off by default: the v2 encoding stays the
-                    // primary, Sparrow-compatible export.
-                    var legacyV0 by remember(signedPsbtBytes) { mutableStateOf(false) }
+                                        // The receiving wallet picks the encoding — one
+                    // choice, not stacked toggles. BlueWallet's BIP174
+                    // parser rejects any v2 global type 0x02 ("Unknown
+                    // global type 2"), so it needs the strict v0
+                    // re-encode; see docs/PSBT-V0-LEGACY-EXPORT.md.
+                    val exportModes = listOf("Sparrow / modern", "BlueWallet (PSBT v0)")
+                    var exportMode by remember(signedPsbtBytes) { mutableStateOf(0) }
+                    val legacyV0 = exportMode == 1
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        exportModes.forEachIndexed { index, label ->
+                            SegmentedButton(
+                                selected = exportMode == index,
+                                onClick = { exportMode = index },
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = exportModes.size),
+                            ) {
+                                Text(label, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
                     val legacyV0Result = remember(signedPsbtBytes, legacyV0) {
                         if (legacyV0) runCatching { downgradePsbtToV0(signedPsbtBytes) } else null
                     }
@@ -336,27 +362,17 @@ fun PsbtSignResultScreen(
                     } else {
                         signedPsbtBytes
                     }
-
-                    Row(
-                        horizontalArrangement = Arrangement.Start,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(checked = legacyV0, onCheckedChange = { legacyV0 = it })
-                        Text(
-                            text = "Legacy wallet mode (PSBT v0, e.g. BlueWallet)",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
                     if (legacyV0 && legacyV0Result?.isFailure == true) {
                         MegaCard {
                             Text(
-                                text = "This PSBT cannot be re-encoded as a legacy (v0) document. Export it normally and import it into a v2-aware coordinator instead.",
+                                text = "This PSBT cannot be re-encoded as a legacy (v0) document. Pick \"Sparrow / modern\" and import it into a v2-aware coordinator instead.",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         }
                     }
 
-                    MegaCard(
+                                        if (!legacyV0 || legacyV0Result?.isSuccess == true) {
+MegaCard(
                         title = "Updated PSBT",
                         trailingAction = if (allowSeedCopy) {
                             {
@@ -370,11 +386,13 @@ fun PsbtSignResultScreen(
                         MegaAnimatedQrCode(
                             frames = remember(exportBytes) { encodeBbqr('P', exportBytes) },
                             contentDescription = "Animated QR code of the partially-signed PSBT, to scan into the next cosigner's wallet" +
-                                if (legacyV0) " (legacy v0 encoding)" else ""
+                                if (legacyV0 && legacyV0Result?.isSuccess == true) " (legacy v0 encoding)" else ""
                         )
                     }
 
-                    MegaPrimaryButton(text = "Done", onClick = onBack)
+                                        }
+
+MegaPrimaryButton(text = "Done", onClick = onBack)
                 }
             }
         }
