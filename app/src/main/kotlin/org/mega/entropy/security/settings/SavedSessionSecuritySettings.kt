@@ -86,6 +86,19 @@ class SavedSessionSecuritySettings(context: Context) {
         prefs.edit().putBoolean(KEY_ALLOW_PRIVATE_KEY_EXPORT, allow).apply()
     }
 
+    /** Gates the visible read-aloud buttons and their TTS (see
+     * MegaReadAloud). Stored default is off, but the effective setting at
+     * render time is ORed with TalkBack touch exploration — a blind user
+     * cannot find a toggle they cannot see, so touch exploration itself
+     * counts as the opt-in (see megaAccessibilityModeActive in MegaA11y). */
+    fun accessibilityModeEnabled(): Boolean {
+        return prefs.getBoolean(KEY_ACCESSIBILITY_MODE, DEFAULT_ACCESSIBILITY_MODE)
+    }
+
+    fun setAccessibilityModeEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ACCESSIBILITY_MODE, enabled).apply()
+    }
+
     /** Clears every stored preference here back to its default, so a
      * duress wipe (see PinVerifyScreen) leaves no trace of prior settings
      * choices alongside the deleted sessions — reading back any getter
@@ -103,6 +116,7 @@ class SavedSessionSecuritySettings(context: Context) {
         private const val KEY_ADVANCED_MODE = "advanced_mode_enabled"
         private const val KEY_DICE_ROLLS_LOCKED = "dice_rolls_locked_default"
         private const val KEY_ALLOW_PRIVATE_KEY_EXPORT = "allow_private_key_export"
+        private const val KEY_ACCESSIBILITY_MODE = "accessibility_mode"
 
         const val DEFAULT_LOCK_TIMEOUT_MILLIS = 0L
         const val DEFAULT_RANDOMIZE_PIN_KEYPAD = true
@@ -111,6 +125,7 @@ class SavedSessionSecuritySettings(context: Context) {
         const val DEFAULT_ADVANCED_MODE = false
         const val DEFAULT_DICE_ROLLS_LOCKED = false
         const val DEFAULT_ALLOW_PRIVATE_KEY_EXPORT = false
+        const val DEFAULT_ACCESSIBILITY_MODE = false
 
         val LOCK_TIMEOUT_OPTIONS = listOf(
             SavedSessionLockTimeoutOption("Immediately", 0L),

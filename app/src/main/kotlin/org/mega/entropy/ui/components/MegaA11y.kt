@@ -1,5 +1,7 @@
 package org.mega.entropy.ui.components
 
+import android.content.Context
+import android.view.accessibility.AccessibilityManager
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -309,3 +311,21 @@ fun Modifier.megaCountStatus(entered: Int, max: Int, noun: String): Modifier =
         contentDescription = noun
         stateDescription = "$entered of $max"
     }
+
+// -------------------------------------------------------- accessibility mode
+
+/**
+ * Effective "Accessibility mode" at render time: the stored setting
+ * (SavedSessionSecuritySettings.accessibilityModeEnabled), OR —
+ * regardless of it — whether a TouchBack-like service is currently doing
+ * touch exploration. Chicken-and-egg: if only the stored toggle counted,
+ * a blind user could never find the setting they need to turn on to make
+ * the app speak, so touch exploration is itself a legitimate opt-in.
+ * Plain function (not @Composable) so callers compute it once per screen
+ * and `remember` it rather than re-querying the framework per row.
+ */
+fun megaAccessibilityModeActive(context: Context, storedSetting: Boolean): Boolean {
+    if (storedSetting) return true
+    return context.getSystemService(AccessibilityManager::class.java)
+        ?.isTouchExplorationEnabled == true
+}
