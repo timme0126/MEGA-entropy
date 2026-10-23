@@ -337,7 +337,10 @@ fun SavedSessionSettingsScreen(
             )
         }
 
-        BackupCard()
+        // Reuses the settings screen's own PIN callback — it branches to
+        // PIN_SETUP when no PIN exists yet, which is the only state this
+        // card's "Set a PIN First" dialog can ever appear in.
+        BackupCard(onCreatePin = onChangePin)
 
         MegaCard {
             Text(

@@ -48,12 +48,14 @@ private const val MIN_BACKUP_PASSPHRASE_LENGTH = 8
 /**
  * Settings section for exporting/importing MEGA's portable encrypted
  * backup file — see BackupRepository's doc comment for the full design.
- * Self-contained: obtains its own BackupViewModel and Storage Access
- * Framework launchers, so it drops into SavedSessionSettingsScreen with no
- * wiring needed from MegaNavGraph, the same way a plain MegaCard would.
+ * Self-contained apart from [onCreatePin]: obtains its own BackupViewModel
+ * and Storage Access Framework launchers, so it drops into
+ * SavedSessionSettingsScreen with just that one callback wired through —
+ * the same way the settings screen's own PIN button already does, rather
+ * than needing a NavController of its own.
  */
 @Composable
-fun BackupCard() {
+fun BackupCard(onCreatePin: () -> Unit) {
     val context = LocalContext.current
     // Every export/import outcome is toast-only feedback — each site
     // below pairs its Toast with an accessibility announcement so it
@@ -152,13 +154,31 @@ fun BackupCard() {
         )
     }
 
+    // Same dead-end-avoidance as every other "must have a PIN first"
+    // redirect in the app: rather than telling the user to go find the PIN
+    // section themselves, send them straight to the existing PIN-setup
+    // flow (which pops back here once a PIN is actually set).
     if (state.showPinRequiredDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissPinRequiredDialog() },
             title = { Text("Set a PIN First") },
-            text = { Text("MEGA requires a PIN before importing saved data — set one up in the PIN section above, then try importing again.") },
+            text = {
+                Text(
+                    "MEGA requires a device PIN before wallets can be " +
+                        "exported or imported. A PIN protects this device — " +
+                        "it does not travel with backups.",
+                )
+            },
             confirmButton = {
-                TextButton(onClick = { viewModel.dismissPinRequiredDialog() }) { Text("OK") }
+                TextButton(
+                    onClick = {
+                        viewModel.dismissPinRequiredDialog()
+                        onCreatePin()
+                    },
+                ) { Text("Create PIN now") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissPinRequiredDialog() }) { Text("Cancel") }
             },
         )
     }
