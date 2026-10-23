@@ -289,6 +289,14 @@ fun MegaStatusBadge(
 }
 
 /**
+ * A visible Text used as a show/hide link-toggle ("Show passphrase"):
+ * TalkBack gets a Shown/Hidden stateDescription so the pressed state is
+ * announced, since no checkbox/switch widget exists to carry it.
+ */
+fun Modifier.megaToggleState(visible: Boolean): Modifier =
+    semantics { stateDescription = if (visible) "Shown" else "Hidden" }
+
+/**
  * Count-encoded status shown only as filled/empty shapes (PIN dots):
  * speak "[noun]: n of max" and keep it a live region so each tap
  * announces. Semantics only — the dots themselves are unchanged.
