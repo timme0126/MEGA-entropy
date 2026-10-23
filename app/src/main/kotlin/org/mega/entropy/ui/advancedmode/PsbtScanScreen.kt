@@ -449,9 +449,10 @@ private const val MAX_PSBT_FILE_BYTES = 2L * 1024 * 1024
 /**
  * Clone of BackupCard.OpenLocalBackupDocument. EXTRA_LOCAL_ONLY for the
  * same reason — a PSBT is sensitive, keep it out of cloud-storage picker
- * roots. The mime filter is deliberately "*/*": an extension or a mime
- * guess is not validation; preparePsbtFileBytes content-sniffs instead,
- * so .psbt / .txt / .b64 / extension-less files all reach the same check.
+ * roots. The mime filter is deliberately a wildcard: an extension or a
+ * mime guess is not validation; preparePsbtFileBytes content-sniffs
+ * instead, so .psbt / .txt / .b64 / extension-less files all reach the
+ * same check.
  */
 private object OpenLocalPsbtDocument : ActivityResultContract<Array<String>, Uri?>() {
     override fun createIntent(context: Context, input: Array<String>): Intent =

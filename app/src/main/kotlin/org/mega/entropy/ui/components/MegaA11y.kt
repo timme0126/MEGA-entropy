@@ -5,8 +5,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.selectable
-import androidx.compose.foundation.toggleable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -24,7 +24,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.isHeader
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -53,7 +53,7 @@ import org.mega.entropy.ui.theme.MegaError
  * MegaSection headings, MegaCard titles) so every screen built on them
  * gets correct headings for free.
  */
-fun Modifier.megaHeading(): Modifier = semantics { isHeader = true }
+fun Modifier.megaHeading(): Modifier = semantics { this[SemanticsProperties.IsHeader] = true }
 
 // ---------------------------------------------------------- live regions
 
