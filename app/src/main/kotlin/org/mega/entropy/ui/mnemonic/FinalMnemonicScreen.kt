@@ -19,15 +19,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.mega.entropy.ui.a11y.MegaReadAloudButton
+import org.mega.entropy.ui.a11y.buildMnemonicAnnouncement
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaCopyIconButton
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaScreenPadding
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaAccessibilityModeActive
 import org.mega.entropy.ui.theme.MegaError
 
 @Composable
@@ -35,9 +39,20 @@ fun FinalMnemonicScreen(
     words: List<String>,
     allowScreenshots: Boolean,
     allowSeedCopy: Boolean,
+    // Stored "Accessibility mode" value; see megaAccessibilityModeActive
+    // for how it combines with live touch exploration.
+    accessibilityModeEnabled: Boolean,
     onDone: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
+
+    // Same gate shape as PsbtReviewScreen: computed once per screen,
+    // gating only the read-aloud button (and its TTS).
+    val appContext = LocalContext.current.applicationContext
+    val readAloudEnabled = remember(accessibilityModeEnabled) {
+        megaAccessibilityModeActive(appContext, accessibilityModeEnabled)
+    }
+
     var revealed by remember { mutableStateOf(false) }
     val exposureGuidance = remember(allowScreenshots, allowSeedCopy) {
         val screenshotGuidance = if (allowScreenshots) {
@@ -93,6 +108,20 @@ fun FinalMnemonicScreen(
                 },
             ) {
                 WordGrid(words)
+                // ONE button for the whole list, not one per word: a
+                // per-word control would add 12–24 stops to the
+                // screen-reader sweep of the very grid the user is
+                // trying to read. The spoken literal is composed only by
+                // buildMnemonicAnnouncement (pure, deterministic) from
+                // the app-derived words — see the invariant in
+                // MegaReadAloud.kt.
+                if (readAloudEnabled) {
+                    MegaReadAloudButton(
+                        value = words,
+                        buildAnnouncement = ::buildMnemonicAnnouncement,
+                        label = "Read words aloud",
+                    )
+                }
             }
             Text(
                 "Written it down? Double-check every word against this " +

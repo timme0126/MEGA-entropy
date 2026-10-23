@@ -42,7 +42,10 @@ private const val UTTERANCE_ID = "mega-verify"
  * MegaComponents / SavedSessionDetailScreen) — so it stays visually
  * minimal inside the PSBT output rows.
  *
- * [value] is the raw app-derived string (e.g. a PSBT output address);
+ * [value] is the raw app-derived value (e.g. a PSBT output address, or
+ * a List<String> of app-derived mnemonic words — the generic type
+ * exists only so every surface routes the value through a pure
+ * builder instead of pre-flattening strings by hand);
  * [buildAnnouncement] MUST be one of the pure functions from
  * SpokenVerification.kt — see the invariant above. [label] doubles as
  * the button's accessible name (a plain focused TextButton is announced
@@ -57,9 +60,9 @@ private const val UTTERANCE_ID = "mega-verify"
  * by paste instead of by ear.
  */
 @Composable
-fun MegaReadAloudButton(
-    value: String,
-    buildAnnouncement: (String) -> String,
+fun <T> MegaReadAloudButton(
+    value: T,
+    buildAnnouncement: (T) -> String,
     label: String,
     modifier: Modifier = Modifier,
 ) {

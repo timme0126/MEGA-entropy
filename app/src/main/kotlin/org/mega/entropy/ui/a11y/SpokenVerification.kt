@@ -139,3 +139,74 @@ fun buildFingerprintAnnouncement(hex: String): String {
         append(". Check every pair against the screen before you trust it.")
     }
 }
+
+// English number words, spelled out, for deterministic ordinal labels
+// ("Word twenty four:", "Roll one hundred:"). ONES covers 1–19 (the
+// teens are irregular), TENS the regular decades; "hundred" composes.
+// 1..999 is total by construction and comfortably covers every count
+// this app can produce (50 or 100 rolls, 12 or 24 words).
+private val ONES = arrayOf(
+    "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+    "seventeen", "eighteen", "nineteen",
+)
+private val TENS = arrayOf(
+    "", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+)
+
+/**
+ * Deterministic, locale-free English number word for [n] (1–999);
+ * out-of-range input falls back to its raw digits, so the function is
+ * total and never throws. Hyphens follow ordinary English convention
+ * ("twenty-one") — no String.format, no locale casing anywhere.
+ */
+private fun englishNumber(n: Int): String {
+    if (n !in 1..999) return n.toString()
+    val hundreds = n / 100
+    val rest = n % 100
+    return buildString {
+        if (hundreds > 0) {
+            append(ONES[hundreds - 1])
+            append(" hundred")
+            if (rest > 0) append(' ')
+        }
+        when {
+            rest in 1..19 -> append(ONES[rest - 1])
+            rest >= 20 -> {
+                append(TENS[rest / 10])
+                if (rest % 10 > 0) {
+                    append('-')
+                    append(ONES[rest % 10 - 1])
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Builds the LITERAL string handed to TextToSpeech for a revealed
+ * BIP39 mnemonic: each position announced as "Word one: <word>." with
+ * the index spelled out in English (a screen-reader user scrolling a
+ * 24-entry grid loses track of WHICH word they are on far more easily
+ * than of the word itself, so the ordinal is part of the fact).
+ * BIP39 words are already plain lowercase english from the wordlist,
+ * so the word itself is passed through verbatim — the only
+ * composition here is the deterministic ordinal.
+ *
+ * Total for any list size (the app only ever produces 12 or 24); an
+ * empty list yields just the trailing verification footer. Same words
+ * in the same order → byte-identical output, always.
+ */
+fun buildMnemonicAnnouncement(words: List<String>): String {
+    return buildString {
+        words.forEachIndexed { index, word ->
+            if (index > 0) append(' ')
+            append("Word ")
+            append(englishNumber(index + 1))
+            append(": ")
+            append(word)
+            append('.')
+        }
+        append(" Check every word against your written backup before you trust it.")
+    }
+}

@@ -30,6 +30,20 @@ class SpokenVerificationTest {
             "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
         )
 
+        // Valid lowercase BIP39 words as deterministic builder input.
+        val WORDLIST = listOf(
+            "abandon", "ability", "able", "about", "above", "absorb", "abstract",
+            "absurd", "abuse", "access", "accident", "account", "achieve", "acid",
+            "acoustic", "across", "act", "actual", "adapt", "add", "address",
+            "adjust", "admit", "adult",
+        )
+
+        // 1..12 spelled — the labels a 12-word announcement must carry.
+        val NUMBER_WORDS = listOf(
+            "one", "two", "three", "four", "five", "six", "seven", "eight",
+            "nine", "ten", "eleven", "twelve",
+        )
+
         fun countOccurrences(haystack: String, needle: String): Int {
             var count = 0
             var index = 0
@@ -151,6 +165,59 @@ class SpokenVerificationTest {
         assertEquals(
             buildFingerprintAnnouncement("af0e34b2"),
             buildFingerprintAnnouncement("AF0E34B2"),
+        )
+    }
+
+    @Test
+    fun `twelve-word mnemonic announcement numbers each word and ends with the footer`() {
+        val words = List(12) { index -> WORDLIST[index] }
+        val announcement = buildMnemonicAnnouncement(words)
+        // Deterministic double call.
+        assertEquals(announcement, buildMnemonicAnnouncement(words))
+        assertTrue("first word labelled", announcement.startsWith("Word one: ${words[0]}."))
+        // Spelled-out ordinals, not digits: "Word twelve", never "Word 12".
+        assertEquals(1, countOccurrences(announcement, "Word twelve: ${words[11]}."))
+        assertEquals(0, countOccurrences(announcement, "Word 12:"))
+        // Each of the twelve labels appears exactly once.
+        (1..12).forEach { n ->
+            assertEquals(1, countOccurrences(announcement, "Word ${NUMBER_WORDS[n - 1]}:"))
+        }
+        assertTrue(
+            "footer missing",
+            announcement.endsWith(" Check every word against your written backup before you trust it."),
+        )
+    }
+
+    @Test
+    fun `twenty-four-word mnemonic announcement reaches twenty four and stays deterministic`() {
+        val words = List(24) { index -> WORDLIST[index] }
+        val announcement = buildMnemonicAnnouncement(words)
+        assertEquals(announcement, buildMnemonicAnnouncement(words))
+        assertTrue(announcement.startsWith("Word one: ${words[0]}."))
+        // Compound ordinals follow the builder's hyphenated convention
+        // (same spelled-hyphenated tradition as the "X-ray" code word).
+        assertEquals(1, countOccurrences(announcement, "Word twenty: ${words[19]}."))
+        assertEquals(1, countOccurrences(announcement, "Word twenty-one: ${words[20]}."))
+        assertEquals(1, countOccurrences(announcement, "Word twenty-four: ${words[23]}."))
+        // No digit labels anywhere.
+        assertEquals(0, countOccurrences(announcement, "Word 2"))
+        assertTrue(
+            announcement.endsWith(" Check every word against your written backup before you trust it."),
+        )
+    }
+
+    @Test
+    fun `mnemonic announcement order is the input order and an empty list is total`() {
+        val words = listOf("zoo", "ability", "middle")
+        assertEquals(
+            "Word one: zoo. Word two: ability. Word three: middle. " +
+                "Check every word against your written backup before you trust it.",
+            buildMnemonicAnnouncement(words),
+        )
+        // Total on the impossible-empty case: footer only, never a throw.
+        assertEquals(
+            " Check every word against your written backup before you trust it.",
+            buildMnemonicAnnouncement(emptyList()),
         )
     }
 }

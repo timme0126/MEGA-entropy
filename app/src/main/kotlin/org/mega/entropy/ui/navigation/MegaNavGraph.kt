@@ -1469,6 +1469,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
             pinManager = pinManager,
             allowScreenshots = allowScreenshots,
             allowSeedCopy = allowSeedCopy,
+            accessibilityModeEnabled = accessibilityModeEnabled,
         )
     }
 }
@@ -1492,6 +1493,10 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
     pinManager: PinManager,
     allowScreenshots: Boolean,
     allowSeedCopy: Boolean,
+    // Hoisted "Accessibility mode" value, threaded into the screens that
+    // offer gated read-aloud buttons (same value the PSBT review flow
+    // uses — see MegaNavGraph's hoisted state).
+    accessibilityModeEnabled: Boolean,
 ) {
     navigation(startDestination = MegaDestinations.DICE_ENTRY, route = MegaDestinations.DICE_FLOW) {
         composable(MegaDestinations.DICE_ENTRY) {
@@ -1571,6 +1576,7 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
                     words = success.words,
                     allowScreenshots = allowScreenshots,
                     allowSeedCopy = allowSeedCopy,
+                    accessibilityModeEnabled = accessibilityModeEnabled,
                     onDone = { navController.navigate(MegaDestinations.SAVE_SESSION) },
                 )
             }
