@@ -891,6 +891,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     allowScreenshots = allowScreenshots,
                     allowSeedCopy = allowSeedCopy,
                     allowPrivateKeyExport = allowPrivateKeyExport,
+                    accessibilityModeEnabled = accessibilityModeEnabled,
                     onBack = { navController.popBackStack() },
                 )
             } else {

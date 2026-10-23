@@ -14,8 +14,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.mega.entropy.ui.a11y.MegaReadAloudButton
+import org.mega.entropy.ui.a11y.buildFingerprintAnnouncement
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaCopyIconButton
 import org.mega.entropy.ui.components.MegaIndexField
@@ -26,6 +29,7 @@ import org.mega.entropy.ui.components.MegaRadioRow
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaQrCode
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaAccessibilityModeActive
 import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
@@ -51,6 +55,13 @@ import org.mega.entropycore.deriveWalletReceivePrivateKey
  * as-is for every derivation below. There's no field to re-type or edit
  * it: a second editable copy of the same decision invites it to silently
  * drift from what was actually entered upstream.
+ *
+ * The gated "Read fingerprint aloud" button is the UI caller that retires
+ * the audit's "dead code" INFO finding on buildFingerprintAnnouncement:
+ * this is the app's only master-fingerprint display, and the spoken
+ * literal is composed by that pure function alone — the user has no
+ * screen to cross-check against, so the NATO pair-reading is their
+ * verification path (see the invariant in MegaReadAloud.kt).
  */
 @Composable
 fun AdvancedModeWalletScreen(
@@ -59,9 +70,19 @@ fun AdvancedModeWalletScreen(
     allowScreenshots: Boolean,
     allowSeedCopy: Boolean,
     allowPrivateKeyExport: Boolean,
+    // Stored "Accessibility mode" value; see megaAccessibilityModeActive
+    // for how it combines with live touch exploration.
+    accessibilityModeEnabled: Boolean,
     onBack: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
+
+    // Same gate shape as PsbtReviewScreen: computed once per screen,
+    // gating only the read-aloud buttons (and their TTS).
+    val appContext = LocalContext.current.applicationContext
+    val readAloudEnabled = remember(accessibilityModeEnabled) {
+        megaAccessibilityModeActive(appContext, accessibilityModeEnabled)
+    }
 
     var scriptType by remember { mutableStateOf(WalletScriptType.NATIVE_SEGWIT) }
     var network by remember { mutableStateOf(WalletNetwork.MAINNET) }
@@ -154,6 +175,16 @@ fun AdvancedModeWalletScreen(
                 },
             ) {
                 MegaMonoText(currentResult.masterFingerprint)
+                // Spoken fingerprint: the standard 8-hex-char fingerprint
+                // read as 4 NATO pairs, twice, composed only by
+                // buildFingerprintAnnouncement (pure, deterministic).
+                if (readAloudEnabled) {
+                    MegaReadAloudButton(
+                        value = currentResult.masterFingerprint,
+                        buildAnnouncement = ::buildFingerprintAnnouncement,
+                        label = "Read fingerprint aloud",
+                    )
+                }
             }
 
             MegaCard {
