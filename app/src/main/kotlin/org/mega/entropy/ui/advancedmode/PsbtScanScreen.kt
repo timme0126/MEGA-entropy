@@ -1,11 +1,17 @@
 package org.mega.entropy.ui.advancedmode
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Base64
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -47,6 +53,7 @@ import com.google.zxing.MultiFormatReader
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.ReaderException
 import com.google.zxing.common.HybridBinarizer
+import java.io.InputStream
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
@@ -56,6 +63,7 @@ import org.mega.entropy.bbqr.accumulateBbqrPart
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
+import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.theme.MegaError
 import com.sparrowwallet.hummingbird.ResultType
@@ -80,11 +88,42 @@ fun PsbtScanScreen(
         hasCameraPermission = granted
     }
 
+    // File import is offered whether or not camera permission was granted
+    // — the point of this path is an accessible route around the camera
+    // for users who cannot or will not use it.
+    var fileImportError by remember { mutableStateOf<String?>(null) }
+    val fileImportLauncher = rememberLauncherForActivityResult(OpenLocalPsbtDocument) { uri ->
+        if (uri != null) {
+            try {
+                onScanned(readPsbtFileAsBytes(context, uri))
+            } catch (e: IllegalArgumentException) {
+                fileImportError = e.message ?: "That file was not a readable PSBT."
+            } catch (_: Exception) {
+                fileImportError = "Could not open the selected file."
+            }
+        }
+    }
+
     MegaInfoScaffold(title = "Scan PSBT", onBack = onBack) {
         if (hasCameraPermission) {
             ScannerContent(onScanned = onScanned)
         } else {
             CameraPermissionContent(onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) })
+        }
+        MegaSecondaryButton(
+            text = "Import from File",
+            onClick = {
+                fileImportError = null
+                fileImportLauncher.launch(arrayOf("*/*"))
+            },
+        )
+        val importError = fileImportError
+        if (importError != null) {
+            Text(
+                text = importError,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MegaError,
+            )
         }
     }
 }
@@ -390,4 +429,83 @@ private fun ImageProxy.extractLuminanceBytes(): ByteArray {
         }
     }
     return output
+}
+
+// --- PSBT file import: SAF open picker + size-capped read -----------------
+
+/**
+ * Hard cap, enforced BEFORE any bulk read: the declared SIZE is checked
+ * first (CustodyViewModel.sizeOf idiom) and the read itself stops at this
+ * count + 1, so a provider that lies about the size still can't make the
+ * app buffer more than ~2 MiB. Never it.readBytes() on a user-chosen file
+ * (BackupCard.readBackupBytes' unbounded read is the anti-pattern this
+ * path deliberately avoids).
+ */
+private const val MAX_PSBT_FILE_BYTES = 2L * 1024 * 1024
+
+/**
+ * Clone of BackupCard.OpenLocalBackupDocument. EXTRA_LOCAL_ONLY for the
+ * same reason — a PSBT is sensitive, keep it out of cloud-storage picker
+ * roots. The mime filter is deliberately "*/*": an extension or a mime
+ * guess is not validation; preparePsbtFileBytes content-sniffs instead,
+ * so .psbt / .txt / .b64 / extension-less files all reach the same check.
+ */
+private object OpenLocalPsbtDocument : ActivityResultContract<Array<String>, Uri?>() {
+    override fun createIntent(context: Context, input: Array<String>): Intent =
+        Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("*/*")
+            .putExtra(Intent.EXTRA_MIME_TYPES, input)
+            .putExtra(Intent.EXTRA_LOCAL_ONLY, true)
+
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? =
+        intent?.data.takeIf { resultCode == Activity.RESULT_OK }
+}
+
+/**
+ * Size-capped read of a SAF-picked document, then the same prepare +
+ * validate hand-off a successful QR scan uses. Throws
+ * IllegalArgumentException with a user-facing message on every rejection
+ * route; plain I/O failures surface to the caller's generic catch.
+ */
+private fun readPsbtFileAsBytes(context: Context, uri: Uri): ByteArray {
+    val declaredSize = queryDocumentSize(context, uri)
+    if (declaredSize > MAX_PSBT_FILE_BYTES) {
+        throw IllegalArgumentException("That file is too large to be a PSBT.")
+    }
+    // An unknown declared size (-1) is allowed through — the bounded read
+    // below is the real cap and costs nothing more. The two failure routes
+    // are kept distinct on purpose: a stream that could not be opened at
+    // all is an I/O error, one that overran the cap is a size rejection.
+    val input = context.contentResolver.openInputStream(uri)
+        ?: error("Could not open the selected file.")
+    val bytes = input.use { readCapped(it, MAX_PSBT_FILE_BYTES) }
+        ?: throw IllegalArgumentException("That file is too large to be a PSBT.")
+    return preparePsbtFileBytes(bytes)
+}
+
+/** SIZE column of a SAF document, or -1 when the provider won't say. */
+private fun queryDocumentSize(context: Context, uri: Uri): Long {
+    var size = -1L
+    context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+        if (c.moveToFirst() && !c.isNull(0)) size = c.getLong(0)
+    }
+    return size
+}
+
+/**
+ * Reads at most [maxBytes] + 1 bytes (CustodyViewModel.readN idiom,
+ * bounded). Returns null when the stream actually exceeded the cap —
+ * i.e. the file lied about its size.
+ */
+private fun readCapped(input: InputStream, maxBytes: Long): ByteArray? {
+    val capPlusOne = (maxBytes + 1).toInt()
+    val out = ByteArray(capPlusOne)
+    var total = 0
+    while (total < capPlusOne) {
+        val r = input.read(out, total, capPlusOne - total)
+        if (r < 0) break
+        total += r
+    }
+    return if (total >= capPlusOne) null else out.copyOf(total)
 }
