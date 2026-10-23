@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -25,6 +26,7 @@ import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaScreenPadding
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.rememberMegaAnnounce
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropy.ui.theme.MegaSuccess
 import org.mega.entropycore.MnemonicLength
@@ -118,6 +120,10 @@ fun BiasCheckScreen(
 
 @Composable
 private fun ResultBanner(passed: Boolean, headline: String) {
+    // The banner resolves asynchronously (the verdict swaps in while
+    // focus may be parked on the math above) — announce the headline once.
+    val announce = rememberMegaAnnounce()
+    LaunchedEffect(headline) { announce(headline) }
     val color = if (passed) MegaSuccess else MegaError
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Icon(

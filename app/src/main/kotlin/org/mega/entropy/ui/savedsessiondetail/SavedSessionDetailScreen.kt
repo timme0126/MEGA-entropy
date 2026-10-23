@@ -35,6 +35,7 @@ import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.MnemonicLength
 import org.mega.entropycore.MnemonicResult
@@ -97,7 +98,7 @@ fun SavedSessionDetailScreen(
         val currentRecord = record
         when {
             currentError != null -> {
-                Text(currentError, style = MaterialTheme.typography.bodyMedium, color = MegaError)
+                Text(currentError, style = MaterialTheme.typography.bodyMedium, color = MegaError, modifier = Modifier.megaLiveRegion())
             }
             currentRecord == null -> {
                 CircularProgressIndicator()
@@ -243,7 +244,7 @@ fun SavedSessionDetailScreen(
                 }
                 val currentMnemonicActionError = mnemonicActionError
                 if (currentMnemonicActionError != null) {
-                    Text(currentMnemonicActionError, style = MaterialTheme.typography.bodySmall, color = MegaError)
+                    Text(currentMnemonicActionError, style = MaterialTheme.typography.bodySmall, color = MegaError, modifier = Modifier.megaLiveRegion())
                 }
             }
         }
@@ -329,7 +330,7 @@ private fun EditDiceBatchDialog(
                     }
                 }
                 if (errorMessage != null) {
-                    Text(errorMessage, style = MaterialTheme.typography.bodySmall, color = MegaError)
+                    Text(errorMessage, style = MaterialTheme.typography.bodySmall, color = MegaError, modifier = Modifier.megaLiveRegion())
                 }
             }
         },

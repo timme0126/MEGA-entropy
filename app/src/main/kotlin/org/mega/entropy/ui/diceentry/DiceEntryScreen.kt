@@ -35,6 +35,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +47,8 @@ import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaHeading
+import org.mega.entropy.ui.components.megaLiveRegion
 
 /**
  * The core interaction of the app: 20 batches of 5 physical die-roll taps,
@@ -89,6 +93,7 @@ fun DiceEntryScreen(
             text = "Roll ${(state.rollsEntered + 1).coerceAtMost(state.totalRolls)} of ${state.totalRolls}",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
+            modifier = Modifier.megaHeading(),
         )
         Text(
             text = "Batch ${state.currentBatchNumber} of ${state.totalBatches}",
@@ -138,7 +143,7 @@ fun DiceEntryScreen(
 @Composable
 private fun ProgressCard(state: DiceSessionUiState) {
     MegaCard {
-        Text("${state.rollsEntered} / ${state.totalRolls} rolls", style = MaterialTheme.typography.bodyMedium)
+        Text("${state.rollsEntered} / ${state.totalRolls} rolls", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.megaLiveRegion())
         LinearProgressIndicator(
             progress = { state.rollsEntered / state.totalRolls.toFloat() },
             modifier = Modifier.fillMaxWidth(),
@@ -164,7 +169,9 @@ private fun ProgressCard(state: DiceSessionUiState) {
 
 @Composable
 private fun RollSlots(currentBatchRolls: List<Int>) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+    // Polite live region: each newly committed roll announces as it
+    // lands, without stealing focus mid the 100-tap entry loop.
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().megaLiveRegion()) {
         for (i in 0 until ROLLS_PER_BATCH) {
             val value = currentBatchRolls.getOrNull(i)
             Surface(
@@ -179,6 +186,11 @@ private fun RollSlots(currentBatchRolls: List<Int>) {
                         text = value?.toString() ?: "_",
                         style = MaterialTheme.typography.headlineSmall,
                         color = if (value != null) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        // "_" reads as an unknown glyph and the fill color is
+                        // sighted-only — speak slot + value instead.
+                        modifier = Modifier.clearAndSetSemantics {
+                            contentDescription = value?.toString() ?: "Roll ${i + 1}: not yet entered"
+                        },
                     )
                 }
             }

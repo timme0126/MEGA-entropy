@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaLiveRegion
 
 const val PIN_MIN_LENGTH = 5
 const val PIN_MAX_LENGTH = 8
@@ -83,7 +84,8 @@ fun PinEntryScreen(
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             errorMessage?.let {
-                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                // Wrong-PIN feedback is visible color + text; also announce it.
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.megaLiveRegion())
             }
 
             PinDots(enteredCount = enteredDigits.size, maxLength = PIN_MAX_LENGTH)

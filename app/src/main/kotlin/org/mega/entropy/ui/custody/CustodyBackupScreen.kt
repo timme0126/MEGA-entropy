@@ -37,6 +37,7 @@ import org.mega.entropy.ui.components.MegaCopyIconButton
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
+import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
 
 /**
@@ -247,6 +248,7 @@ fun CustodyBackupScreen(onBack: () -> Unit) {
                 text = "The two passphrases do not match.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MegaError,
+                modifier = Modifier.megaLiveRegion(),
             )
         }
         MegaPrimaryButton(
@@ -424,6 +426,8 @@ fun CustodyBackupScreen(onBack: () -> Unit) {
                         Text(
                             text = progress ?: "Working… Keep MEGA open.",
                             style = MaterialTheme.typography.bodyMedium,
+                            // Export steps mutate this in place — announce each.
+                            modifier = Modifier.megaLiveRegion(),
                         )
                     }
                 },

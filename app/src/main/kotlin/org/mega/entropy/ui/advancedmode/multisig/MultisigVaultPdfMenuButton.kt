@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import org.mega.entropy.pdf.copyPdfToDestination
 import org.mega.entropy.pdf.exportMultisigVaultPdf
 import org.mega.entropy.pdf.pdfSuggestedFileName
+import org.mega.entropy.ui.components.rememberMegaAnnounce
 import org.mega.entropy.pdf.shareMultisigVaultPdf
 import org.mega.entropycore.MultisigWallet
 
@@ -53,6 +54,7 @@ fun MultisigVaultPdfMenuButton(vaultLabel: String, wallet: MultisigWallet, cosig
     // picker's own callback (which needs that same URI to copy from).
     var pendingSaveSource by remember { mutableStateOf<Uri?>(null) }
 
+    val announce = rememberMegaAnnounce()
     val saveLauncher = rememberLauncherForActivityResult(CreateLocalPdfDocument) { destination ->
         val source = pendingSaveSource
         // A null destination means the user cancelled the picker — not a
@@ -63,7 +65,10 @@ fun MultisigVaultPdfMenuButton(vaultLabel: String, wallet: MultisigWallet, cosig
         if (destination != null) {
             val copied = source != null && copyPdfToDestination(context, source, destination)
             if (!copied) {
-                Toast.makeText(context, "Could not save the PDF to that location.", Toast.LENGTH_LONG).show()
+                val message = "Could not save the PDF to that location."
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                // Toast alone can be missed with focus parked elsewhere.
+                announce(message)
             }
         }
         pendingSaveSource = null
