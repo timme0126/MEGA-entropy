@@ -127,10 +127,11 @@ class SpokenVerificationTest {
         assertTrue("first chunk not spelled", first.contains(firstChunkWords))
         assertTrue("last chunk not spelled", first.contains(lastChunkWords))
 
-        // First/last two characters expanded phonetically:
-        // b,c -> Bravo Charlie; t,4 -> Tango Four.
+        // First/last two characters expanded phonetically inside the
+        // single raw pass (b,c -> Bravo Charlie; t,4 -> Tango Four).
+        // The repeat is the full NATO spelling, checked above.
         assertEquals(
-            2,
+            1,
             countOccurrences(first, "Starts with Bravo Charlie, ends with Tango Four."),
         )
     }
