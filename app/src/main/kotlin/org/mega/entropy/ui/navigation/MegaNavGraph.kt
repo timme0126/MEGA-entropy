@@ -1093,7 +1093,10 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
         composable(MegaDestinations.ADVANCED_MODE_CUSTODY_BACKUP) {
             // Not gated behind a loaded mnemonic: the envelope covers the whole
             // backup database, and works the same before or after any session.
-            CustodyBackupScreen(onBack = { navController.popBackStack() })
+            CustodyBackupScreen(
+                accessibilityModeEnabled = accessibilityModeEnabled,
+                onBack = { navController.popBackStack() },
+            )
         }
 
         composable(MegaDestinations.ADVANCED_MODE_RECOVER_FROM_BACKUP_SHARES) {

@@ -259,4 +259,23 @@ class SpokenVerificationTest {
             countOccurrences(buildRollsAnnouncement(rolls.take(50)), "That is 50 rolls."),
         )
     }
+
+    @Test
+    fun `generated passphrase is chunked raw then spelled in NATO words`() {
+        val expected =
+            "Passphrase in groups of 4. ab12, cd34. " +
+                "Once more, phonetically. " +
+                "Alpha Bravo One Two, Charlie Delta Three Four. " +
+                "Check every character against your written copy."
+        assertEquals(expected, buildPassphraseAnnouncement("ab12cd34"))
+        assertEquals(expected, buildPassphraseAnnouncement("ab12cd34"))
+        // Uneven remainder keeps its own group, raw and phonetic.
+        assertEquals(
+            "Passphrase in groups of 4. ab12, c. " +
+                "Once more, phonetically. " +
+                "Alpha Bravo One Two, Charlie. " +
+                "Check every character against your written copy.",
+            buildPassphraseAnnouncement("ab12c"),
+        )
+    }
 }

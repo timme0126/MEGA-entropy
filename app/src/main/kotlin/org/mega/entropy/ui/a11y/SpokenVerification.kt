@@ -243,3 +243,37 @@ fun buildRollsAnnouncement(rolls: List<Int>): String {
         append(" Check every roll against your dice before you trust it.")
     }
 }
+
+/**
+ * Builds the LITERAL string for a GENERATED passphrase shown once on
+ * screen (never a user-typed one — this builder is only ever called
+ * with the app's own generated value): raw 4-character groups first,
+ * then the same groups AGAIN spelled in NATO words, exactly the
+ * two-pass shape of [buildAddressAnnouncement]. The raw pass lets a
+ * sighted helper read it back to the owner; the NATO pass is the
+ * unambiguous spelling a screen-reader user (or anyone near-homophone
+ * prone: 0/O, 1/l/I) actually writes down from.
+ *
+ * Security posture of the CALLER (CustodyBackupScreen): TextToSpeech is
+ * offline/local on stock Android and the output is audio in the user's
+ * own room — this is the user's own generated secret, spoken solely so
+ * they can verify what they write down or paste; it is never logged,
+ * never leaves the device, and is composed only by this pure function.
+ *
+ * Pure and deterministic: same passphrase → byte-identical output.
+ */
+fun buildPassphraseAnnouncement(passphrase: String): String {
+    val chunks = chunkForSpeech(passphrase, 4).joinToString(", ")
+    val natoPass = chunkForSpeech(passphrase, 4).joinToString(", ") { chunk ->
+        toNatoPhonetic(chunk)
+    }
+    return buildString {
+        append("Passphrase in groups of ")
+        append(4)
+        append(". ")
+        append(chunks)
+        append(". Once more, phonetically. ")
+        append(natoPass)
+        append(". Check every character against your written copy.")
+    }
+}

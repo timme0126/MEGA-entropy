@@ -32,11 +32,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.text.selection.SelectionContainer
 import kotlinx.coroutines.launch
+import org.mega.entropy.ui.a11y.MegaReadAloudButton
+import org.mega.entropy.ui.a11y.buildPassphraseAnnouncement
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaCopyIconButton
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
+import org.mega.entropy.ui.components.megaAccessibilityModeActive
 import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
 
@@ -49,12 +52,31 @@ import org.mega.entropy.ui.theme.MegaError
  * Files never touch app-private storage: attachment in, container out,
  * and the verify path's extracted records all move through
  * user-chosen SAF documents only.
+ *
+ * The gated "Read passphrase aloud" button under the generated
+ * passphrase: TextToSpeech is offline/local and the speech is audio in
+ * the room — this is the user's own generated secret, spoken once so
+ * they can verify what they write down, never logged, and composed
+ * only by buildPassphraseAnnouncement (see the invariant in
+ * MegaReadAloud.kt). User-typed passphrase fields get no such button:
+ * only the app's own generated value is ever read aloud.
  */
 @Composable
-fun CustodyBackupScreen(onBack: () -> Unit) {
+fun CustodyBackupScreen(
+    // Stored "Accessibility mode" value; see megaAccessibilityModeActive
+    // for how it combines with live touch exploration.
+    accessibilityModeEnabled: Boolean,
+    onBack: () -> Unit,
+) {
     val viewModel: CustodyViewModel = viewModel()
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // Same gate shape as PsbtReviewScreen: computed once per screen,
+    // gating only the read-aloud button (and its TTS).
+    val readAloudEnabled = remember(accessibilityModeEnabled) {
+        megaAccessibilityModeActive(context, accessibilityModeEnabled)
+    }
 
     val busy by viewModel.busy.collectAsState()
     val progress by viewModel.progress.collectAsState()
@@ -279,6 +301,17 @@ fun CustodyBackupScreen(onBack: () -> Unit) {
                         text = "Copy it NOW or write it down. It is the only way to open the " +
                             "container, and it is never stored anywhere, including here.",
                         style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                // Read the GENERATED value only — composed solely by
+                // buildPassphraseAnnouncement (raw groups, then a full
+                // NATO spelling) so the user can verify the characters
+                // they write down against an unambiguous audio pass.
+                if (readAloudEnabled) {
+                    MegaReadAloudButton(
+                        value = generated,
+                        buildAnnouncement = ::buildPassphraseAnnouncement,
+                        label = "Read passphrase aloud",
                     )
                 }
             }
