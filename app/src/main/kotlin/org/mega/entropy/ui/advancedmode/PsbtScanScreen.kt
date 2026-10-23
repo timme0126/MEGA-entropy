@@ -11,6 +11,11 @@ import android.provider.OpenableColumns
 import android.util.Base64
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -93,14 +98,22 @@ fun PsbtScanScreen(
     // — the point of this path is an accessible route around the camera
     // for users who cannot or will not use it.
     var fileImportError by remember { mutableStateOf<String?>(null) }
+    val fileImportScope = rememberCoroutineScope()
     val fileImportLauncher = rememberLauncherForActivityResult(OpenLocalPsbtDocument) { uri ->
         if (uri != null) {
-            try {
-                onScanned(readPsbtFileAsBytes(context, uri))
-            } catch (e: IllegalArgumentException) {
-                fileImportError = e.message ?: "That file was not a readable PSBT."
-            } catch (_: Exception) {
-                fileImportError = "Could not open the selected file."
+            // SAF query + bounded read + decode run on Dispatchers.IO: a
+            // hostile DocumentProvider that stalls would otherwise freeze
+            // (or ANR) the main thread mid-import.
+            fileImportScope.launch {
+                try {
+                    onScanned(readPsbtFileAsBytes(context, uri))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: IllegalArgumentException) {
+                    fileImportError = e.message ?: "That file was not a readable PSBT."
+                } catch (_: Exception) {
+                    fileImportError = "Could not open the selected file."
+                }
             }
         }
     }
@@ -472,7 +485,10 @@ private object OpenLocalPsbtDocument : ActivityResultContract<Array<String>, Uri
  * IllegalArgumentException with a user-facing message on every rejection
  * route; plain I/O failures surface to the caller's generic catch.
  */
-private fun readPsbtFileAsBytes(context: Context, uri: Uri): ByteArray {
+private suspend fun readPsbtFileAsBytes(context: Context, uri: Uri): ByteArray =
+    withContext(Dispatchers.IO) { readPsbtFileBytesBlocking(context, uri) }
+
+private fun readPsbtFileBytesBlocking(context: Context, uri: Uri): ByteArray {
     val declaredSize = queryDocumentSize(context, uri)
     if (declaredSize > MAX_PSBT_FILE_BYTES) {
         throw IllegalArgumentException("That file is too large to be a PSBT.")
