@@ -218,7 +218,7 @@ fun MegaCard(
                             text = title,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).megaHeading(),
                         )
                     } else {
                         Box(modifier = Modifier.weight(1f))
@@ -250,6 +250,7 @@ fun MegaCopyIconButton(
 ) {
     val context = LocalContext.current
     val systemClipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val announce = rememberMegaAnnounce()
 
     var copied by remember { mutableStateOf(false) }
     // What we last put on the clipboard, so the auto-clear effect below can
@@ -301,6 +302,9 @@ fun MegaCopyIconButton(
             systemClipboard.setPrimaryClip(clipData)
             lastCopiedText = textToCopy
             copied = true
+            // The icon-swap is the deliberate silent-for-sighted feedback;
+            // TalkBack still needs to hear that the copy succeeded.
+            announce("Copied to clipboard")
         },
         modifier = modifier,
     ) {
@@ -380,7 +384,7 @@ fun MegaPassphraseCard(passphrase: String) {
                 text = if (revealed) "Hide passphrase" else "Show passphrase",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { revealed = !revealed },
+                modifier = Modifier.clickable { revealed = !revealed }.megaToggleState(revealed),
             )
         }
     }
@@ -439,7 +443,9 @@ fun MegaLabelSessionDialog(
  */
 @Composable
 fun MegaSavedConfirmationCard(label: String, onDismissed: () -> Unit) {
+    val announce = rememberMegaAnnounce()
     LaunchedEffect(label) {
+        announce("Saved as \"$label\".")
         delay(3000)
         onDismissed()
     }

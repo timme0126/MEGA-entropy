@@ -40,6 +40,8 @@ import java.util.Locale
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
+import org.mega.entropy.ui.components.rememberMegaAnnounce
+import org.mega.entropy.ui.components.megaToggleState
 
 private const val MIN_BACKUP_PASSPHRASE_LENGTH = 8
 
@@ -53,6 +55,10 @@ private const val MIN_BACKUP_PASSPHRASE_LENGTH = 8
 @Composable
 fun BackupCard() {
     val context = LocalContext.current
+    // Every export/import outcome is toast-only feedback — each site
+    // below pairs its Toast with an accessibility announcement so it
+    // reaches TalkBack focus parked away from the button.
+    val announce = rememberMegaAnnounce()
     val viewModel: BackupViewModel = viewModel()
     val state by viewModel.uiState.collectAsState()
 
@@ -72,11 +78,10 @@ fun BackupCard() {
         pendingExportBytes = null
         if (destination != null && bytes != null) {
             val written = writeBackupBytes(context, destination, bytes)
-            Toast.makeText(
-                context,
-                if (written) "Backup saved." else "Could not save the backup to that location.",
-                Toast.LENGTH_LONG,
-            ).show()
+            val message =
+                if (written) "Backup saved." else "Could not save the backup to that location."
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            announce(message)
         }
     }
 
@@ -84,7 +89,9 @@ fun BackupCard() {
         if (source != null) {
             val bytes = readBackupBytes(context, source)
             if (bytes == null) {
-                Toast.makeText(context, "Could not read that file.", Toast.LENGTH_LONG).show()
+                val message = "Could not read that file."
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                announce(message)
             } else {
                 viewModel.onBackupFilePicked(bytes)
             }
@@ -165,15 +172,18 @@ fun BackupCard() {
             }
             is BackupOperationResult.ExportFailed -> {
                 Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                announce(result.message)
                 viewModel.clearResult()
             }
             is BackupOperationResult.ImportSucceeded -> {
                 val summary = "Imported ${result.sessionCount} session(s) and ${result.vaultCount} vault(s)."
                 Toast.makeText(context, summary, Toast.LENGTH_LONG).show()
+                announce(summary)
                 viewModel.clearResult()
             }
             is BackupOperationResult.ImportFailed -> {
                 Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                announce(result.message)
                 viewModel.clearResult()
             }
             null -> Unit
@@ -225,7 +235,7 @@ private fun ExportPassphraseDialog(onDismiss: () -> Unit, onConfirm: (String) ->
                     if (showPassphrase) "Hide passphrase" else "Show passphrase",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { showPassphrase = !showPassphrase },
+                    modifier = Modifier.clickable { showPassphrase = !showPassphrase }.megaToggleState(showPassphrase),
                 )
             }
         },
