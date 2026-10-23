@@ -1502,6 +1502,7 @@ private fun androidx.navigation.NavGraphBuilder.diceFlow(
         composable(MegaDestinations.DICE_ENTRY) {
             DiceEntryScreen(
                 viewModel = sharedViewModel,
+                accessibilityModeEnabled = accessibilityModeEnabled,
                 onSessionComplete = { navController.navigate(MegaDestinations.BIAS_CHECK) },
                 // Leaving the flow from its very first screen must reset the
                 // same as every other deliberate exit back to Welcome (see

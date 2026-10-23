@@ -220,4 +220,43 @@ class SpokenVerificationTest {
             buildMnemonicAnnouncement(emptyList()),
         )
     }
+
+    @Test
+    fun `rolls are spoken as position-labelled NATO digit words`() {
+        assertEquals(
+            "Roll one: Four. Roll two: Two. That is 2 rolls. " +
+                "Check every roll against your dice before you trust it.",
+            buildRollsAnnouncement(listOf(4, 2)),
+        )
+        // Singular count, and the 1-based position word differs from the
+        // roll value word when they coincide ("Roll one: One").
+        assertEquals(
+            "Roll one: One. That is 1 roll. " +
+                "Check every roll against your dice before you trust it.",
+            buildRollsAnnouncement(listOf(1)),
+        )
+    }
+
+    @Test
+    fun `the rolls count is derived from the list, impossible to mismatch, and deterministic`() {
+        // 100 rolls: the count sentence and the highest ordinal both
+        // come from the SAME list, and no count parameter exists at
+        // all — a spoken-count mismatch is impossible by construction.
+        val rolls = (0 until 100).map { (it % 6) + 1 }
+        val announcement = buildRollsAnnouncement(rolls)
+        assertEquals(announcement, buildRollsAnnouncement(rolls))
+        assertEquals(1, countOccurrences(announcement, "That is 100 rolls."))
+        assertEquals(0, countOccurrences(announcement, "That is 99 rolls."))
+        assertEquals(0, countOccurrences(announcement, "That is 101 rolls."))
+        // Every one of the 100 position labels is present exactly once,
+        // including the composed "one hundred".
+        assertEquals(100, countOccurrences(announcement, "Roll "))
+        assertEquals(1, countOccurrences(announcement, "Roll one hundred: "))
+        assertEquals(1, countOccurrences(announcement, "Roll fifty: "))
+        // 50 rolls count as 50, never 100 — again size-derived.
+        assertEquals(
+            1,
+            countOccurrences(buildRollsAnnouncement(rolls.take(50)), "That is 50 rolls."),
+        )
+    }
 }

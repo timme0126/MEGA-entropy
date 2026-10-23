@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -42,11 +43,14 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import org.mega.entropy.ui.a11y.MegaReadAloudButton
+import org.mega.entropy.ui.a11y.buildRollsAnnouncement
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaAccessibilityModeActive
 import org.mega.entropy.ui.components.megaHeading
 import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.components.megaToggleState
@@ -61,11 +65,21 @@ import org.mega.entropy.ui.components.megaToggleState
 fun DiceEntryScreen(
     onSessionComplete: () -> Unit,
     onBack: () -> Unit,
+    // Stored "Accessibility mode" value; see megaAccessibilityModeActive
+    // for how it combines with live touch exploration.
+    accessibilityModeEnabled: Boolean,
     viewModel: DiceSessionViewModel = viewModel(),
 ) {
     SecureScreen()
     val state by viewModel.uiState.collectAsState()
     val haptics = LocalHapticFeedback.current
+
+    // Same gate shape as PsbtReviewScreen: computed once per screen,
+    // gating only the read-aloud button in the review card below.
+    val appContext = LocalContext.current.applicationContext
+    val readAloudEnabled = remember(accessibilityModeEnabled) {
+        megaAccessibilityModeActive(appContext, accessibilityModeEnabled)
+    }
 
     if (state.isSessionComplete) {
         // Navigate away once the 100th roll completes the final batch;
@@ -134,7 +148,10 @@ fun DiceEntryScreen(
         }
 
         if (state.completedBatches.size > 1) {
-            PreviousBatchesCard(batches = state.completedBatches.dropLast(1))
+            PreviousBatchesCard(
+                batches = state.completedBatches.dropLast(1),
+                readAloudEnabled = readAloudEnabled,
+            )
         }
 
         MegaSecondaryButton(text = "Back", onClick = onBack)
@@ -282,7 +299,7 @@ private fun BatchCalculationCard(batch: CompletedBatch) {
 }
 
 @Composable
-private fun PreviousBatchesCard(batches: List<CompletedBatch>) {
+private fun PreviousBatchesCard(batches: List<CompletedBatch>, readAloudEnabled: Boolean) {
     var expanded by remember { mutableStateOf(false) }
     MegaCard {
         Text(
@@ -293,6 +310,20 @@ private fun PreviousBatchesCard(batches: List<CompletedBatch>) {
         )
         AnimatedVisibility(visible = expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // This expanded card IS the "review what you rolled"
+                // moment: a screen-reader user can replay every shown
+                // roll, position-labelled and as NATO digit words, and
+                // cross-check against the dice on the table. The literal
+                // is composed only by buildRollsAnnouncement (pure,
+                // deterministic) from the committed batches — see the
+                // invariant in MegaReadAloud.kt.
+                if (readAloudEnabled) {
+                    MegaReadAloudButton(
+                        value = batches.flatMap { it.physicalRolls },
+                        buildAnnouncement = ::buildRollsAnnouncement,
+                        label = "Read rolls aloud",
+                    )
+                }
                 batches.forEach { batch ->
                     HorizontalDivider()
                     Text("Batch ${batch.batchNumber}: ${batch.physicalRolls.joinToString(" ")}", style = MaterialTheme.typography.bodyMedium)

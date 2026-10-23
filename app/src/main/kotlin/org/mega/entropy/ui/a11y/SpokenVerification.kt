@@ -210,3 +210,36 @@ fun buildMnemonicAnnouncement(words: List<String>): String {
         append(" Check every word against your written backup before you trust it.")
     }
 }
+
+/**
+ * Builds the LITERAL string for reviewing entered dice rolls against the
+ * physical dice: each position announced as "Roll one: Four." — the
+ * ordinal spelled out (see [buildMnemonicAnnouncement] for why the
+ * ordinal is part of the fact), the value as its NATO digit word (same
+ * mapping as the address/fingerprint passes: a spoken "four" can never
+ * be misheard as the glyph '4' losing its way onto the wrong slot).
+ * The closing count sentence is derived from `rolls.size` itself, so a
+ * mismatch between the rolls spoken and the number claimed is
+ * impossible by construction — no caller-supplied count exists anywhere
+ * in this pipeline.
+ *
+ * Total for any list (the app produces exactly 50 or 100); an empty
+ * list yields just the count + footer. Deterministic: same sequence →
+ * byte-identical output, always.
+ */
+fun buildRollsAnnouncement(rolls: List<Int>): String {
+    return buildString {
+        rolls.forEachIndexed { index, roll ->
+            if (index > 0) append(' ')
+            append("Roll ")
+            append(englishNumber(index + 1))
+            append(": ")
+            append(toNatoPhonetic(roll.toString()))
+            append('.')
+        }
+        append(" That is ")
+        append(rolls.size)
+        append(if (rolls.size == 1) " roll." else " rolls.")
+        append(" Check every roll against your dice before you trust it.")
+    }
+}
