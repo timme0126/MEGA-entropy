@@ -31,6 +31,8 @@ import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaRadioRow
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaLiveRegion
+import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.HarvestedPsbtInputs
 import org.mega.entropycore.WalletNetwork
@@ -131,6 +133,7 @@ fun StructureTransactionScreen(
                             ?: "None of this transaction's inputs belong to this device's key.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MegaError,
+                        modifier = Modifier.megaLiveRegion(),
                     )
                 }
                 MegaSecondaryButton(text = "Back", onClick = onBack)
@@ -254,7 +257,7 @@ fun StructureTransactionScreen(
                 val currentError = state.error
                 if (currentError != null) {
                     MegaCard {
-                        Text(currentError, style = MaterialTheme.typography.bodyMedium, color = MegaError)
+                        Text(currentError, style = MaterialTheme.typography.bodyMedium, color = MegaError, modifier = Modifier.megaLiveRegion())
                     }
                 }
 

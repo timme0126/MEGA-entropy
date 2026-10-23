@@ -30,6 +30,8 @@ import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaLiveRegion
+import org.mega.entropy.ui.components.rememberMegaAnnounce
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.FingerprintMatchStatus
 import org.mega.entropycore.PsbtInputScriptKind
@@ -134,6 +136,7 @@ fun PsbtSignResultScreen(
 
     val context = androidx.compose.ui.platform.LocalContext.current
     var pendingSaveBytes by remember(psbtBytes) { mutableStateOf<ByteArray?>(null) }
+    val announce = rememberMegaAnnounce()
     val saveLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { destination ->
@@ -142,7 +145,13 @@ fun PsbtSignResultScreen(
             val saved = runCatching {
                 context.contentResolver.openOutputStream(destination)?.use { output -> output.write(bytes) } != null
             }.getOrDefault(false)
-            if (!saved) android.widget.Toast.makeText(context, "Could not save the signed PSBT.", android.widget.Toast.LENGTH_LONG).show()
+            if (!saved) {
+                val message = "Could not save the signed PSBT."
+                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+                // Toast alone can be missed with focus parked elsewhere —
+                // also announce it through the accessibility channel.
+                announce(message)
+            }
         }
         pendingSaveBytes = null
     }
@@ -169,13 +178,13 @@ fun PsbtSignResultScreen(
                 MegaCard(title = "Preparing PSBT") {
                     Column {
                         CircularProgressIndicator()
-                        Text(text = "Signing…", style = MaterialTheme.typography.bodyMedium)
+                        Text(text = "Signing…", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.megaLiveRegion())
                     }
                 }
             }
             signOutcomeState is PsbtAsyncState.Failed -> {
                 MegaCard(title = "Could Not Sign PSBT") {
-                    Text(text = signOutcomeState.error.message ?: "This PSBT could not be processed by this device.", style = MaterialTheme.typography.bodyMedium, color = MegaError)
+                    Text(text = signOutcomeState.error.message ?: "This PSBT could not be processed by this device.", style = MaterialTheme.typography.bodyMedium, color = MegaError, modifier = Modifier.megaLiveRegion())
                 }
             }
             else -> {
@@ -183,12 +192,12 @@ fun PsbtSignResultScreen(
                 when (outcome) {
                     is PsbtSignOutcome.CosignerMismatch -> {
                         MegaCard(title = "Wrong Cosigner") {
-                            Text(text = "This saved session key does not match the selected cosigner. Signing has been refused.", style = MaterialTheme.typography.bodyMedium, color = MegaError)
+                            Text(text = "This saved session key does not match the selected cosigner. Signing has been refused.", style = MaterialTheme.typography.bodyMedium, color = MegaError, modifier = Modifier.megaLiveRegion())
                         }
                     }
                     is PsbtSignOutcome.Failed -> {
                         MegaCard(title = "Could Not Sign PSBT") {
-                            Text(text = outcome.message, style = MaterialTheme.typography.bodyMedium, color = MegaError)
+                            Text(text = outcome.message, style = MaterialTheme.typography.bodyMedium, color = MegaError, modifier = Modifier.megaLiveRegion())
                         }
                         if (diagnosticsState is PsbtAsyncState.Loading) CircularProgressIndicator()
                         if (diagnostics != null) {

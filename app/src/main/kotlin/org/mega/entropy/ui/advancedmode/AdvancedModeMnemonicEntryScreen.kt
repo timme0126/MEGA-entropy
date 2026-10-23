@@ -32,6 +32,7 @@ import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaRadioRow
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.ManualMnemonicValidation
 import org.mega.entropycore.bip39WordsStartingWith
@@ -188,7 +189,7 @@ fun AdvancedModeMnemonicEntryScreen(
 
         val currentError = error
         if (currentError != null) {
-            Text(currentError, style = MaterialTheme.typography.bodyMedium, color = MegaError)
+            Text(currentError, style = MaterialTheme.typography.bodyMedium, color = MegaError, modifier = Modifier.megaLiveRegion())
         }
 
         MegaPrimaryButton(

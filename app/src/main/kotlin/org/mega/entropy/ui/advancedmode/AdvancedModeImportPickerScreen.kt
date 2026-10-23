@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import java.text.DateFormat
@@ -21,6 +22,7 @@ import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.MnemonicLength
 import org.mega.entropycore.MnemonicResult
@@ -93,7 +95,7 @@ fun AdvancedModeImportPickerScreen(
 
         val currentError = error
         if (currentError != null) {
-            Text(currentError, style = MaterialTheme.typography.bodyMedium, color = MegaError)
+            Text(currentError, style = MaterialTheme.typography.bodyMedium, color = MegaError, modifier = Modifier.megaLiveRegion())
         }
 
         val currentSessions = sessions

@@ -46,6 +46,9 @@ import org.mega.entropy.ui.components.MegaRadioRow
 import org.mega.entropy.ui.components.MegaSavedConfirmationCard
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaLiveRegion
+import org.mega.entropy.ui.components.megaLiveRegion
+import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.BareCosignerExtendedKey
 import org.mega.entropycore.MultisigScriptType
@@ -332,7 +335,7 @@ private fun SlotsStepContent(
 
     val currentWalletError = uiState.walletError
     if (currentWalletError != null) {
-        Text(currentWalletError, style = MaterialTheme.typography.bodyMedium, color = MegaError)
+        Text(currentWalletError, style = MaterialTheme.typography.bodyMedium, color = MegaError, modifier = Modifier.megaLiveRegion())
     }
 
     MegaPrimaryButton(text = "Build Vault", enabled = uiState.allSlotsFilled, onClick = onBuildVault)
@@ -559,7 +562,7 @@ private fun MultisigSlotCard(
                         tint = MegaError,
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(status.message, style = MaterialTheme.typography.bodyMedium, color = MegaError)
+                    Text(status.message, style = MaterialTheme.typography.bodyMedium, color = MegaError, modifier = Modifier.megaLiveRegion())
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 SlotActionIcons(onBeginFillSlot, onScanSlot, { showPasteDialog = true })
@@ -694,7 +697,7 @@ private fun CompleteCosignerInfoDialog(
 
                     if (error != null) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(error, style = MaterialTheme.typography.bodyMedium, color = MegaError)
+                        Text(error, style = MaterialTheme.typography.bodyMedium, color = MegaError, modifier = Modifier.megaLiveRegion())
                     }
                 }
             }

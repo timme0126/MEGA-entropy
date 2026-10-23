@@ -60,6 +60,7 @@ import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
 
 /**
@@ -198,6 +199,7 @@ private fun SeedQrScannerContent(onScanned: (words: List<String>) -> Unit) {
             text = currentError,
             style = MaterialTheme.typography.bodyMedium,
             color = MegaError,
+            modifier = Modifier.megaLiveRegion(),
         )
     }
 }

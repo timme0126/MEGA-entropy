@@ -65,6 +65,7 @@ import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
 import com.sparrowwallet.hummingbird.ResultType
 import com.sparrowwallet.hummingbird.URDecoder
@@ -123,6 +124,7 @@ fun PsbtScanScreen(
                 text = importError,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MegaError,
+                modifier = Modifier.megaLiveRegion(),
             )
         }
     }
@@ -287,6 +289,7 @@ private fun ScannerContent(onScanned: (ByteArray) -> Unit) {
             text = currentError,
             style = MaterialTheme.typography.bodyMedium,
             color = MegaError,
+            modifier = Modifier.megaLiveRegion(),
         )
     }
 }

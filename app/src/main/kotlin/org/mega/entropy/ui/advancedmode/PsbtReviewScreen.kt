@@ -7,6 +7,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -16,6 +18,7 @@ import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.MultisigCosignerOrigin
 import org.mega.entropycore.PsbtSummary
@@ -74,13 +77,18 @@ fun PsbtReviewScreen(
 
     MegaInfoScaffold(title = "Review Transaction", onBack = onCancel) {
         if (summaryResult == null) {
-            CircularProgressIndicator()
+            // Spoken label on the spinner (semantics only, invisible to
+            // sighted users) so "in progress" is perceivable at all.
+            CircularProgressIndicator(
+                modifier = Modifier.semantics { contentDescription = "Parsing transaction…" },
+            )
         } else if (summaryResult.isFailure) {
             MegaCard(title = "Could Not Parse PSBT") {
                 Text(
                     text = summaryResult.exceptionOrNull()?.message ?: "This PSBT could not be read.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MegaError
+                    color = MegaError,
+                    modifier = Modifier.megaLiveRegion(),
                 )
             }
         } else {
