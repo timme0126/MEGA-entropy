@@ -153,6 +153,9 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
     var advancedModeEnabled by remember {
         mutableStateOf(savedSessionSecuritySettings.advancedModeEnabled())
     }
+    var accessibilityModeEnabled by remember {
+        mutableStateOf(savedSessionSecuritySettings.accessibilityModeEnabled())
+    }
     var diceRollsLockedDefault by remember {
         mutableStateOf(savedSessionSecuritySettings.diceRollsLockedByDefault())
     }
@@ -943,6 +946,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                         }
                     },
                     allowScreenshots = allowScreenshots,
+                    accessibilityModeEnabled = accessibilityModeEnabled,
                     onCancel = { onReviewCancelled() },
                     onConfirm = { navController.navigate(MegaDestinations.ADVANCED_MODE_PSBT_SIGN_RESULT) },
                 )
@@ -1409,6 +1413,7 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     vaultThreshold = vault.threshold,
                     vaultCosigners = vault.cosigners.map { it.toOrigin() },
                     allowScreenshots = allowScreenshots,
+                    accessibilityModeEnabled = accessibilityModeEnabled,
                     onCancel = { exitSavedVaultPsbtFlow() },
                     onConfirm = { navController.navigate(MegaDestinations.SAVED_MULTISIG_VAULT_PSBT_SIGN_RESULT) },
                 )

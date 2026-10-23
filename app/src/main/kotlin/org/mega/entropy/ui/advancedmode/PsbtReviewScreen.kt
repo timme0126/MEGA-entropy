@@ -6,7 +6,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
@@ -20,6 +22,7 @@ import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaAccessibilityModeActive
 import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.MultisigCosignerOrigin
@@ -36,6 +39,9 @@ fun PsbtReviewScreen(
     knownNetwork: WalletNetwork?,
     deviceMasterFingerprint: String?,
     allowScreenshots: Boolean,
+    // Stored "Accessibility mode" value; see megaAccessibilityModeActive
+    // for how it combines with live touch exploration below.
+    accessibilityModeEnabled: Boolean,
     // When reviewing a spend from a KNOWN saved vault, its threshold and
     // cosigner origins — enabling cryptographic verification of change
     // outputs (see verifyVaultChangeOutput) instead of trusting the PSBT's
@@ -46,6 +52,16 @@ fun PsbtReviewScreen(
     onConfirm: () -> Unit,
 ) {
     SecureScreen(enabled = !allowScreenshots)
+
+    // Only the visible read-aloud buttons (and their TTS) are gated by
+    // Accessibility mode; every other a11y affordance on this screen —
+    // headings, spoken spinner label, live-region announcements — is
+    // unconditional, being invisible to sighted users anyway. Computed
+    // once per screen (and memoized), not once per output row.
+    val appContext = LocalContext.current.applicationContext
+    val readAloudEnabled = remember(accessibilityModeEnabled) {
+        megaAccessibilityModeActive(appContext, accessibilityModeEnabled)
+    }
 
     // Both computations involve BIP32 derivation, expensive enough to run
     // off the Compose main thread — see producePsbtAsync's own doc.
@@ -235,11 +251,15 @@ fun PsbtReviewScreen(
                     // only by buildAddressAnnouncement (pure, deterministic)
                     // from this app-parsed output value — never from
                     // anything else (see the invariant in MegaReadAloud.kt).
-                    MegaReadAloudButton(
-                        value = output.address ?: output.scriptPubKeyHex,
-                        buildAnnouncement = ::buildAddressAnnouncement,
-                        label = "Read output ${index + 1} aloud",
-                    )
+                    // Only rendered when Accessibility mode is effectively
+                    // on (stored opt-in or live touch exploration).
+                    if (readAloudEnabled) {
+                        MegaReadAloudButton(
+                            value = output.address ?: output.scriptPubKeyHex,
+                            buildAnnouncement = ::buildAddressAnnouncement,
+                            label = "Read output ${index + 1} aloud",
+                        )
+                    }
                     if (index in verifiedChange) {
                         Text(
                             text = "Change back to this vault (verified against its keys)",
