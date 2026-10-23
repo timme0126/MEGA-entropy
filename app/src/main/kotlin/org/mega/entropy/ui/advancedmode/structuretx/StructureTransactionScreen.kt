@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import org.mega.entropy.ui.advancedmode.PsbtAsyncState
 import org.mega.entropy.ui.advancedmode.producePsbtAsync
 import org.mega.entropy.ui.components.MegaCard
+import org.mega.entropy.ui.components.MegaCheckboxRow
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPassphraseCard
@@ -178,10 +178,11 @@ fun StructureTransactionScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = state.rbf, onCheckedChange = viewModel::setRbf)
-                        Text("Enable Replace-By-Fee (RBF)", style = MaterialTheme.typography.bodyMedium)
-                    }
+                    MegaCheckboxRow(
+                        checked = state.rbf,
+                        onCheckedChange = viewModel::setRbf,
+                        label = "Enable Replace-By-Fee (RBF)",
+                    )
                     OutlinedTextField(
                         value = state.startReceiveIndex,
                         onValueChange = viewModel::setStartReceiveIndex,

@@ -1,15 +1,14 @@
 package org.mega.entropy.ui.advancedmode.backupshares
 
 import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import org.mega.entropy.ui.components.MegaCard
+import org.mega.entropy.ui.components.MegaCheckboxRow
 import org.mega.entropy.ui.components.MegaCopyIconButton
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaMonoText
@@ -73,13 +72,11 @@ fun BackupShareRevealScreen(
             }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(
-                checked = uiState.currentShareRecorded,
-                onCheckedChange = { if (it) viewModel.confirmCurrentShareRecorded() },
-            )
-            Text("I've recorded share ${uiState.currentShareNumber}.", style = MaterialTheme.typography.bodyMedium)
-        }
+        MegaCheckboxRow(
+            checked = uiState.currentShareRecorded,
+            onCheckedChange = { if (it) viewModel.confirmCurrentShareRecorded() },
+            label = "I've recorded share ${uiState.currentShareNumber}.",
+        )
 
         val isLastShare = uiState.currentShareNumber == uiState.totalShares
         MegaPrimaryButton(

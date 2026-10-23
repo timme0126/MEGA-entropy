@@ -1,7 +1,6 @@
 package org.mega.entropy.ui.advancedmode.backupshares
 
 import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -9,8 +8,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import org.mega.entropy.ui.components.MegaCard
+import org.mega.entropy.ui.components.MegaCheckboxRow
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
@@ -67,13 +66,11 @@ fun BackupSharesDisclaimerScreen(
             )
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = acknowledged, onCheckedChange = { acknowledged = it })
-            Text(
-                "I understand each share can help recover this seed, and I'll store them separately.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
+        MegaCheckboxRow(
+            checked = acknowledged,
+            onCheckedChange = { acknowledged = it },
+            label = "I understand each share can help recover this seed, and I'll store them separately.",
+        )
 
         if (acknowledged) {
             MegaPrimaryButton(text = "Continue", onClick = onContinueToSetup)

@@ -1,7 +1,6 @@
 package org.mega.entropy.ui.savedsessions
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -16,7 +15,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,7 +24,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,6 +39,7 @@ import org.mega.entropy.ui.components.MegaLabelSessionDialog
 import org.mega.entropy.ui.components.MegaNeutralButton
 import org.mega.entropy.ui.components.MegaRadioRow
 import org.mega.entropy.ui.components.MegaPrimaryButton
+import org.mega.entropy.ui.components.MegaSwitchRow
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 
@@ -380,26 +378,12 @@ private fun SettingSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        androidx.compose.foundation.layout.Column(
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            modifier = Modifier.weight(1f),
-        ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
+    MegaSwitchRow(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        label = label,
+        description = description,
+    )
 }
 
 @Composable
