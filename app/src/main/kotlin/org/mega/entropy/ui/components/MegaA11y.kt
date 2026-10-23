@@ -53,7 +53,9 @@ import org.mega.entropy.ui.theme.MegaError
  * MegaSection headings, MegaCard titles) so every screen built on them
  * gets correct headings for free.
  */
-fun Modifier.megaHeading(): Modifier = semantics { this[SemanticsProperties.IsHeader] = true }
+fun Modifier.megaHeading(): Modifier = semantics { // Compose 1.11 renamed the heading key: SemanticsProperties.Heading, a
+        // Unit-valued flag (the old isHeader Boolean alias is gone from this BOM).
+        this[SemanticsProperties.Heading] = Unit }
 
 // ---------------------------------------------------------- live regions
 
