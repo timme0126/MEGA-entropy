@@ -1,6 +1,26 @@
 # Changelog
 
-Notable changes to MEGA, most recent first. The current beta build is `v0.1.16` (see [`README.md`](README.md#download-the-beta-apk)).
+Notable changes to MEGA, most recent first. The current beta build is `v0.1.18` (see [`README.md`](README.md#download-the-beta-apk)).
+
+## [0.1.18] - 2026-10-23
+### Added
+- "Import from File" on the PSBT scan screen: pick a .psbt or base64 text
+  file directly (2 MiB cap) — no QR scan required. The primary route for
+  desktop wallets like Sparrow.
+- Accessibility mode (Settings, per-session): opt-in toggle, and it turns
+  itself on automatically when a system screen reader (e.g. TalkBack) is
+  running.
+- Read-aloud verification for handoff-critical values on five screens:
+  PSBT review outputs, Master Fingerprint, mnemonic words, dice-roll
+  review, and the generated Custody Backup+ passphrase. Deterministic,
+  offline text-to-speech only — raw groups first, then full NATO
+  phonetic spelling.
+### Changed
+- App-wide screen-reader pass: headings, row-level controls, and spoken
+  announcements for errors and progress across ~30 screens.
+- "Set a PIN First" (import backup) now offers "Create PIN now" and
+  returns you to Settings when the PIN is set, instead of leaving you to
+  find the PIN section by hand.
 
 ## [0.1.17] - 2026-10-16
 ### Added

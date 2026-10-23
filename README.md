@@ -10,9 +10,9 @@ six-sided die rolls, supplied entirely by the user,** into a valid 12- or
 
 ## Download the beta APK
 
-**Current beta:** [`mega-beta-v0.1.17.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.17/mega-beta-v0.1.17.apk)
+**Current beta:** [`mega-beta-v0.1.18.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.18/mega-beta-v0.1.18.apk)
 
-Release page: [`MEGA Beta v0.1.17`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.17)
+Release page: [`MEGA Beta v0.1.18`](https://github.com/timme0126/MEGA-entropy/releases/tag/v0.1.18)
 
 > ⚠️ **Updating from v0.1.13 or earlier? Uninstall the old app first.** This
 > release is signed with the rotated key (the previous one was rotated on
@@ -26,8 +26,8 @@ Release page: [`MEGA Beta v0.1.17`](https://github.com/timme0126/MEGA-entropy/re
 Verify the primary release APK before installing:
 
 ```bash
-sha256sum mega-beta-v0.1.17.apk
-# cb70ab60273472b584d626e561dcfa4582da07bd7ce14b37bdbf332f52554107
+sha256sum mega-beta-v0.1.18.apk
+# CHECKSUM_BETA
 ```
 
 This primary build is a **release-type, non-debuggable APK signed with the
@@ -42,14 +42,14 @@ This is an experimental beta build for disposable test roll sequences only.
 
 ### Debug build (parallel-installable)
 
-[`mega-debug-v0.1.17.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.17/mega-debug-v0.1.17.apk)
+[`mega-debug-v0.1.18.apk`](https://github.com/timme0126/MEGA-entropy/releases/download/v0.1.18/mega-debug-v0.1.18.apk)
 
 Debug-signed: installs **side-by-side** with the beta (different signing
-key). Same code as v0.1.17.
+key). Same code as v0.1.18.
 
 ```bash
-sha256sum mega-debug-v0.1.17.apk
-# b83978c4b8757fb8ff9ee5b68e6dbb74bc66e9a5a669966765ed4fd0646ab05c
+sha256sum mega-debug-v0.1.18.apk
+# CHECKSUM_DEBUG
 ```
 
 ### Earlier builds (historical)
