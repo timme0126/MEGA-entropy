@@ -30,6 +30,7 @@ import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSavedConfirmationCard
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaToggleState
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropycore.Bip39Seed
 import org.mega.entropycore.deriveSeed
@@ -163,7 +164,7 @@ fun AdvancedModeHubScreen(
                 text = "Hide seed words",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { wordsRevealed = false },
+                modifier = Modifier.clickable { wordsRevealed = false }.megaToggleState(true),
             )
         }
 
@@ -189,7 +190,7 @@ fun AdvancedModeHubScreen(
                 text = if (showPassphrase) "Hide passphrase" else "Show passphrase",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { showPassphrase = !showPassphrase },
+                modifier = Modifier.clickable { showPassphrase = !showPassphrase }.megaToggleState(showPassphrase),
             )
             Text(
                 text = "Leave blank to derive from the seed words alone.",
@@ -232,7 +233,7 @@ fun AdvancedModeHubScreen(
                 text = "Hide seed",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { revealedSeed = null },
+                modifier = Modifier.clickable { revealedSeed = null }.megaToggleState(true),
             )
         }
     }

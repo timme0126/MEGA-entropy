@@ -49,6 +49,7 @@ import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
 import org.mega.entropy.ui.components.megaHeading
 import org.mega.entropy.ui.components.megaLiveRegion
+import org.mega.entropy.ui.components.megaToggleState
 
 /**
  * The core interaction of the app: 20 batches of 5 physical die-roll taps,
@@ -247,7 +248,7 @@ private fun BatchCalculationCard(batch: CompletedBatch) {
             text = if (showMath) "Hide the math" else "Show the math",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable { showMath = !showMath },
+            modifier = Modifier.clickable { showMath = !showMath }.megaToggleState(showMath),
         )
         AnimatedVisibility(visible = showMath) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -266,7 +267,7 @@ private fun BatchCalculationCard(batch: CompletedBatch) {
             text = if (showTechnical) "Hide technical details" else "Show technical details",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable { showTechnical = !showTechnical },
+            modifier = Modifier.clickable { showTechnical = !showTechnical }.megaToggleState(showTechnical),
         )
         AnimatedVisibility(visible = showTechnical) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -288,7 +289,7 @@ private fun PreviousBatchesCard(batches: List<CompletedBatch>) {
             text = if (expanded) "Hide previous batches" else "Review previous batches (${batches.size})",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable { expanded = !expanded },
+            modifier = Modifier.clickable { expanded = !expanded }.megaToggleState(expanded),
         )
         AnimatedVisibility(visible = expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
