@@ -16,7 +16,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,6 +40,7 @@ import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaLabelSessionDialog
 import org.mega.entropy.ui.components.MegaNeutralButton
+import org.mega.entropy.ui.components.MegaRadioRow
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
@@ -222,19 +222,12 @@ fun SavedSessionSettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             lockTimeoutOptions.forEach { option ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onLockTimeoutSelected(option.millis) },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    RadioButton(
-                        selected = option.millis == selectedLockTimeoutMillis,
-                        onClick = { onLockTimeoutSelected(option.millis) },
-                    )
-                    Text(option.label, style = MaterialTheme.typography.bodyMedium)
-                }
+                MegaRadioRow(
+                    selected = option.millis == selectedLockTimeoutMillis,
+                    onClick = { onLockTimeoutSelected(option.millis) },
+                    label = option.label,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
 
@@ -416,23 +409,13 @@ private fun KeypadLayoutOption(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        RadioButton(selected = selected, onClick = onClick)
-        androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(label, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    MegaRadioRow(
+        selected = selected,
+        onClick = onClick,
+        label = label,
+        modifier = Modifier.fillMaxWidth(),
+        description = description,
+    )
 }
 
 @Composable

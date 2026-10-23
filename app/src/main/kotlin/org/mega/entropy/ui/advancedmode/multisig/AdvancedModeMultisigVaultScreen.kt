@@ -1,6 +1,5 @@
 package org.mega.entropy.ui.advancedmode.multisig
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,7 +25,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,6 +42,7 @@ import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaLabelSessionDialog
 import org.mega.entropy.ui.components.MegaMonoText
 import org.mega.entropy.ui.components.MegaPrimaryButton
+import org.mega.entropy.ui.components.MegaRadioRow
 import org.mega.entropy.ui.components.MegaSavedConfirmationCard
 import org.mega.entropy.ui.components.MegaSecondaryButton
 import org.mega.entropy.ui.components.SecureScreen
@@ -355,40 +354,35 @@ private fun IntOptionRow(label: String, options: List<Int>, selected: Int?, onCl
         verticalAlignment = Alignment.CenterVertically,
     ) {
         options.forEach { option ->
-            Row(
-                modifier = Modifier.weight(1f).clickable { onClick(option) },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                RadioButton(selected = selected == option, onClick = { onClick(option) })
-                Text(option.toString(), style = MaterialTheme.typography.bodyMedium)
-            }
+            MegaRadioRow(
+                selected = selected == option,
+                onClick = { onClick(option) },
+                label = option.toString(),
+                modifier = Modifier.weight(1f),
+                spacing = 4.dp,
+            )
         }
     }
 }
 
 @Composable
 private fun NetworkOption(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        RadioButton(selected = selected, onClick = onClick)
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-    }
+    MegaRadioRow(
+        selected = selected,
+        onClick = onClick,
+        label = label,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
 private fun MultisigScriptTypeOption(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        RadioButton(selected = selected, onClick = onClick)
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-    }
+    MegaRadioRow(
+        selected = selected,
+        onClick = onClick,
+        label = label,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
