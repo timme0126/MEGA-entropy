@@ -16,9 +16,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.security.SecureRandom
+import org.mega.entropy.ui.components.megaCountStatus
 
 /**
  * SECURITY NOTE (spec section 21): the shuffle below uses SecureRandom
@@ -86,6 +89,7 @@ fun ScrambledKeypad(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             FunctionButton(
                 label = "CLR",
+                spokenLabel = "Clear the entered PIN",
                 onTapped = onClear,
                 enabled = clearEnabled,
                 modifier = Modifier.weight(1f),
@@ -93,6 +97,7 @@ fun ScrambledKeypad(
             KeypadButton(digit = lastDigit, onTapped = onDigitTapped, modifier = Modifier.weight(1f))
             FunctionButton(
                 label = "⌫",
+                spokenLabel = "Delete the last digit",
                 onTapped = onDelete,
                 enabled = deleteEnabled,
                 modifier = Modifier.weight(1f),
@@ -123,6 +128,7 @@ private fun KeypadButton(digit: Int, onTapped: (Int) -> Unit, modifier: Modifier
 private fun FunctionButton(
     label: String,
     onTapped: () -> Unit,
+    spokenLabel: String = label,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
@@ -139,7 +145,15 @@ private fun FunctionButton(
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
-            Text(text = label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = contentColor)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor,
+                // Raw "CLR"/"⌫" glyphs read as letters or an unknown character —
+                // speak the action instead. Visual text is unchanged.
+                modifier = Modifier.clearAndSetSemantics { contentDescription = spokenLabel },
+            )
         }
     }
 }
@@ -148,7 +162,12 @@ private fun FunctionButton(
  * rather than digits." Never renders the actual entered digits. */
 @Composable
 fun PinDots(enteredCount: Int, maxLength: Int, modifier: Modifier = Modifier) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(
+        // Filled-vs-empty color alone says nothing to TalkBack: speak the
+        // count, and keep it a live region so every digit tapped announces.
+        modifier = modifier.megaCountStatus(entered = enteredCount, max = maxLength, noun = "PIN digits entered"),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         repeat(maxLength) { index ->
             val filled = index < enteredCount
             Surface(

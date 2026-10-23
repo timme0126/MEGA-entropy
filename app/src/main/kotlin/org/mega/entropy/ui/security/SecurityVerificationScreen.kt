@@ -30,7 +30,9 @@ import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaSecondaryButton
+import org.mega.entropy.ui.components.MegaStatusBadge
 import org.mega.entropy.ui.components.SecureScreen
+import org.mega.entropy.ui.components.megaLiveRegion
 import org.mega.entropy.ui.theme.MegaError
 import org.mega.entropy.ui.theme.MegaSuccess
 
@@ -52,7 +54,7 @@ fun SecurityVerificationScreen(onBack: () -> Unit, onContinue: () -> Unit) {
         }
     }
     MegaInfoScaffold(title = "Security Verification", onBack = onBack, scrollToTopRequest = recheckCount) {
-        Text(if (completedRechecks == 0) "Not checked again since this screen opened." else "Last checked after recheck " + completedRechecks + ".", style = MaterialTheme.typography.labelMedium)
+        Text(if (completedRechecks == 0) "Not checked again since this screen opened." else "Last checked after recheck " + completedRechecks + ".", style = MaterialTheme.typography.labelMedium, modifier = Modifier.megaLiveRegion())
         Text("MEGA has no Android Internet permission. This screen reports what the app can verify; it does not certify that a phone is air-gapped.", style = MaterialTheme.typography.bodyMedium)
         OverallCard(state)
         CheckSection("MEGA NETWORK CAPABILITY", state.appChecks)
@@ -90,7 +92,16 @@ private fun CheckSection(title: String, checks: List<SecurityCheck>) {
                 SecurityCheckStatus.FAIL -> "!" to MegaError
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(symbol, color = color, style = MaterialTheme.typography.titleMedium)
+                MegaStatusBadge(
+                    glyph = symbol,
+                    spoken = when (check.status) {
+                        SecurityCheckStatus.PASS -> "Check passed"
+                        SecurityCheckStatus.WARNING -> "Warning — needs your judgment"
+                        SecurityCheckStatus.UNAVAILABLE -> "Could not be verified"
+                        SecurityCheckStatus.FAIL -> "Check failed"
+                    },
+                    color = color,
+                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(check.title, style = MaterialTheme.typography.bodyLarge)
                     Text(check.detail, style = MaterialTheme.typography.bodySmall)

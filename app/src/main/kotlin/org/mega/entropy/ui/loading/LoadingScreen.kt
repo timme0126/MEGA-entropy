@@ -29,6 +29,7 @@ import kotlinx.coroutines.delay
 import org.mega.entropy.ui.components.MegaLogo
 import org.mega.entropy.ui.components.MegaPrimaryButton
 import org.mega.entropy.ui.components.MegaScreenPadding
+import org.mega.entropy.ui.components.MegaStatusBadge
 import org.mega.entropy.ui.theme.MegaSuccess
 
 private val LOADING_ITEMS = listOf(
@@ -84,11 +85,11 @@ fun LoadingScreen(onEnter: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text(
-                            text = "✓",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
+                        MegaStatusBadge(
+                            glyph = "✓",
+                            spoken = "Done",
                             color = MegaSuccess,
+                            fontWeight = FontWeight.Bold,
                         )
                         Text(text = label, style = MaterialTheme.typography.bodyLarge)
                     }
