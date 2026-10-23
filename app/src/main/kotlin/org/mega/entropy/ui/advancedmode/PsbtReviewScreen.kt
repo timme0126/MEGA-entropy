@@ -12,6 +12,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.mega.entropy.ui.a11y.MegaReadAloudButton
+import org.mega.entropy.ui.a11y.buildAddressAnnouncement
 import org.mega.entropy.ui.components.MegaCard
 import org.mega.entropy.ui.components.MegaInfoScaffold
 import org.mega.entropy.ui.components.MegaMonoText
@@ -229,6 +231,15 @@ fun PsbtReviewScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                     MegaMonoText(text = output.address ?: output.scriptPubKeyHex)
+                    // F3 spoken verification: the TTS string is composed
+                    // only by buildAddressAnnouncement (pure, deterministic)
+                    // from this app-parsed output value — never from
+                    // anything else (see the invariant in MegaReadAloud.kt).
+                    MegaReadAloudButton(
+                        value = output.address ?: output.scriptPubKeyHex,
+                        buildAnnouncement = ::buildAddressAnnouncement,
+                        label = "Read output ${index + 1} aloud",
+                    )
                     if (index in verifiedChange) {
                         Text(
                             text = "Change back to this vault (verified against its keys)",
