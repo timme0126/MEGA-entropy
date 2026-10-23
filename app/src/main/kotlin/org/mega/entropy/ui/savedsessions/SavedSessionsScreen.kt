@@ -64,6 +64,8 @@ fun SavedSessionsScreen(
     onAllowPrivateKeyExportChanged: (Boolean) -> Unit,
     advancedModeEnabled: Boolean,
     onAdvancedModeChanged: (Boolean) -> Unit,
+    accessibilityModeEnabled: Boolean,
+    onAccessibilityModeChanged: (Boolean) -> Unit,
     viewModel: SavedSessionsViewModel = viewModel(),
 ) {
     SecureScreen(enabled = !allowScreenshots)
@@ -96,6 +98,8 @@ fun SavedSessionsScreen(
             onAllowPrivateKeyExportChanged = onAllowPrivateKeyExportChanged,
             advancedModeEnabled = advancedModeEnabled,
             onAdvancedModeChanged = onAdvancedModeChanged,
+            accessibilityModeEnabled = accessibilityModeEnabled,
+            onAccessibilityModeChanged = onAccessibilityModeChanged,
             onChangePin = {
                 showingSettings = false
                 onChangePin()
@@ -203,6 +207,8 @@ fun SavedSessionSettingsScreen(
     onAllowPrivateKeyExportChanged: (Boolean) -> Unit,
     advancedModeEnabled: Boolean,
     onAdvancedModeChanged: (Boolean) -> Unit,
+    accessibilityModeEnabled: Boolean,
+    onAccessibilityModeChanged: (Boolean) -> Unit,
     onChangePin: () -> Unit,
     onChangeDuressPin: () -> Unit,
     onClearDuressPin: () -> Unit,
@@ -265,6 +271,15 @@ fun SavedSessionSettingsScreen(
                 description = "Show copy buttons for seed words and BIP85 child words after reveal.",
                 checked = allowSeedCopy,
                 onCheckedChange = onAllowSeedCopyChanged,
+            )
+        }
+
+        MegaCard(title = "Accessibility") {
+            SettingSwitchRow(
+                label = "Accessibility mode",
+                description = "Spoken verification and read-aloud actions. Turns itself on whenever a screen reader is running, even if this is off.",
+                checked = accessibilityModeEnabled,
+                onCheckedChange = onAccessibilityModeChanged,
             )
         }
 

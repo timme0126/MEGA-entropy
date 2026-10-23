@@ -601,6 +601,11 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                     savedSessionSecuritySettings.setAdvancedModeEnabled(enabled)
                     advancedModeEnabled = savedSessionSecuritySettings.advancedModeEnabled()
                 },
+                accessibilityModeEnabled = accessibilityModeEnabled,
+                onAccessibilityModeChanged = { enabled ->
+                    savedSessionSecuritySettings.setAccessibilityModeEnabled(enabled)
+                    accessibilityModeEnabled = savedSessionSecuritySettings.accessibilityModeEnabled()
+                },
             )
         }
         composable(MegaDestinations.SETTINGS) {
@@ -648,6 +653,11 @@ fun MegaNavGraph(navController: NavHostController = rememberNavController()) {
                 onAdvancedModeChanged = { enabled ->
                     savedSessionSecuritySettings.setAdvancedModeEnabled(enabled)
                     advancedModeEnabled = savedSessionSecuritySettings.advancedModeEnabled()
+                },
+                accessibilityModeEnabled = accessibilityModeEnabled,
+                onAccessibilityModeChanged = { enabled ->
+                    savedSessionSecuritySettings.setAccessibilityModeEnabled(enabled)
+                    accessibilityModeEnabled = savedSessionSecuritySettings.accessibilityModeEnabled()
                 },
                 onChangePin = {
                     coroutineScope.launch {
