@@ -103,14 +103,22 @@ fun buildAddressAnnouncement(address: String, groupSize: Int = 4): String {
         append(lastPhonetic)
         append(".")
     }
+    // The REPEAT pass is spelled fully in NATO words, not raw groups:
+    // a screen-reader user has no screen to cross-check against, and
+    // raw 4-char groups carry 0/O and 1/l/I homophones. The NATO pass
+    // is the unambiguous second read for exactly the user this
+    // feature exists to protect.
+    val natoPass = chunkForSpeech(address, groupSize).joinToString(", ") { chunk ->
+        toNatoPhonetic(chunk)
+    }
     return buildString {
         append("Address in groups of ")
         append(groupSize)
         append(". ")
         append(pass)
-        append(" Once more. ")
-        append(pass)
-        append(" Check every group against the screen before you trust it.")
+        append(" Once more, phonetically. ")
+        append(natoPass)
+        append(". Check every group against your own records before you trust it.")
     }
 }
 

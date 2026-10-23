@@ -9,7 +9,7 @@ import org.junit.Test
  * F3 pure-function coverage: NATO mapping completeness (all A–Z, all
  * digits, case-insensitive, total on junk input), deterministic chunking
  * with remainder, the twice-spoken address announcement (identical on
- * repeated invocation, chunk sequence present exactly twice), and the
+ * repeated invocation, raw chunk sequence once, then a full-phonetic repeat), and the
  * fingerprint pair expansion. Plain JUnit4 — the functions under test
  * use no Android APIs, so no Robolectric.
  */
@@ -112,15 +112,20 @@ class SpokenVerificationTest {
     }
 
     @Test
-    fun `address announcement is deterministic and speaks the chunk sequence twice`() {
+    fun `address announcement is deterministic and repeats the sequence phonetically`() {
         val first = buildAddressAnnouncement(ADDRESS)
         val second = buildAddressAnnouncement(ADDRESS)
         assertEquals(first, second)
 
         val chunkSequence = chunkForSpeech(ADDRESS).joinToString(", ")
         assertTrue("chunk sequence missing", first.contains(chunkSequence))
-        assertEquals(2, countOccurrences(first, chunkSequence))
-        assertTrue(first.contains("Once more."))
+        assertEquals(1, countOccurrences(first, chunkSequence))
+        assertTrue(first.contains("Once more, phonetically."))
+        // The repeat carries NATO words for the FIRST and LAST chunks.
+        val firstChunkWords = toNatoPhonetic(chunkForSpeech(ADDRESS).first())
+        val lastChunkWords = toNatoPhonetic(chunkForSpeech(ADDRESS).last())
+        assertTrue("first chunk not spelled", first.contains(firstChunkWords))
+        assertTrue("last chunk not spelled", first.contains(lastChunkWords))
 
         // First/last two characters expanded phonetically:
         // b,c -> Bravo Charlie; t,4 -> Tango Four.
