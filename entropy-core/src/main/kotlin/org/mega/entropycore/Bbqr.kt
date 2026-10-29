@@ -107,7 +107,21 @@ private fun combineAndDecodeBbqrParts(parts: List<BbqrPart>, supportedFileTypes:
     require(parts.all { it.total == total }) { "Scanned BBQr parts disagree on the total number of parts." }
     require(parts.all { it.encoding == encoding }) { "Scanned BBQr parts disagree on their encoding." }
     require(parts.all { it.fileType == fileType }) { "Scanned BBQr parts disagree on their file type." }
-    val byIndex = parts.associateBy { it.index }
+    // A frame re-scanned by the camera may legitimately arrive twice —
+    // scanning the same QR again must be idempotent, so IDENTICAL
+    // duplicates of one index collapse to one. But the same index
+    // arriving with DIFFERENT payloads means one of the two scans of
+    // that frame is corrupt or tampered with, and no rule that silently
+    // picks a winner ("last scan wins") may be applied to wallet data:
+    // a tampered re-scan would otherwise overwrite a good frame in
+    // plain sight. Conflicting duplicates are therefore a hard error.
+    val payloadsByIndex = parts.groupBy({ it.index }, { it.payload })
+    for ((index, payloads) in payloadsByIndex) {
+        require(payloads.distinct().size == 1) {
+            "Scanned BBQr parts repeat index $index with different payloads — one scan of that frame is corrupt or was tampered with. Re-scan every frame from the source device."
+        }
+    }
+    val byIndex = payloadsByIndex.mapValues { it.value.first() }
     require((0 until total).all { it in byIndex }) {
         "Missing BBQr parts — only ${byIndex.size} of $total have been scanned so far."
     }
@@ -128,17 +142,17 @@ private fun combineAndDecodeBbqrParts(parts: List<BbqrPart>, supportedFileTypes:
     // way here means a chunk [encodeBbqr] could never legally produce is caught
     // immediately as a decode error instead of silently accepted by a decoder
     // lenient enough to paper over it.
-    val orderedParts = (0 until total).map { byIndex.getValue(it) }
+    val orderedPayloads = (0 until total).map { byIndex.getValue(it) }
     val decodedBytes = when (encoding) {
-        'H' -> orderedParts.fold(ByteArray(0)) { acc, part -> acc + decodeBbqrHex(part.payload) }
-        '2' -> orderedParts.fold(ByteArray(0)) { acc, part -> acc + decodeBase32(part.payload) }
+        'H' -> orderedPayloads.fold(ByteArray(0)) { acc, payload -> acc + decodeBbqrHex(payload) }
+        '2' -> orderedPayloads.fold(ByteArray(0)) { acc, payload -> acc + decodeBase32(payload) }
         'Z' -> {
             // Deflate is a single continuous compressed stream — unlike the
             // Base32 stage, it cannot be inflated one part at a time. Each
             // part's Base32 text is still decoded independently (per the spec
             // requirement above), then the resulting COMPRESSED bytes are
             // concatenated back into one stream before the single inflate call.
-            val compressed = orderedParts.fold(ByteArray(0)) { acc, part -> acc + decodeBase32(part.payload) }
+            val compressed = orderedPayloads.fold(ByteArray(0)) { acc, payload -> acc + decodeBase32(payload) }
             inflateRawDeflate(compressed)
         }
         else -> throw IllegalArgumentException("Unsupported BBQr encoding '$encoding'.")
