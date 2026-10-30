@@ -37,7 +37,13 @@ sealed class CryptoSelfTestOutcome {
     /** One or more vectors mismatched, threw, or otherwise failed.
      * [failedCheckNames] are stable identifiers (no key material) safe
      * to display or hand to support. */
-    data class Failed(val failedCheckNames: List<String>) : CryptoSelfTestOutcome()
+    data class Failed internal constructor(val failedCheckNames: List<String>) : CryptoSelfTestOutcome() {
+        init {
+            require(failedCheckNames.isNotEmpty()) {
+                "A Failed outcome must name at least one failed check — an unnamed failure is a miswired caller, not a verdict."
+            }
+        }
+    }
 }
 
 object CryptoSelfTest {
@@ -46,20 +52,62 @@ object CryptoSelfTest {
      * vectors themselves are [checks]. */
     data class Check(val name: String, val run: () -> Boolean)
 
+    /** How many [checks] MUST be registered. [run] refuses to report a
+     * Pass unless the live list matches this count exactly — "no check
+     * failed" and "every expected check ran" are different claims, and
+     * only the second one is allowed to open the app. A future refactor
+     * that builds the list conditionally, or a shrinking step that drops
+     * an entry, fails loudly at boot instead of silently narrowing
+     * (or emptying) the gate. */
+    const val EXPECTED_CHECK_COUNT = 18
+
+    /** Special failure name for resource exhaustion — NOT a wrong
+     * computation. See [runChecks]. */
+    const val MEMORY_EXHAUSTED = "memory-exhausted"
+
+    /** Special failure name for when the gate itself could not execute
+     * far enough to name per-check detail (e.g. it threw during
+     * construction). Kept distinct so the report never claims checks
+     * failed when in fact none completed. */
+    const val STARTUP_FAILURE = "self-test-startup"
+
+    /** The only sanctioned way for a caller OUTSIDE this module to
+     * present a named failure without per-check detail — [run] itself
+     * produces all detailed outcomes. */
+    fun startupFailure(): CryptoSelfTestOutcome.Failed =
+        CryptoSelfTestOutcome.Failed(listOf(STARTUP_FAILURE))
+
     /** Outcome of running [checks]: pass, or the names of everything
      * that failed. A check that THROWS counts as failed, never as a
      * silent pass — the whole point of this gate is that nothing about
      * this computation is allowed to be silently wrong. */
-    fun run(): CryptoSelfTestOutcome = runChecks(checks)
+    fun run(): CryptoSelfTestOutcome {
+        val names = checks.map { it.name }
+        check(names.size == EXPECTED_CHECK_COUNT && names.distinct().size == EXPECTED_CHECK_COUNT) {
+            "Self-test registration is broken: expected $EXPECTED_CHECK_COUNT uniquely named checks, " +
+                "found ${names.size} (${names.distinct().size} unique)."
+        }
+        return runChecks(checks)
+    }
 
     internal fun runChecks(checks: List<Check>): CryptoSelfTestOutcome {
-        val failed = checks.filter { check ->
+        require(checks.isNotEmpty()) {
+            "runChecks refuses an empty check list — zero failures over zero checks is a vacuous pass."
+        }
+        val failed = checks.mapNotNull { check ->
             try {
-                !check.run()
+                if (!check.run()) check.name else null
+            } catch (_: VirtualMachineError) {
+                // OutOfMemoryError and friends are RESOURCE exhaustion,
+                // not a wrong computation. Still never a silent pass —
+                // but named distinctly, so the failure UI can say
+                // "free memory and try again" instead of accusing the
+                // device of corrupt arithmetic it cannot fix.
+                MEMORY_EXHAUSTED
             } catch (_: Throwable) {
-                true
+                check.name
             }
-        }.map { it.name }
+        }.distinct()
         return if (failed.isEmpty()) {
             CryptoSelfTestOutcome.Pass
         } else {
@@ -87,6 +135,20 @@ object CryptoSelfTest {
     // ---- the vectors
 
     internal val checks: List<Check> = listOf(
+
+        // Meta-check FIRST: the equality primitives every other check
+        // silently depends on must be able to say NO. All 17 other
+        // checks ask eq a question; this one proves a wrong answer gets
+        // rejected. Without it, a compiled runtime whose comparison
+        // always returned true would pass the entire gate at once —
+        // the single highest-leverage fault the gate can see, and the
+        // only way to catch it is to demand inequality on purpose.
+        Check("equality-negative-control") {
+            !eq("aa", "ab") &&
+                !eq("ab".hexToBytes(), "aa") &&
+                eq("aa", "aa") &&
+                eq("aa".hexToBytes(), "aa")
+        },
 
         // SHA-256("abc") — FIPS 180-4 example.
         Check("sha256") {
@@ -254,26 +316,41 @@ object CryptoSelfTest {
             )
         },
         Check("bip340-verify-rejects") {
-            val pk = "DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659".hexToBytes()
-            val msg = "243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89".hexToBytes()
-            val badSigs = listOf(
+            // The complete published FALSE set, BIP-340 test-vectors.csv
+            // indices 5-14 (pk, sig pairs exactly as published; the
+            // message hash is identical for all ten). Each must be
+            // REJECTED — these are the boundary classes (point at
+            // infinity, sig[0:32] == field size, s == curve order,
+            // pk beyond the field) where a subtly wrong bound check in
+            // the verifier hides, and it hides silently if untested.
+            val msgHex = "243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"
+            val pkDff1 = "DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659"
+            val rejected = listOf(
+                // 5: public key not on the curve
+                "EEFDEA4CDB677750A420FEE807EACF21EB9898AE79B9768766E4FAA04A2D4A34" to "6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E17776969E89B4C5564D00349106B8497785DD7D1D713A8AE82B32FA79D5F7FC407D39B",
                 // 6: has_even_y(R) is false
-                "FFF97BD5755EEEA420453A14355235D382F6472F8568A18B2F057A14602975563CC27944640AC607CD107AE10923D9EF7A73C643E166BE5EBEAFA34B1AC553E2",
-                // 7: negated message hash
-                "1FA62E331EDBC21C394792D2AB1100A7B432B013DF3F6FF4F99FCB33E0E1515F28890B3EDB6E7189B630448B515CE4F8622A954CFE545735AAEA5134FCCDB2BD",
+                pkDff1 to "FFF97BD5755EEEA420453A14355235D382F6472F8568A18B2F057A14602975563CC27944640AC607CD107AE10923D9EF7A73C643E166BE5EBEAFA34B1AC553E2",
+                // 7: negated message
+                pkDff1 to "1FA62E331EDBC21C394792D2AB1100A7B432B013DF3F6FF4F99FCB33E0E1515F28890B3EDB6E7189B630448B515CE4F8622A954CFE545735AAEA5134FCCDB2BD",
                 // 8: negated s value
-                "6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E177769961764B3AA9B2FFCB6EF947B6887A226E8D7C93E00C5ED0C1834FF0D0C2E6DA6",
+                pkDff1 to "6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E177769961764B3AA9B2FFCB6EF947B6887A226E8D7C93E00C5ED0C1834FF0D0C2E6DA6",
+                // 9: sG - eP is infinite (has_even_y(inf) = true, x(inf) = 0)
+                pkDff1 to "0000000000000000000000000000000000000000000000000000000000000000123DDA8328AF9C23A94C1FEECFD123BA4FB73476F0D594DCB65C6425BD186051",
+                // 10: sG - eP is infinite (has_even_y(inf) = true, x(inf) = 1)
+                pkDff1 to "00000000000000000000000000000000000000000000000000000000000000017615FBAF5AE28864013C099742DEADB4DBA87F11AC6754F93780D5A1837CF197",
                 // 11: sig[0:32] is not an X coordinate on the curve
-                "4A298DACAE57395A15D0795DDBFD1DCB564DA82B0F269BC70A74F8220429BA1D69E89B4C5564D00349106B8497785DD7D1D713A8AE82B32FA79D5F7FC407D39B",
-                // 13: sig[32:64] equals the curve order
-                "6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E177769FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141",
+                pkDff1 to "4A298DACAE57395A15D0795DDBFD1DCB564DA82B0F269BC70A74F8220429BA1D69E89B4C5564D00349106B8497785DD7D1D713A8AE82B32FA79D5F7FC407D39B",
+                // 12: sig[0:32] is equal to field size
+                pkDff1 to "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F69E89B4C5564D00349106B8497785DD7D1D713A8AE82B32FA79D5F7FC407D39B",
+                // 13: sig[32:64] is equal to curve order
+                pkDff1 to "6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E177769FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141",
+                // 14: pk exceeds the field size
+                "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC30" to "6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E17776969E89B4C5564D00349106B8497785DD7D1D713A8AE82B32FA79D5F7FC407D39B",
             )
-            badSigs.all { sigHex -> !Schnorr.verify(pk, msg, sigHex.hexToBytes()) } &&
-                !Schnorr.verify(
-                    "EEFDEA4CDB677750A420FEE807EACF21EB9898AE79B9768766E4FAA04A2D4A34".hexToBytes(),
-                    msg,
-                    "6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E17776969E89B4C5564D00349106B8497785DD7D1D713A8AE82B32FA79D5F7FC407D39B".hexToBytes(),
-                )
+            rejected.size == 10 &&
+                rejected.all { (pkHex, sigHex) ->
+                    !Schnorr.verify(pkHex.hexToBytes(), msgHex.hexToBytes(), sigHex.hexToBytes())
+                }
         },
 
         // Deterministic ECDSA (RFC 6979 + BIP62 low-S): the two

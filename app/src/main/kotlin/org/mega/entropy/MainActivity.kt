@@ -7,7 +7,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import org.mega.entropy.ui.navigation.MegaNavGraph
 import org.mega.entropy.ui.selftest.SelfTestFailedDialog
@@ -25,21 +28,35 @@ class MainActivity : ComponentActivity() {
                 // ENTIRE app, not a warning banner: known-answer vectors
                 // are recomputed right here, and until every one matches
                 // a published value, no part of MegaNavGraph — not even
-                // the Welcome screen — composes. `remember` evaluates it
-                // once per process, synchronously, before the `when`
-                // below can pick a branch, and the vectors are a fixed
-                // handful of small computations (well under a second),
-                // so blocking the first composition frame is the honest
-                // order of operations rather than a race against it.
-                val outcome = remember { CryptoSelfTest.run() }
-                when (outcome) {
+                // the Welcome screen — composes. `remember` re-evaluates
+                // it once PER COMPOSITION — i.e. again on every Activity
+                // recreation and every process start — deliberately: a
+                // result cached across recompositions would be a
+                // staleness surface the gate exists to close. If the
+                // gate itself dies (construction fault), the exception
+                // is caught HERE so the designed, readable failure
+                // dialog — never a raw crash loop — is what a user sees.
+                // (Wall-clock cost on the slowest supported devices is
+                // an open, owner-measured question, tracked in the
+                // 2026-10-30 audit notes; nothing here claims a bound.)
+                var outcome by remember {
+                    mutableStateOf(runCatching { CryptoSelfTest.run() }.getOrElse { CryptoSelfTest.startupFailure() })
+                }
+                when (val current = outcome) {
                     CryptoSelfTestOutcome.Pass -> Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background,
                     ) {
                         MegaNavGraph()
                     }
-                    is CryptoSelfTestOutcome.Failed -> SelfTestFailedDialog(outcome.failedCheckNames)
+                    is CryptoSelfTestOutcome.Failed -> SelfTestFailedDialog(
+                        failedCheckNames = current.failedCheckNames,
+                        onRetry = {
+                            outcome = runCatching { CryptoSelfTest.run() }
+                                .getOrElse { CryptoSelfTest.startupFailure() }
+                        },
+                        onClose = { finishAffinity() },
+                    )
                 }
             }
         }

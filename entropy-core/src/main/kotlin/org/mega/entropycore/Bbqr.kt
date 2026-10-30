@@ -24,7 +24,12 @@ data class BbqrPart(
     val total: Int,
     val index: Int,
     val payload: String,
-)
+) {
+    init {
+        require(total in 1..MAX_BBQR_PARTS) { "BBQr total must be in 1..$MAX_BBQR_PARTS, got $total." }
+        require(index in 0 until total) { "BBQr index $index out of range for total $total." }
+    }
+}
 
 /**
  * Parses one scanned QR's text as a BBQr part header. Returns null for
@@ -117,8 +122,13 @@ private fun combineAndDecodeBbqrParts(parts: List<BbqrPart>, supportedFileTypes:
     // plain sight. Conflicting duplicates are therefore a hard error.
     val payloadsByIndex = parts.groupBy({ it.index }, { it.payload })
     for ((index, payloads) in payloadsByIndex) {
-        require(payloads.distinct().size == 1) {
-            "Scanned BBQr parts repeat index $index with different payloads — one scan of that frame is corrupt or was tampered with. Re-scan every frame from the source device."
+        val distinctPayloads = payloads.distinct()
+        if (distinctPayloads.size > 1 &&
+            !allDecodeIdentically(distinctPayloads, encoding)
+        ) {
+            throw IllegalArgumentException(
+                "Scanned BBQr parts repeat index $index with different payloads — one scan of that frame is corrupt or was tampered with. Re-scan every frame from the source device.",
+            )
         }
     }
     val byIndex = payloadsByIndex.mapValues { it.value.first() }
@@ -143,6 +153,24 @@ private fun combineAndDecodeBbqrParts(parts: List<BbqrPart>, supportedFileTypes:
     // immediately as a decode error instead of silently accepted by a decoder
     // lenient enough to paper over it.
     val orderedPayloads = (0 until total).map { byIndex.getValue(it) }
+    // Enforce the split boundary the BBQr spec requires of Base32: every
+    // part except the last MUST be a whole number of encoded bytes
+    // (length % 8 == 0). Without this, a payload stream re-split at a
+    // mid-byte boundary — from a non-compliant or deliberately crafted
+    // source device — passes every other check while each part silently
+    // discards real data bits, reassembling corrupt bytes that no single
+    // check ever flags. MEGA's own [encodeBbqr] only ever produces
+    // legal splits; this closes the same hole on the INPUT side.
+    if (encoding == '2' || encoding == 'Z') {
+        for (i in 0 until total - 1) {
+            val payload = orderedPayloads[i]
+            require(payload.length % 8 == 0) {
+                "BBQr part $i ends mid-byte (payload is ${payload.length} Base32 characters, " +
+                    "not a multiple of 8) — this frame series was split at an illegal boundary " +
+                    "and cannot be trusted as one document. Export it again from the source device."
+            }
+        }
+    }
     val decodedBytes = when (encoding) {
         'H' -> orderedPayloads.fold(ByteArray(0)) { acc, payload -> acc + decodeBbqrHex(payload) }
         '2' -> orderedPayloads.fold(ByteArray(0)) { acc, payload -> acc + decodeBase32(payload) }
@@ -308,7 +336,34 @@ private fun decodeBase32(text: String): ByteArray {
             bits = bits and ((1 shl bitCount) - 1)
         }
     }
+    // RFC 4648: the leftover bits of a padded final group are not part of
+    // the data and MUST be zero. Guava's strict BaseEncoding (what Sparrow
+    // uses to read these frames) rejects non-zero leftovers outright —
+    // accept nothing looser here, or a crafted chunk could smuggle a
+    // silently different byte-stream past the length checks above.
+    require(bits == 0) {
+        "BBQr Base32 payload has non-zero padding bits — a complete encoding must zero them."
+    }
     return output.toByteArray()
+}
+
+/** True when every payload in [payloads] decodes to the SAME bytes under
+ * [encoding] (or false if any fails to decode — never a silent pass).
+ * Used only to distinguish a benign camera re-scan that differs solely in
+ * non-informative trailing padding bits from a genuinely conflicting
+ * duplicate, which must stay a hard error. */
+private fun allDecodeIdentically(payloads: List<String>, encoding: Char): Boolean {
+    val decoded = try {
+        when (encoding) {
+            'H' -> payloads.map { decodeBbqrHex(it) }
+            '2', 'Z' -> payloads.map { decodeBase32(it) }
+            else -> return false
+        }
+    } catch (_: IllegalArgumentException) {
+        return false
+    }
+    val first = decoded.first()
+    return decoded.all { it.contentEquals(first) }
 }
 
 /** Hard cap on BBQr 'Z'-encoding inflate output. Raw input is bounded by the
@@ -366,9 +421,103 @@ private fun inflateRawDeflate(compressed: ByteArray): ByteArray {
     return output.toByteArray()
 }
 
-private val JSON_DESCRIPTOR_FIELD_REGEX = Regex(""""descriptor"\s*:\s*"((?:[^"\\]|\\.)*)"""")
-
+/**
+ * Extracts the TOP-LEVEL "descriptor" string field from the decoded 'J'
+ * (JSON) payload. Deliberately NOT a regex first-match scan: a decoy
+ * "descriptor":"..." substring nested earlier in the document (inside a
+ * comment, metadata, or any nested string value) must never outrank the
+ * real top-level field — for a multisig import, WHICH descriptor string
+ * wins determines what spend policy the wallet believes it imported.
+ * This walks the document with brace/string/escape awareness, reads only
+ * keys at depth 1 of the outermost object, requires the value to be a
+ * string, refuses more than one top-level "descriptor" key outright, and
+ * fails closed on anything malformed.
+ */
 private fun extractJsonDescriptorField(json: String): String? {
-    val match = JSON_DESCRIPTOR_FIELD_REGEX.find(json) ?: return null
-    return match.groupValues[1].replace("\\/", "/").replace("\\\"", "\"")
+    var depth = 0
+    var topLevelSeen = false
+    var result: String? = null
+    var i = 0
+    while (i < json.length) {
+        when (json[i]) {
+            '{', '[' -> { depth++; i++ }
+            '}', ']' -> { depth--; i++ }
+            '"' -> {
+                val keyOrValue = readJsonString(json, i) ?: return null
+                val text = keyOrValue.second
+                var next = keyOrValue.first
+                var j = next
+                while (j < json.length && json[j].isWhitespace()) j++
+                if (depth == 1 && j < json.length && json[j] == ':' && text == "descriptor") {
+                    if (topLevelSeen) {
+                        throw IllegalArgumentException("BBQr JSON has more than one top-level 'descriptor' field.")
+                    }
+                    topLevelSeen = true
+                    var k = j + 1
+                    while (k < json.length && json[k].isWhitespace()) k++
+                    if (k >= json.length || json[k] != '"') {
+                        throw IllegalArgumentException("BBQr JSON 'descriptor' field is not a string.")
+                    }
+                    val value = readJsonString(json, k) ?: throw IllegalArgumentException("BBQr JSON 'descriptor' string is unterminated.")
+                    result = unescapeJsonString(value.second)
+                    next = value.first
+                }
+                i = next
+            }
+            else -> i++
+        }
+    }
+    return result
+}
+
+/** Reads a JSON string starting at [start] (which MUST point at the
+ * opening quote). Returns the index just past the closing quote and the
+ * raw characters (escapes intact), or null if malformed. */
+private fun readJsonString(json: String, start: Int): Pair<Int, String>? {
+    var i = start + 1
+    val sb = StringBuilder()
+    while (i < json.length) {
+        when (json[i]) {
+            '"' -> return Pair(i + 1, sb.toString())
+            '\\' -> {
+                if (i + 1 >= json.length) return null
+                sb.append(json[i]).append(json[i + 1])
+                i += 2
+            }
+            else -> { sb.append(json[i]); i++ }
+        }
+    }
+    return null
+}
+
+private fun unescapeJsonString(raw: String): String {
+    val sb = StringBuilder(raw.length)
+    var i = 0
+    while (i < raw.length) {
+        val c = raw[i]
+        if (c != '\\') { sb.append(c); i++; continue }
+        i++
+        if (i >= raw.length) throw IllegalArgumentException("BBQr JSON string ends with a dangling escape.")
+        when (val e = raw[i]) {
+            '"' -> sb.append('"')
+            '\\' -> sb.append('\\')
+            '/' -> sb.append('/')
+            'b' -> sb.append('\b')
+            'f' -> sb.append('\u000C')
+            'n' -> sb.append('\n')
+            'r' -> sb.append('\r')
+            't' -> sb.append('\t')
+            'u' -> {
+                require(i + 4 < raw.length) { "BBQr JSON \\u escape is truncated." }
+                val hex = raw.substring(i + 1, i + 5)
+                val cp = hex.toIntOrNull(16)
+                    ?: throw IllegalArgumentException("BBQr JSON \\u escape is not hex: $hex")
+                sb.append(cp.toChar())
+                i += 4
+            }
+            else -> throw IllegalArgumentException("BBQr JSON string contains an invalid escape: \\$e")
+        }
+        i++
+    }
+    return sb.toString()
 }

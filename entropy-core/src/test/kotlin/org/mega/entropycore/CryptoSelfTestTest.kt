@@ -1,6 +1,7 @@
 package org.mega.entropycore
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,8 +24,44 @@ class CryptoSelfTestTest {
     @Test
     fun everyCheckHasAUniqueStableName() {
         val names = CryptoSelfTest.checks.map { it.name }
-        assertTrue("self-test needs a meaningful number of vectors", names.size >= 12)
+        assertEquals(
+            "registered check count must match the pinned expectation",
+            CryptoSelfTest.EXPECTED_CHECK_COUNT,
+            names.size,
+        )
         assertEquals("check names must be unique", names.distinct().size, names.size)
+    }
+
+    @Test
+    fun theEqualityPrimitiveIsProvenAbleToSayNo() {
+        // The gate's shared comparison dependency has its own named
+        // negative control, and it runs FIRST.
+        assertTrue(
+            CryptoSelfTest.checks.first().name == "equality-negative-control",
+        )
+    }
+
+    @Test
+    fun anEmptyCheckListIsRefusedNotPassed() {
+        // Zero failures over zero checks is a vacuous pass — the one
+        // shape of "green" this harness may never produce.
+        assertThrows(IllegalArgumentException::class.java) {
+            CryptoSelfTest.runChecks(emptyList())
+        }
+    }
+
+    @Test
+    fun resourceExhaustionIsNamedDistinctlyFromAWrongComputation() {
+        // An OOME is not corrupt arithmetic; the report must be able to
+        // tell them apart (see the failure-message builder's branch).
+        val outcome = CryptoSelfTest.runChecks(
+            listOf(CryptoSelfTest.Check("boom") { throw OutOfMemoryError("simulated pressure") }),
+        )
+        assertTrue(
+            outcome is CryptoSelfTestOutcome.Failed &&
+                (outcome as CryptoSelfTestOutcome.Failed).failedCheckNames ==
+                listOf(CryptoSelfTest.MEMORY_EXHAUSTED),
+        )
     }
 
     @Test
