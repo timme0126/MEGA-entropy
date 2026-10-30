@@ -1,6 +1,31 @@
 # Changelog
 
-Notable changes to MEGA, most recent first. The current beta build is `v0.1.18` (see [`README.md`](README.md#download-the-beta-apk)).
+Notable changes to MEGA, most recent first. The current beta build is `v0.1.19` (see [`README.md`](README.md#download-the-beta-apk)).
+
+## [0.1.19] - 2026-10-30
+### Added
+- Boot-time crypto self-test. Before the app renders anything, MEGA
+  recomputes a battery of published known-answer vectors — SHA-256,
+  RIPEMD-160/HASH160, HMAC-SHA256/512, secp256k1 point derivation,
+  BIP-39 seed derivation (official 12/18/24-word vectors), the complete
+  BIP-32 vector-1 chain, WIF, BIP-340 Schnorr sign *and* must-reject
+  cases, and RFC 6979 deterministic ECDSA — and compares every byte.
+  Any mismatch, or any check that throws, replaces the entire app with
+  a blocking, copyable "Safety check failed" report: a device that
+  computes one byte wrong cannot reach a screen that shows key
+  material. Unit tests prove the vectors; this gate proves *this
+  binary on this device, right now*.
+### Fixed
+- BBQr sequences: re-scanning a frame is now formally idempotent, and
+  the same frame index arriving twice with *different* payloads is a
+  hard, named error. Previously the assembler silently kept the
+  last-scanned copy — a corrupted or tampered re-scan could overwrite a
+  good frame of a PSBT mid-scan.
+### Credits
+- Pattern inspired by EntropyLab (https://github.com/OogaBoogaX/entropylab),
+  a public-domain offline wallet calculator, whose boot-time
+  known-answer self-test and strict multi-part QR re-scan validation
+  are exactly right for an air-gapped signer.
 
 ## [0.1.18] - 2026-10-23
 ### Added
